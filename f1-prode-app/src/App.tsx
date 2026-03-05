@@ -1173,6 +1173,92 @@ function PredictionsGridTab({ nextRace }: { nextRace: any }) {
 }
 
 // --- Media Vault Component ---
+
+// MediaCard: auto-fetches TMDB poster for series/movies/animes
+function MediaCard({ item, i, isGame, getGenreColor, tab }: {
+  item: any; i: number; isGame: boolean; getGenreColor: (g: string) => string; tab: string;
+}) {
+  const [poster, setPoster] = React.useState<string | null>(null);
+  const [overview, setOverview] = React.useState<string | null>(null);
+  const [hovered, setHovered] = React.useState(false);
+
+  React.useEffect(() => {
+    if (isGame) return;
+    const type = tab === 'movies' ? 'movie' : 'tv';
+    fetchWithAuth(`/api/tmdb/search?query=${encodeURIComponent(item.name)}&type=${type}`)
+      .then(r => r.json())
+      .then((results: any[]) => {
+        if (results && results.length > 0) {
+          setPoster(results[0].poster || null);
+          setOverview(results[0].overview || null);
+        }
+      })
+      .catch(() => { });
+  }, [item.name, isGame, tab]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+      className="glass-card p-5 flex flex-col items-start gap-3 hover:border-codeflow-accent/40 group relative overflow-hidden"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {/* Poster + body layout */}
+      <div className="flex gap-4 w-full">
+        {/* Poster */}
+        {!isGame && (
+          <div className="shrink-0 w-16 h-24 rounded-lg overflow-hidden bg-white/5 border border-white/10 flex items-center justify-center text-2xl">
+            {poster
+              ? <img src={poster} alt={item.name} className="w-full h-full object-cover" loading="lazy" />
+              : <span>{tab === 'movies' ? '🎬' : tab === 'animes' ? '🎌' : '📺'}</span>
+            }
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex justify-between items-start gap-2 mb-1">
+            <h3 className="text-base font-bold text-white group-hover:text-codeflow-accent transition-colors leading-tight line-clamp-2">{item.name}</h3>
+            {!isGame && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/10 text-white/70 whitespace-nowrap shrink-0">{item.rating || 'Sin nota'}</span>}
+          </div>
+          {!isGame && item.genre && (
+            <div className="flex flex-wrap gap-1 mb-2">
+              {item.genre.split(',').slice(0, 2).map((g: string) => (
+                <span key={g} className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${getGenreColor(g.trim())}`}>{g.trim()}</span>
+              ))}
+            </div>
+          )}
+          {isGame && (
+            <div className="flex flex-wrap gap-1">
+              {item.game_type && <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${getGenreColor(item.game_type)}`}>{item.game_type}</span>}
+              {item.difficulty && <span className="text-[10px] font-semibold text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded-md">{item.difficulty}</span>}
+              {item.players && <span className="text-[10px] font-semibold text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded-md">{item.players} jug.</span>}
+            </div>
+          )}
+          <p className="text-xs text-codeflow-text/70 italic line-clamp-2 mt-1">{item.description || item.notes}</p>
+        </div>
+      </div>
+
+      {/* TMDB overview hover overlay */}
+      {!isGame && overview && (
+        <AnimatePresence>
+          {hovered && (
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-codeflow-dark/95 backdrop-blur-sm p-4 flex flex-col justify-center z-10"
+            >
+              <p className="text-xs text-white/80 leading-relaxed line-clamp-6 italic">{overview}</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
+
+      <div className="w-full pt-3 mt-auto border-t border-white/5 text-[10px] text-codeflow-muted flex justify-between items-center">
+        <span>Recomendó: <strong className="text-white">{item.recommender || '—'}</strong></span>
+        <span>{new Date(item.created_at).toLocaleDateString('es-AR')}</span>
+      </div>
+    </motion.div>
+  );
+}
+
 function MediaVaultView({ tab }: { tab: string }) {
   const [items, setItems] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -1329,37 +1415,7 @@ function MediaVaultView({ tab }: { tab: string }) {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredItems.map((item, i) => (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} key={item.id} className="glass-card p-6 flex flex-col items-start gap-4 hover:border-codeflow-accent/40 group">
-              <div className="flex justify-between items-start w-full gap-2">
-                <h3 className="text-xl font-bold text-white group-hover:text-codeflow-accent transition-colors leading-tight">{item.name}</h3>
-                {!isGame && <span className="text-xs font-bold px-2 py-1 rounded-full bg-white/10 text-white/70 whitespace-nowrap shrink-0">{item.rating || 'Sin nota'}</span>}
-              </div>
-
-              {!isGame ? (
-                <>
-                  {item.genre && (
-                    <div className="flex flex-wrap gap-2">
-                      {item.genre.split(',').map((g: string) => <span key={g} className={`text-xs font-semibold px-2 py-1 rounded-md ${getGenreColor(g.trim())}`}>{g.trim()}</span>)}
-                    </div>
-                  )}
-                  <p className="text-sm text-codeflow-text/80 italic flex-1">{item.description}</p>
-                  <div className="w-full pt-4 mt-auto border-t border-white/5 text-xs text-codeflow-muted flex justify-between items-center">
-                    <span>Recomendó: <strong className="text-white">{item.recommender}</strong></span>
-                    <span>{new Date(item.created_at).toLocaleDateString()}</span>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="flex flex-wrap gap-2">
-                    {item.game_type && <span className={`text-xs font-semibold px-2 py-1 rounded-md ${getGenreColor(item.game_type)}`}>{item.game_type}</span>}
-                    {item.difficulty && <span className="text-xs font-semibold text-purple-400 bg-purple-500/10 px-2 py-1 rounded-md">{item.difficulty}</span>}
-                    {item.players && <span className="text-xs font-semibold text-green-400 bg-green-500/10 px-2 py-1 rounded-md">{item.players} Jug.</span>}
-                    {item.duration && <span className="text-xs font-semibold text-orange-400 bg-orange-500/10 px-2 py-1 rounded-md">⏱ {item.duration}</span>}
-                  </div>
-                  {item.notes && <p className="text-sm text-codeflow-text/80 italic flex-1">{item.notes}</p>}
-                </>
-              )}
-            </motion.div>
+            <MediaCard key={item.id} item={item} i={i} isGame={isGame} getGenreColor={getGenreColor} tab={tab} />
           ))}
         </div>
       )}
