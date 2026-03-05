@@ -364,6 +364,15 @@ function F1ProdeView() {
       });
   }, []);
 
+  // --- Constantes para Selects ---
+  const USERS = ["MrKazter", "Eliana", "NestorMcNestor", "GuilleGb", "Rubiola", "Colorado", "MrFori"];
+  const DRIVERS = [
+    "Max Verstappen", "Lando Norris", "Charles Leclerc", "Carlos Sainz", "Oscar Piastri",
+    "Lewis Hamilton", "George Russell", "Fernando Alonso", "Lance Stroll", "Yuki Tsunoda",
+    "Liam Lawson", "Nico Hülkenberg", "Esteban Ocon", "Pierre Gasly", "Jack Doohan",
+    "Alexander Albon", "Franco Colapinto", "Oliver Bearman", "Andrea Kimi Antonelli", "Gabriel Bortoleto"
+  ].sort();
+
   const handlePredictSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -444,12 +453,12 @@ function F1ProdeView() {
           {f1Tab === 'prode' && (
             <div className="space-y-6">
               {/* Claude Oracle Section */}
-              <div className="glass-card p-1 pb-6 relative overflow-hidden min-h-[140px]">
-                {/* Fancy border effect */}
-                <div className="absolute inset-0 bg-gradient-to-r from-codeflow-accent via-fuchsia-600 to-purple-800 opacity-20" />
+              <div className="glass-card p-1 pb-6 relative overflow-hidden min-h-[140px] border border-white/5">
+                {/* Fancy border effect atenuado */}
+                <div className="absolute inset-0 bg-gradient-to-r from-codeflow-accent via-fuchsia-600 to-purple-800 opacity-5" />
                 <div className="m-5 relative z-10">
                   <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-purple-600 to-blue-600 p-[1px] shadow-lg shadow-purple-500/20 shrink-0">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-purple-800 to-blue-800 p-[1px] shadow-lg shadow-purple-900/20 shrink-0">
                       <div className="w-full h-full bg-codeflow-card rounded-xl flex items-center justify-center">
                         <span className="text-2xl">🤖</span>
                       </div>
@@ -486,30 +495,39 @@ function F1ProdeView() {
 
                   <form onSubmit={handlePredictSubmit} className="space-y-4 flex-1">
                     <div>
-                      <label className="block text-xs uppercase font-bold text-codeflow-muted tracking-wider mb-1">Nombre Jugador (Debe ser exacto)</label>
-                      <input type="text" value={pName} onChange={e => setPName(e.target.value)} required className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-codeflow-accent" placeholder="Ej: MrKazter" />
+                      <label className="block text-xs uppercase font-bold text-codeflow-muted tracking-wider mb-1">Nombre Jugador</label>
+                      <select value={pName} onChange={e => setPName(e.target.value)} required className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-codeflow-accent appearance-none cursor-pointer">
+                        <option value="" disabled className="bg-codeflow-dark text-codeflow-muted">Seleccioná tu usuario...</option>
+                        {USERS.map(u => <option key={u} value={u} className="bg-codeflow-dark text-white">{u}</option>)}
+                      </select>
                     </div>
                     <div>
                       <label className="block text-xs uppercase font-bold text-codeflow-muted tracking-wider mb-1 flex justify-between">
                         <span>Pole Position (Sábado)</span>
                         <span className="text-codeflow-accent/60">+5 pts</span>
                       </label>
-                      <input type="text" value={pPole} onChange={e => setPPole(e.target.value)} required className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-codeflow-accent" placeholder="Piloto" />
+                      <select value={pPole} onChange={e => setPPole(e.target.value)} required className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-codeflow-accent appearance-none cursor-pointer">
+                        <option value="" disabled className="bg-codeflow-dark text-codeflow-muted">Seleccioná al Poleman...</option>
+                        {DRIVERS.map(d => <option key={d} value={d} className="bg-codeflow-dark text-white">{d}</option>)}
+                      </select>
                     </div>
 
                     <div className="pt-2">
-                      <label className="block text-xs uppercase font-bold text-purple-400 tracking-wider mb-3">Top 5 Domingo (10 pts c/u)</label>
+                      <label className="block text-xs uppercase font-bold text-codeflow-accent/70 tracking-wider mb-3">Top 5 Domingo (10 pts c/u)</label>
                       <div className="space-y-2">
                         {[
-                          { l: '1° (Ganador)', v: p1, s: setP1, c: 'border-yellow-500/50 focus:border-yellow-500 bg-yellow-500/5' },
-                          { l: '2° Puesto', v: p2, s: setP2, c: 'border-gray-400/50 focus:border-gray-400 bg-gray-400/5' },
-                          { l: '3° Puesto', v: p3, s: setP3, c: 'border-orange-500/50 focus:border-orange-500 bg-orange-500/5' },
+                          { l: '1° (Ganador)', v: p1, s: setP1, c: 'border-yellow-500/30 focus:border-yellow-500 bg-yellow-500/5' },
+                          { l: '2° Puesto', v: p2, s: setP2, c: 'border-gray-400/30 focus:border-gray-400 bg-gray-400/5' },
+                          { l: '3° Puesto', v: p3, s: setP3, c: 'border-orange-500/30 focus:border-orange-500 bg-orange-500/5' },
                           { l: '4° Puesto', v: p4, s: setP4, c: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
                           { l: '5° Puesto', v: p5, s: setP5, c: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
                         ].map((item, i) => (
                           <div key={i} className="flex items-center gap-3">
                             <span className="text-sm font-bold text-white/50 w-24">{item.l}</span>
-                            <input type="text" value={item.v} onChange={e => item.s(e.target.value)} required className={`flex-1 rounded-lg px-3 py-1.5 text-white outline-none border ${item.c}`} placeholder="Piloto" />
+                            <select value={item.v} onChange={e => item.s(e.target.value)} required className={`flex-1 rounded-lg px-3 py-2 text-white outline-none border ${item.c} appearance-none cursor-pointer`}>
+                              <option value="" disabled className="bg-codeflow-dark text-codeflow-muted">Elegir piloto...</option>
+                              {DRIVERS.map(d => <option key={d} value={d} className="bg-codeflow-dark text-white">{d}</option>)}
+                            </select>
                           </div>
                         ))}
                       </div>
@@ -517,7 +535,7 @@ function F1ProdeView() {
 
                     <div className="pt-4">
                       {success && <p className="text-sm text-green-400 mb-3 text-center">{success}</p>}
-                      <button type="submit" disabled={isSubmitting} className="w-full bg-codeflow-accent hover:bg-codeflow-accent/80 text-white font-bold py-3 rounded-lg transition-colors">
+                      <button type="submit" disabled={isSubmitting} className="w-full bg-white/10 border border-white/20 hover:bg-white/20 hover:border-codeflow-accent/50 text-white font-bold py-3 rounded-lg transition-colors">
                         {isSubmitting ? 'Enviando telemetría...' : 'Enviar Pronóstico'}
                       </button>
                     </div>
