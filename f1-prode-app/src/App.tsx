@@ -192,9 +192,7 @@ function LoginView({ onLogin }: { onLogin: () => void }) {
         animate={{ opacity: 1, scale: 1 }}
         className="glass-card p-10 max-w-md w-full relative z-10 flex flex-col items-center border border-white/10 shadow-2xl"
       >
-        <div className="w-20 h-20 mb-6 bg-gradient-to-br from-codeflow-accent to-fuchsia-600 rounded-2xl flex items-center justify-center shadow-[0_0_30px_rgba(168,85,247,0.5)] p-2">
-          <img src={logoCodeflow} alt="Logo" className="w-full h-full object-contain filter drop-shadow-md" />
-        </div>
+        <img src={logoCodeflow} alt="CodeWeb" className="w-20 h-20 mb-6 object-contain drop-shadow-[0_0_15px_rgba(168,85,247,0.6)]" />
 
         <h1 className="text-3xl font-display font-bold text-white mb-2">Acceso al Paddock</h1>
         <p className="text-codeflow-muted mb-8 text-center">Sistema Interno F1 Prode</p>
