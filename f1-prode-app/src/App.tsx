@@ -617,6 +617,12 @@ function F1ProdeView() {
   const [p4, setP4] = React.useState('');
   const [p5, setP5] = React.useState('');
 
+  // --- Session & Schedule ---
+  type SessionType = 'qualifying' | 'sprint_qualifying' | 'sprint' | 'race';
+  const [schedule, setSchedule] = React.useState<any>(null);
+  const [selectedSession, setSelectedSession] = React.useState<SessionType>('race');
+  const selectedSessionData = schedule?.sessions?.find((s: any) => s.type === selectedSession);
+
   // --- Constantes y Estados Dinámicos ---
   const USERS = ["MrKazter", "Eliana", "NestorMcNestor", "GuilleGb", "Rubiola", "Colorado", "MrFori"];
   const [DRIVERS, setDRIVERS] = React.useState<string[]>([
@@ -628,21 +634,19 @@ function F1ProdeView() {
 
   const { addToast } = useToast();
   const [existingPrediction, setExistingPrediction] = React.useState<any>(null);
-  const [predictionsClosed, setPredictionsClosed] = React.useState(false);
 
   React.useEffect(() => {
-    // Fetch next race info
     fetchWithAuth('/api/races/next')
       .then(res => res.json())
       .then(data => {
         setNextRace(data);
-        // Close predictions 1 hour before race
-        const raceDate = new Date(data.date).getTime();
-        setPredictionsClosed(Date.now() > raceDate - 3600000);
+        // Fetch full schedule for this round
+        return fetchWithAuth(`/api/races/${data.round}/schedule`);
       })
-      .catch(err => console.error("Error cargando próxima carrera:", err));
+      .then(res => res.json())
+      .then(schedData => setSchedule(schedData))
+      .catch(err => console.error("Error cargando horarios:", err));
 
-    // Fetch Drivers de la API Oficial Ergast F1 (Fork Jolpi 2026+)
     fetch('https://api.jolpi.ca/ergast/f1/2026/drivers.json')
       .then(res => res.json())
       .then(data => {
@@ -658,21 +662,14 @@ function F1ProdeView() {
         if (!res.ok) throw new Error(data.error || "Falla en el backend del oráculo");
         return data;
       })
-      .then(data => {
-        setOracleInsight(data.analysis || "No tengo palabras...");
-        setLoadingOracle(false);
-      })
-      .catch(err => {
-        console.error("Oráculo caído", err);
-        setOracleInsight("El oráculo tuvo una falla en su motor lógico. Volvé a intentarlo en breve.");
-        setLoadingOracle(false);
-      });
+      .then(data => { setOracleInsight(data.analysis || "No tengo palabras..."); setLoadingOracle(false); })
+      .catch(() => { setOracleInsight("El oráculo tuvo una falla en su motor lógico."); setLoadingOracle(false); });
   }, []);
 
-  // When player changes, load their existing prediction
+  // When player or session changes, pre-fill existing prediction
   React.useEffect(() => {
     if (!pName) return;
-    fetchWithAuth('/api/predictions')
+    fetchWithAuth(`/api/predictions?session_type=${selectedSession}`)
       .then(r => r.json())
       .then((preds: any[]) => {
         const mine = preds.find(p => p.player === pName);
@@ -681,46 +678,92 @@ function F1ProdeView() {
           setPPole(mine.pole_position || '');
           setP1(mine.p1 || ''); setP2(mine.p2 || ''); setP3(mine.p3 || '');
           setP4(mine.p4 || ''); setP5(mine.p5 || '');
-          addToast('warning', `Cargando tu pronóstico existente para ${pName}`);
+          addToast('warning', `Cargando tu prognostico de ${selectedSession} para ${pName}`);
         } else {
           setExistingPrediction(null);
+          setPPole(''); setP1(''); setP2(''); setP3(''); setP4(''); setP5('');
         }
       })
       .catch(console.error);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pName]);
+  }, [pName, selectedSession]);
 
   // Duplicate driver validation
   const allPicks = [p1, p2, p3, p4, p5].filter(Boolean);
   const hasDuplicates = new Set(allPicks).size !== allPicks.length;
   const isDuplicateField = (v: string) => v && allPicks.filter(p => p === v).length > 1;
+  const isSessionClosed = selectedSessionData ? !selectedSessionData.isOpen : false;
+
+  // Dynamic form config per session
+  const SESSION_FORM: Record<SessionType, { label: string; fields: { key: string; label: string; pts: string; color: string }[]; hasPole: boolean }> = {
+    qualifying: {
+      label: '🏎️ Clasificación',
+      fields: [
+        { key: 'p1', label: 'Pole (1° Qualy)', pts: '10 pts', color: 'border-yellow-500/30 focus:border-yellow-500 bg-yellow-500/5' },
+        { key: 'p2', label: '2° Qualy', pts: '10 pts', color: 'border-gray-400/20 focus:border-gray-400 bg-gray-400/5' },
+        { key: 'p3', label: '3° Qualy', pts: '10 pts', color: 'border-orange-600/20 focus:border-orange-600 bg-orange-600/5' },
+      ],
+      hasPole: false,
+    },
+    sprint_qualifying: {
+      label: '⚡ Sprint Qualifying',
+      fields: [
+        { key: 'p1', label: '1° Sprint Qualifying', pts: '5 pts', color: 'border-yellow-500/30 focus:border-yellow-500 bg-yellow-500/5' },
+      ],
+      hasPole: false,
+    },
+    sprint: {
+      label: '🏃 Sprint Race',
+      fields: [
+        { key: 'p1', label: '1° Sprint', pts: '8 pts', color: 'border-yellow-500/30 focus:border-yellow-500 bg-yellow-500/5' },
+        { key: 'p2', label: '2° Sprint', pts: '8 pts', color: 'border-gray-400/20 focus:border-gray-400 bg-gray-400/5' },
+        { key: 'p3', label: '3° Sprint', pts: '8 pts', color: 'border-orange-600/20 focus:border-orange-600 bg-orange-600/5' },
+      ],
+      hasPole: false,
+    },
+    race: {
+      label: '🏁 Carrera',
+      fields: [
+        { key: 'p1', label: '1° Ganador', pts: '10 pts', color: 'border-yellow-500/30 focus:border-yellow-500 bg-yellow-500/5' },
+        { key: 'p2', label: '2° Puesto', pts: '10 pts', color: 'border-gray-400/20 focus:border-gray-400 bg-gray-400/5' },
+        { key: 'p3', label: '3° Puesto', pts: '10 pts', color: 'border-orange-600/20 focus:border-orange-600 bg-orange-600/5' },
+        { key: 'p4', label: '4° Puesto', pts: '10 pts', color: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
+        { key: 'p5', label: '5° Puesto', pts: '10 pts', color: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
+      ],
+      hasPole: true,
+    },
+  };
+
+  const currentForm = SESSION_FORM[selectedSession];
+  const fieldValues: Record<string, string> = { p1, p2, p3, p4, p5, pole_position: pPole };
+  const setFieldValue = (key: string, v: string) => {
+    if (key === 'p1') setP1(v); else if (key === 'p2') setP2(v);
+    else if (key === 'p3') setP3(v); else if (key === 'p4') setP4(v);
+    else if (key === 'p5') setP5(v); else if (key === 'pole_position') setPPole(v);
+  };
 
   const handlePredictSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (hasDuplicates) {
-      addToast('error', '¡Tenés pilotos repetidos en el Top 5!');
-      return;
-    }
-    if (predictionsClosed) {
-      addToast('error', 'Las predicciones ya están cerradas para este GP.');
-      return;
-    }
+    if (hasDuplicates) { addToast('error', '¡Tenés pilotos repetidos!'); return; }
+    if (isSessionClosed) { addToast('error', 'Las predicciones ya están cerradas para esta sesión.'); return; }
     if (existingPrediction) {
-      const confirm = window.confirm(`Ya tenés un pronóstico cargado para ${pName}. ¿Confirmar actualización?`);
-      if (!confirm) return;
+      const ok = window.confirm(`Ya tenés un pronóstico de ${currentForm.label} para ${pName}. ¿Actualizar?`);
+      if (!ok) return;
     }
     setIsSubmitting(true);
     try {
       const res = await fetchWithAuth('/api/predictions', {
         method: 'POST',
-        body: JSON.stringify({ player: pName, pole_position: pPole, p1, p2, p3, p4, p5 })
+        body: JSON.stringify({
+          player: pName, session_type: selectedSession,
+          pole_position: pPole, p1, p2, p3, p4, p5,
+        })
       });
       if (!res.ok) throw new Error("Falla al guardar");
-      addToast('success', `¡Pronóstico de ${pName} guardado en boxes! 🏎️`);
-      setExistingPrediction({ player: pName, pole_position: pPole, p1, p2, p3, p4, p5 });
+      addToast('success', `✅ Pronóstico de ${currentForm.label} guardado para ${pName}!`);
+      setExistingPrediction({ player: pName, session_type: selectedSession, pole_position: pPole, p1, p2, p3, p4, p5 });
     } catch (err) {
-      console.error(err);
-      addToast('error', 'Error de motor guardando el pronóstico. Verificá la conexión.');
+      addToast('error', 'Error guardando el pronóstico. Verificá la conexión.');
     } finally {
       setIsSubmitting(false);
     }
@@ -766,6 +809,12 @@ function F1ProdeView() {
             className={`pb-3 font-semibold transition-colors relative whitespace-nowrap ${f1Tab === 'calendar' ? 'text-codeflow-accent' : 'text-codeflow-muted hover:text-white'}`}>
             Calendario Oficial (Hora AR)
             {f1Tab === 'calendar' && <motion.div layoutId="f1ActiveLine" className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-codeflow-accent" />}
+          </button>
+          <button
+            onClick={() => setF1Tab('grilla')}
+            className={`pb-3 font-semibold transition-colors relative whitespace-nowrap ${f1Tab === 'grilla' ? 'text-codeflow-accent' : 'text-codeflow-muted hover:text-white'}`}>
+            Grilla de Pronósticos
+            {f1Tab === 'grilla' && <motion.div layoutId="f1ActiveLine" className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-codeflow-accent" />}
           </button>
         </div>
       </header>
@@ -813,33 +862,76 @@ function F1ProdeView() {
                 </div>
               </div>
 
-              {/* Prediction Forms and Leaderboard sections will go here */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Prediction Form */}
-                <div className="glass-card p-6 flex flex-col">
-                  <div className="flex items-center justify-between mb-4 border-b border-white/5 pb-4">
-                    <div className="flex items-center gap-3">
-                      <Trophy size={24} className="text-codeflow-accent" />
+              {/* ===== SESSION SCHEDULE BAR ===== */}
+              <div className="glass-card p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">🗓️ Sesiones del Fin de Semana</h4>
+                  <span className="text-xs text-codeflow-muted">{nextRace?.name || ''} · {nextRace?.city || ''}</span>
+                </div>
+                {!schedule ? (
+                  <div className="flex gap-3">
+                    {[1, 2, 3].map(i => <div key={i} className="h-16 flex-1 bg-white/5 rounded-xl animate-pulse" />)}
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-3">
+                    {schedule.sessions?.map((s: any) => {
+                      const isSelected = selectedSession === s.type;
+                      const argDate = s.date_arg ? new Date(s.date_arg) : null;
+                      const dayStr = argDate ? argDate.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' }) : 'TBD';
+                      const timeStr = argDate ? argDate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + ' ARG' : 'TBD';
+                      return (
+                        <button
+                          key={s.type}
+                          onClick={() => setSelectedSession(s.type as SessionType)}
+                          className={`flex-1 min-w-[140px] flex flex-col gap-1 p-3 rounded-xl border transition-all text-left ${isSelected
+                            ? 'border-codeflow-accent/60 bg-codeflow-accent/10 shadow-[0_0_15px_rgba(168,85,247,0.15)]'
+                            : 'border-white/10 bg-white/[0.02] hover:bg-white/5 hover:border-white/20'
+                            }`}
+                        >
+                          <span className="text-sm font-bold text-white">{s.label}</span>
+                          <span className="text-[10px] text-codeflow-muted">{dayStr}</span>
+                          <span className="text-[10px] font-mono text-codeflow-muted">{timeStr}</span>
+                          <div className={`flex items-center gap-1 text-[9px] font-bold mt-1 ${s.isOpen ? 'text-green-400' : 'text-red-400'}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${s.isOpen ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
+                            {s.isOpen ? 'ABIERTO' : 'CERRADO'}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* ===== PREDICTION FORM ===== */}
+              <div className="glass-card p-6 flex flex-col">
+                <div className="flex items-center justify-between mb-4 border-b border-white/5 pb-4">
+                  <div className="flex items-center gap-3">
+                    <Trophy size={24} className="text-codeflow-accent" />
+                    <div>
                       <h3 className="text-xl font-bold text-white">Enviar Pronóstico</h3>
-                    </div>
-                    <div className={`flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border ${predictionsClosed
-                      ? 'bg-red-500/10 text-red-400 border-red-500/30'
-                      : 'bg-green-500/10 text-green-400 border-green-500/30'
-                      }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${predictionsClosed ? 'bg-red-400' : 'bg-green-400 animate-pulse'}`} />
-                      {predictionsClosed ? 'CERRADO' : 'ABIERTO'}
+                      <p className="text-xs text-codeflow-muted">{currentForm.label}</p>
                     </div>
                   </div>
-                  <form onSubmit={handlePredictSubmit} className="space-y-4 flex-1">
+                  <div className={`flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border ${isSessionClosed ? 'bg-red-500/10 text-red-400 border-red-500/30' : 'bg-green-500/10 text-green-400 border-green-500/30'
+                    }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${isSessionClosed ? 'bg-red-400' : 'bg-green-400 animate-pulse'}`} />
+                    {isSessionClosed ? 'CERRADO' : 'ABIERTO'}
+                  </div>
+                </div>
+
+                <form onSubmit={handlePredictSubmit} className="space-y-4 flex-1">
+                  <div>
+                    <label className="block text-xs uppercase font-bold text-codeflow-muted tracking-wider mb-1">Nombre Jugador</label>
+                    <select value={pName} onChange={e => setPName(e.target.value)} required className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-codeflow-accent appearance-none cursor-pointer">
+                      <option value="" disabled className="bg-codeflow-dark text-codeflow-muted">Seleccioná tu usuario...</option>
+                      {USERS.map(u => <option key={u} value={u} className="bg-codeflow-dark text-white">{u}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Pole — only for race session */}
+                  {currentForm.hasPole && (
                     <div>
-                      <label className="block text-xs uppercase font-bold text-codeflow-muted tracking-wider mb-1">Nombre Jugador</label>
-                      <select value={pName} onChange={e => setPName(e.target.value)} required className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-codeflow-accent appearance-none cursor-pointer">
-                        <option value="" disabled className="bg-codeflow-dark text-codeflow-muted">Seleccioná tu usuario...</option>
-                        {USERS.map(u => <option key={u} value={u} className="bg-codeflow-dark text-white">{u}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs uppercase font-bold text-codeflow-muted tracking-wider mb-1 flex justify-between">
+                      <label className="flex justify-between text-xs uppercase font-bold text-codeflow-muted tracking-wider mb-1">
                         <span>Pole Position (Sábado)</span>
                         <span className="text-codeflow-accent/60">+5 pts</span>
                       </label>
@@ -848,63 +940,59 @@ function F1ProdeView() {
                         {DRIVERS.map(d => <option key={d} value={d} className="bg-codeflow-dark text-white">{d}</option>)}
                       </select>
                     </div>
+                  )}
 
-
-                    <div className="pt-2">
-                      <div className="flex items-center justify-between mb-3">
-                        <label className="text-xs uppercase font-bold text-codeflow-accent/70 tracking-wider">Top 5 Domingo (10 pts c/u)</label>
-                        {hasDuplicates && (
-                          <span className="text-[10px] text-red-400 font-bold flex items-center gap-1">
-                            <AlertCircle size={10} /> Pilotos repetidos
-                          </span>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        {[
-                          { l: '1° Ganador', v: p1, s: setP1, c: 'border-yellow-500/30 focus:border-yellow-500 bg-yellow-500/5' },
-                          { l: '2° Puesto', v: p2, s: setP2, c: 'border-gray-400/30 focus:border-gray-400 bg-gray-400/5' },
-                          { l: '3° Puesto', v: p3, s: setP3, c: 'border-orange-500/30 focus:border-orange-500 bg-orange-500/5' },
-                          { l: '4° Puesto', v: p4, s: setP4, c: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
-                          { l: '5° Puesto', v: p5, s: setP5, c: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
-                        ].map((item, i) => (
-                          <div key={i} className="flex items-center gap-3">
-                            <span className="text-sm font-bold text-white/50 w-24">{item.l}</span>
-                            <select
-                              value={item.v}
-                              onChange={e => item.s(e.target.value)}
-                              required
-                              className={`flex-1 rounded-lg px-3 py-2 text-white outline-none border appearance-none cursor-pointer transition-colors ${isDuplicateField(item.v) ? 'border-red-500/60 bg-red-500/10' : item.c
-                                }`}
-                            >
-                              <option value="" disabled className="bg-codeflow-dark text-codeflow-muted">Elegir piloto...</option>
-                              {DRIVERS.map(d => <option key={d} value={d} className="bg-codeflow-dark text-white">{d}</option>)}
-                            </select>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="pt-4">
-                      {existingPrediction && (
-                        <p className="text-[10px] text-yellow-400/70 mb-2 flex items-center gap-1">
-                          <AlertCircle size={10} /> Actualizarás tu pronóstico existente
-                        </p>
+                  {/* Dynamic position fields */}
+                  <div className="pt-1">
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="text-xs uppercase font-bold text-codeflow-accent/70 tracking-wider">
+                        Posiciones ({currentForm.fields[0]?.pts} c/u)
+                      </label>
+                      {hasDuplicates && (
+                        <span className="text-[10px] text-red-400 font-bold flex items-center gap-1">
+                          <AlertCircle size={10} /> Repetidos
+                        </span>
                       )}
-                      <button
-                        type="submit"
-                        disabled={isSubmitting || hasDuplicates || predictionsClosed}
-                        className="w-full bg-gradient-to-r from-codeflow-accent to-fuchsia-600 hover:opacity-90 text-white font-bold py-3 rounded-lg transition-all shadow-lg disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        {isSubmitting ? (
-                          <span className="flex items-center justify-center gap-2">
-                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            Enviando telemetría...
-                          </span>
-                        ) : predictionsClosed ? '🚫 Carga cerrada' : existingPrediction ? '🔄 Actualizar Pronóstico' : '🏁 Enviar Pronóstico'}
-                      </button>
                     </div>
-                  </form>
-                </div>
+                    <div className="space-y-2">
+                      {currentForm.fields.map((field) => (
+                        <div key={field.key} className="flex items-center gap-3">
+                          <span className="text-xs font-bold text-white/50 w-28 shrink-0">{field.label}</span>
+                          <select
+                            value={fieldValues[field.key] || ''}
+                            onChange={e => setFieldValue(field.key, e.target.value)}
+                            required
+                            className={`flex-1 rounded-lg px-3 py-2 text-white outline-none border appearance-none cursor-pointer transition-colors ${isDuplicateField(fieldValues[field.key]) ? 'border-red-500/60 bg-red-500/10' : field.color
+                              }`}
+                          >
+                            <option value="" disabled className="bg-codeflow-dark text-codeflow-muted">Elegir piloto...</option>
+                            {DRIVERS.map(d => <option key={d} value={d} className="bg-codeflow-dark text-white">{d}</option>)}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    {existingPrediction && (
+                      <p className="text-[10px] text-yellow-400/70 mb-2 flex items-center gap-1">
+                        <AlertCircle size={10} /> Actualizarás tu pronóstico de {currentForm.label} existente
+                      </p>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={isSubmitting || hasDuplicates || isSessionClosed}
+                      className="w-full bg-gradient-to-r from-codeflow-accent to-fuchsia-600 hover:opacity-90 text-white font-bold py-3 rounded-lg transition-all shadow-lg disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {isSubmitting ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Guardando...
+                        </span>
+                      ) : isSessionClosed ? '🚫 Sesión cerrada' : existingPrediction ? `🔄 Actualizar ${currentForm.label}` : `🏁 Enviar ${currentForm.label}`}
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
           )}
@@ -915,6 +1003,10 @@ function F1ProdeView() {
 
           {f1Tab === 'calendar' && (
             <F1CalendarTab />
+          )}
+
+          {f1Tab === 'grilla' && (
+            <PredictionsGridTab nextRace={nextRace} />
           )}
 
         </motion.div>
@@ -975,6 +1067,109 @@ function F1LeaderboardTab() {
       )}
     </div>
   )
+}
+
+// --- Predictions Grid Tab ---
+function PredictionsGridTab({ nextRace }: { nextRace: any }) {
+  const [predictions, setPredictions] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [sessionFilter, setSessionFilter] = React.useState('race');
+  const USERS = ["MrKazter", "Eliana", "NestorMcNestor", "GuilleGb", "Rubiola", "Colorado", "MrFori"];
+
+  React.useEffect(() => {
+    setLoading(true);
+    fetchWithAuth(`/api/predictions?session_type=${sessionFilter}`)
+      .then(r => r.json())
+      .then(data => { setPredictions(data); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [sessionFilter]);
+
+  const SESSION_LABELS: Record<string, string> = {
+    race: '🏁 Carrera', qualifying: '🏎️ Clasificación',
+    sprint: '🏃 Sprint', sprint_qualifying: '⚡ Sprint Qualifying',
+  };
+  const POSITIONS: Record<string, string[]> = {
+    race: ['pole_position', 'p1', 'p2', 'p3', 'p4', 'p5'],
+    qualifying: ['p1', 'p2', 'p3'], sprint: ['p1', 'p2', 'p3'], sprint_qualifying: ['p1'],
+  };
+  const POS_LABELS: Record<string, string> = {
+    pole_position: '🏎️ Pole', p1: '🥇 1°', p2: '🥈 2°', p3: '🥉 3°', p4: '4°', p5: '5°',
+  };
+  const positions = POSITIONS[sessionFilter] || POSITIONS.race;
+  const consensus: Record<string, Record<string, number>> = {};
+  for (const pos of positions) {
+    consensus[pos] = {};
+    for (const pred of predictions) {
+      const v = pred[pos]; if (v) consensus[pos][v] = (consensus[pos][v] || 0) + 1;
+    }
+  }
+  const submittedPlayers = new Set(predictions.map((p: any) => p.player));
+  const missingPlayers = USERS.filter(u => !submittedPlayers.has(u));
+
+  return (
+    <div className="space-y-4">
+      <div className="glass-card p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-bold text-white">Grilla de Pronósticos</h3>
+          <div className="flex gap-2 flex-wrap">
+            {Object.entries(SESSION_LABELS).map(([k, v]) => (
+              <button key={k} onClick={() => setSessionFilter(k)}
+                className={`px-3 py-1 text-xs rounded-full font-semibold transition-all border ${sessionFilter === k ? 'bg-codeflow-accent/20 text-codeflow-accent border-codeflow-accent/40' : 'text-codeflow-muted border-white/10 hover:border-white/20'}`}>
+                {v}
+              </button>
+            ))}
+          </div>
+        </div>
+        <p className="text-xs text-codeflow-muted mb-4">
+          {nextRace ? nextRace.name : ''} · Celdas en <span className="text-green-400 font-semibold">verde</span> = consenso del grupo.
+        </p>
+        {loading ? (
+          <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-10 w-full bg-white/5 rounded-xl animate-pulse" />)}</div>
+        ) : predictions.length === 0 ? (
+          <p className="text-codeflow-muted text-center py-10">Nadie cargó pronósticos de {SESSION_LABELS[sessionFilter]} todavía.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/10">
+                  <th className="text-left text-codeflow-muted font-semibold pb-3 pr-4">Posición</th>
+                  {predictions.map((pred: any) => (
+                    <th key={pred.player} className="text-center text-white font-bold pb-3 px-3">{pred.player}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {positions.map((pos) => (
+                  <tr key={pos} className="border-b border-white/5 hover:bg-white/[0.02]">
+                    <td className="text-codeflow-muted text-xs font-semibold py-3 pr-4 whitespace-nowrap">{POS_LABELS[pos]}</td>
+                    {predictions.map((pred: any) => {
+                      const val = pred[pos];
+                      const isConsensus = val && (consensus[pos][val] || 0) > 1;
+                      return (
+                        <td key={pred.player} className="text-center py-2 px-3">
+                          <span className={`inline-block px-2 py-1 rounded-lg text-xs font-medium whitespace-nowrap ${!val ? 'text-codeflow-muted/50 italic' : isConsensus ? 'bg-green-500/15 text-green-300 border border-green-500/30' : 'bg-white/5 text-white/80 border border-white/10'}`}>
+                            {val ? val.split(' ').slice(-1)[0] : '—'}
+                          </span>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      {missingPlayers.length > 0 && (
+        <div className="glass-card p-4 border border-orange-500/20 bg-orange-500/5">
+          <p className="text-orange-400 text-sm font-semibold mb-2 flex items-center gap-2"><AlertCircle size={14} /> Sin pronóstico de {SESSION_LABELS[sessionFilter]}:</p>
+          <div className="flex flex-wrap gap-2">
+            {missingPlayers.map(p => <span key={p} className="px-2 py-1 rounded-full bg-orange-500/10 text-orange-300/70 text-xs border border-orange-500/20">{p}</span>)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // --- Media Vault Component ---
