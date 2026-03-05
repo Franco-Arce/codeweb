@@ -1498,6 +1498,7 @@ function F1CalendarTab() {
 function AdminView() {
   const [races, setRaces] = React.useState<any[]>([]);
   const [selectedRound, setSelectedRound] = React.useState('');
+  const [selectedSession, setSelectedSession] = React.useState<'race' | 'qualifying' | 'sprint' | 'sprint_qualifying'>('race');
   const [pole, setPole] = React.useState('');
   const [p1, setP1] = React.useState('');
   const [p2, setP2] = React.useState('');
@@ -1506,6 +1507,14 @@ function AdminView() {
   const [p5, setP5] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
   const [resultMessage, setResultMessage] = React.useState<any>(null);
+
+  const SESSION_CONFIG = {
+    race: { label: '🏁 Carrera', fields: ['p1', 'p2', 'p3', 'p4', 'p5'], hasPole: true },
+    qualifying: { label: '🏎️ Clasificación', fields: ['p1', 'p2', 'p3'], hasPole: false },
+    sprint: { label: '🏃 Sprint Race', fields: ['p1', 'p2', 'p3'], hasPole: false },
+    sprint_qualifying: { label: '⚡ Sprint Qualifying', fields: ['p1'], hasPole: false },
+  } as const;
+  const sessionCfg = SESSION_CONFIG[selectedSession];
 
   const DRIVERS = [
     "Max Verstappen", "Lando Norris", "Charles Leclerc", "Carlos Sainz", "Oscar Piastri",
@@ -1568,7 +1577,7 @@ function AdminView() {
     try {
       const res = await fetchWithAuth('/api/admin/results', {
         method: 'POST',
-        body: JSON.stringify({ race_round: Number(selectedRound), p1, p2, p3, p4, p5, pole_position: pole })
+        body: JSON.stringify({ race_round: Number(selectedRound), session_type: selectedSession, p1, p2, p3, p4, p5, pole_position: sessionCfg.hasPole ? pole : undefined })
       });
       const data = await res.json();
       setResultMessage(data);
@@ -1609,9 +1618,24 @@ function AdminView() {
 
           {selectedRound && (
             <>
-              <div className="flex justify-between items-center bg-codeflow-accent/10 border border-codeflow-accent/20 p-4 rounded-xl mb-4">
+              {/* Session selector */}
+              <div>
+                <label className="block text-xs uppercase font-bold text-codeflow-muted tracking-wider mb-2">Tipo de Sesión</label>
+                <div className="flex flex-wrap gap-2">
+                  {(Object.entries(SESSION_CONFIG) as any[]).map(([key, cfg]: any) => (
+                    <button key={key} type="button"
+                      onClick={() => { setSelectedSession(key as any); setResultMessage(null); setPole(''); setP1(''); setP2(''); setP3(''); setP4(''); setP5(''); }}
+                      className={`px-3 py-2 text-xs font-semibold rounded-xl border transition-all ${selectedSession === key ? 'bg-codeflow-accent/20 text-codeflow-accent border-codeflow-accent/40 shadow-[0_0_10px_rgba(168,85,247,0.2)]' : 'border-white/10 text-codeflow-muted hover:border-white/20'}`}
+                    >
+                      {cfg.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center bg-codeflow-accent/10 border border-codeflow-accent/20 p-4 rounded-xl">
                 <div className="flex flex-col">
-                  <p className="text-sm text-codeflow-accent font-semibold">{selectedRaceName}</p>
+                  <p className="text-sm text-codeflow-accent font-semibold">{selectedRaceName} · {sessionCfg.label}</p>
                   <p className="text-[10px] text-codeflow-muted uppercase tracking-tighter">Sincronización automática disponible</p>
                 </div>
                 <button
@@ -1620,29 +1644,35 @@ function AdminView() {
                   className="bg-codeflow-accent/20 hover:bg-codeflow-accent/30 text-codeflow-accent text-xs font-bold px-4 py-2 rounded-lg transition-colors flex items-center gap-2 border border-codeflow-accent/30"
                 >
                   <RefreshCw size={14} className={submitting ? 'animate-spin' : ''} />
-                  Sincronizar con API OfficiaL
+                  Sincronizar con API Oficial
                 </button>
               </div>
 
-              <div>
-                <label className="block text-xs uppercase font-bold text-codeflow-muted tracking-wider mb-1">Pole Position</label>
-                <select value={pole} onChange={e => setPole(e.target.value)} required className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-codeflow-accent appearance-none cursor-pointer">
-                  <option value="" disabled className="bg-codeflow-dark text-codeflow-muted">Poleman oficial...</option>
-                  {DRIVERS.map(d => <option key={d} value={d} className="bg-codeflow-dark text-white">{d}</option>)}
-                </select>
-              </div>
+              {/* Pole - only for race */}
+              {sessionCfg.hasPole && (
+                <div>
+                  <label className="block text-xs uppercase font-bold text-codeflow-muted tracking-wider mb-1">Pole Position</label>
+                  <select value={pole} onChange={e => setPole(e.target.value)} required className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-codeflow-accent appearance-none cursor-pointer">
+                    <option value="" disabled className="bg-codeflow-dark text-codeflow-muted">Poleman oficial...</option>
+                    {DRIVERS.map(d => <option key={d} value={d} className="bg-codeflow-dark text-white">{d}</option>)}
+                  </select>
+                </div>
+              )}
 
+              {/* Dynamic position fields */}
               <div className="space-y-2">
-                <label className="block text-xs uppercase font-bold text-codeflow-accent/70 tracking-wider">Top 5 Oficial</label>
+                <label className="block text-xs uppercase font-bold text-codeflow-accent/70 tracking-wider">
+                  Posiciones Oficiales — {sessionCfg.label}
+                </label>
                 {[
-                  { l: '1° Ganador', v: p1, s: setP1, c: 'border-yellow-500/30 focus:border-yellow-500 bg-yellow-500/5' },
-                  { l: '2° Puesto', v: p2, s: setP2, c: 'border-gray-400/30 focus:border-gray-400 bg-gray-400/5' },
-                  { l: '3° Puesto', v: p3, s: setP3, c: 'border-orange-500/30 focus:border-orange-500 bg-orange-500/5' },
-                  { l: '4° Puesto', v: p4, s: setP4, c: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
-                  { l: '5° Puesto', v: p5, s: setP5, c: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
-                ].map((item, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <span className="text-sm font-bold text-white/50 w-24">{item.l}</span>
+                  { key: 'p1', label: '1°', v: p1, s: setP1, c: 'border-yellow-500/30 focus:border-yellow-500 bg-yellow-500/5' },
+                  { key: 'p2', label: '2°', v: p2, s: setP2, c: 'border-gray-400/30 focus:border-gray-400 bg-gray-400/5' },
+                  { key: 'p3', label: '3°', v: p3, s: setP3, c: 'border-orange-500/30 focus:border-orange-500 bg-orange-500/5' },
+                  { key: 'p4', label: '4°', v: p4, s: setP4, c: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
+                  { key: 'p5', label: '5°', v: p5, s: setP5, c: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
+                ].filter(f => sessionCfg.fields.includes(f.key)).map((item) => (
+                  <div key={item.key} className="flex items-center gap-3">
+                    <span className="text-sm font-bold text-white/50 w-8 shrink-0">{item.label}</span>
                     <select value={item.v} onChange={e => item.s(e.target.value)} required className={`flex-1 rounded-lg px-3 py-2 text-white outline-none border ${item.c} appearance-none cursor-pointer`}>
                       <option value="" disabled className="bg-codeflow-dark text-codeflow-muted">Elegir piloto...</option>
                       {DRIVERS.map(d => <option key={d} value={d} className="bg-codeflow-dark text-white">{d}</option>)}
@@ -1652,7 +1682,7 @@ function AdminView() {
               </div>
 
               <button type="submit" disabled={submitting} className="w-full bg-gradient-to-r from-red-600 to-orange-600 hover:opacity-90 text-white font-bold py-3 rounded-xl transition-all shadow-lg mt-4 disabled:opacity-50">
-                {submitting ? 'Procesando resultados y puntajes...' : '🏁 Procesar Resultados y Calcular Puntajes'}
+                {submitting ? 'Procesando puntajes...' : `🏁 Procesar ${sessionCfg.label} y Calcular Puntajes`}
               </button>
             </>
           )}
