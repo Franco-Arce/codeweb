@@ -1,7 +1,6 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import { Pool } from 'pg';
-import cookieParser from 'cookie-parser';
 import 'dotenv/config';
 import { generateOracleRoast } from './groqOracle';
 
@@ -14,11 +13,11 @@ app.use(cors({
     credentials: true,
 }));
 app.use(express.json());
-app.use(cookieParser());
 
 // --- Simple Auth Middleware ---
 const requireAuth = (req: Request, res: Response, next: any) => {
-    if (req.cookies.prode_auth === 'f1_pepe_logged_in') {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader === 'Bearer f1_pepe_logged_in_token') {
         next();
     } else {
         res.status(401).json({ error: 'Unauthorized. Please login.' });
@@ -77,21 +76,25 @@ initDb();
 app.post('/api/auth/login', (req: Request, res: Response) => {
     const { username, password } = req.body;
     if (username === 'pepe' && password === 'pepon') {
-        // En producción idealmente usaríamos secure: true + SameSite=none, lo mantengo simple.
-        res.cookie('prode_auth', 'f1_pepe_logged_in', { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 30 }); // 30 days
-        res.json({ success: true, message: 'Welcome to the Paddock' });
+        // En lugar de Cookie, devolvemos un Token estático para el MVP
+        res.json({
+            success: true,
+            message: 'Welcome to the Paddock',
+            token: 'f1_pepe_logged_in_token',
+            user: { username: 'pepe', role: 'admin' }
+        });
     } else {
         res.status(401).json({ success: false, message: 'Bandera negra: Credenciales inválidas' });
     }
 });
 
 app.post('/api/auth/logout', (req: Request, res: Response) => {
-    res.clearCookie('prode_auth');
-    res.json({ success: true });
+    res.json({ success: true, message: 'Logged out' });
 });
 
 app.get('/api/auth/session', (req: Request, res: Response) => {
-    if (req.cookies.prode_auth === 'f1_pepe_logged_in') {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader === 'Bearer f1_pepe_logged_in_token') {
         res.json({ authenticated: true, user: 'pepe' });
     } else {
         res.json({ authenticated: false });
