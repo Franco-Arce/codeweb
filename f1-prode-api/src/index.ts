@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import { Pool } from 'pg';
+import cookieParser from 'cookie-parser';
 import 'dotenv/config';
 import { generateOracleRoast } from './groqOracle';
 
@@ -8,8 +9,21 @@ const app = express();
 const port = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: process.env.VITE_FRONTEND_URL || '*', // Ajustaremos esto en producción para que acepte Vercel
+    credentials: true,
+}));
 app.use(express.json());
+app.use(cookieParser());
+
+// --- Simple Auth Middleware ---
+const requireAuth = (req: Request, res: Response, next: any) => {
+    if (req.cookies.prode_auth === 'f1_pepe_logged_in') {
+        next();
+    } else {
+        res.status(401).json({ error: 'Unauthorized. Please login.' });
+    }
+};
 
 // --- Postges Database Connection ---
 const pool = new Pool({
@@ -26,10 +40,15 @@ const initDb = async () => {
             CREATE TABLE IF NOT EXISTS predictions (
                 id SERIAL PRIMARY KEY,
                 player VARCHAR(100) NOT NULL,
-                winner VARCHAR(100),
-                team VARCHAR(100),
-                top5 JSONB,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                race_id VARCHAR(50) NOT NULL DEFAULT 'current',
+                p1 VARCHAR(50),
+                p2 VARCHAR(50),
+                p3 VARCHAR(50),
+                p4 VARCHAR(50),
+                p5 VARCHAR(50),
+                pole_position VARCHAR(50),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(player, race_id)
             );
 
             CREATE TABLE IF NOT EXISTS leaderboard (
@@ -54,16 +73,41 @@ const initDb = async () => {
 
 initDb();
 
-// --- API Routes ---
+// --- Auth Routes ---
+app.post('/api/auth/login', (req: Request, res: Response) => {
+    const { username, password } = req.body;
+    if (username === 'pepe' && password === 'pepon') {
+        // En producción idealmente usaríamos secure: true + SameSite=none, lo mantengo simple.
+        res.cookie('prode_auth', 'f1_pepe_logged_in', { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 30 }); // 30 days
+        res.json({ success: true, message: 'Welcome to the Paddock' });
+    } else {
+        res.status(401).json({ success: false, message: 'Bandera negra: Credenciales inválidas' });
+    }
+});
+
+app.post('/api/auth/logout', (req: Request, res: Response) => {
+    res.clearCookie('prode_auth');
+    res.json({ success: true });
+});
+
+app.get('/api/auth/session', (req: Request, res: Response) => {
+    if (req.cookies.prode_auth === 'f1_pepe_logged_in') {
+        res.json({ authenticated: true, user: 'pepe' });
+    } else {
+        res.json({ authenticated: false });
+    }
+});
+
+// --- API Routes (Protected) ---
 
 app.get('/api/health', (req: Request, res: Response) => {
     res.json({ status: 'ok', message: 'F1 Prode Backend is running fast!' });
 });
 
 // Get predictions for the upcoming race
-app.get('/api/predictions', async (req: Request, res: Response) => {
+app.get('/api/predictions', requireAuth, async (req: Request, res: Response) => {
     try {
-        const result = await pool.query('SELECT * FROM predictions ORDER BY created_at DESC');
+        const result = await pool.query("SELECT * FROM predictions WHERE race_id = 'current' ORDER BY created_at DESC");
         res.json(result.rows);
     } catch (error) {
         console.error('Error fetching predictions', error);
@@ -71,14 +115,20 @@ app.get('/api/predictions', async (req: Request, res: Response) => {
     }
 });
 
-// Submit a new prediction
-app.post('/api/predictions', async (req: Request, res: Response) => {
+// Submit a new prediction (o actualizar si ya existe para este jugador y carrera)
+app.post('/api/predictions', requireAuth, async (req: Request, res: Response) => {
     try {
-        const { player, winner, team, top5 } = req.body;
-        // top5 is an array, we store as JSONB
+        // race_id hardcoded temporalmente hasta conectar un calendario de F1
+        const { player, p1, p2, p3, p4, p5, pole_position } = req.body;
+        const race_id = 'current';
+
         const result = await pool.query(
-            'INSERT INTO predictions (player, winner, team, top5) VALUES ($1, $2, $3, $4) RETURNING *',
-            [player, winner, team, JSON.stringify(top5 || [])]
+            `INSERT INTO predictions (player, race_id, p1, p2, p3, p4, p5, pole_position) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+             ON CONFLICT (player, race_id) 
+             DO UPDATE SET p1 = $3, p2 = $4, p3 = $5, p4 = $6, p5 = $7, pole_position = $8, created_at = CURRENT_TIMESTAMP
+             RETURNING *`,
+            [player, race_id, p1, p2, p3, p4, p5, pole_position]
         );
         res.status(201).json({ message: 'Prediction saved successfully', prediction: result.rows[0] });
     } catch (error) {
@@ -88,7 +138,7 @@ app.post('/api/predictions', async (req: Request, res: Response) => {
 });
 
 // Get Leaderboard
-app.get('/api/leaderboard', async (req: Request, res: Response) => {
+app.get('/api/leaderboard', requireAuth, async (req: Request, res: Response) => {
     try {
         const result = await pool.query('SELECT * FROM leaderboard ORDER BY pts DESC');
         res.json(result.rows);
@@ -99,9 +149,9 @@ app.get('/api/leaderboard', async (req: Request, res: Response) => {
 });
 
 // Get 'The Oracle' analysis (Groq AI)
-app.get('/api/oracle/roast', async (req: Request, res: Response) => {
+app.get('/api/oracle/roast', requireAuth, async (req: Request, res: Response) => {
     try {
-        const result = await pool.query('SELECT * FROM predictions ORDER BY created_at DESC LIMIT 10');
+        const result = await pool.query("SELECT * FROM predictions WHERE race_id = 'current' ORDER BY created_at DESC LIMIT 10");
         const predictions = result.rows;
         const roast = await generateOracleRoast(predictions);
         res.json({ analysis: roast });
