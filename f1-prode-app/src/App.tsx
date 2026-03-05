@@ -4,7 +4,14 @@ import {
   Trophy, Film, Gamepad2, Tv, LayoutDashboard, Settings,
   RefreshCw, AlertCircle, CheckCircle, XCircle
 } from 'lucide-react';
+import {
+  Chart as ChartJS, CategoryScale, LinearScale, PointElement,
+  LineElement, Title, Tooltip, Legend, Filler
+} from 'chart.js';
+import { Line } from 'react-chartjs-2';
 import logoCodeflow from './assets/LogoOnly.png';
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
@@ -476,6 +483,114 @@ function DashboardView() {
             })}
           </div>
         )}
+      </div>
+
+      {/* ===== SCORE HISTORY CHART ===== */}
+      <ScoreHistoryChart />
+    </div>
+  );
+}
+
+// --- Score History Chart ---
+const PLAYER_COLORS = [
+  '#a855f7', '#f59e0b', '#3b82f6', '#10b981', '#ef4444',
+  '#ec4899', '#06b6d4', '#84cc16',
+];
+
+function ScoreHistoryChart() {
+  const [history, setHistory] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    fetchWithAuth('/api/leaderboard/history')
+      .then(r => r.json())
+      .then(data => { setHistory(data); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="glass-card p-6">
+        <div className="h-4 w-48 bg-white/5 rounded animate-pulse mb-6" />
+        <div className="h-64 w-full bg-white/5 rounded-xl animate-pulse" />
+      </div>
+    );
+  }
+
+  if (history.length === 0) {
+    return (
+      <div className="glass-card p-6 text-center">
+        <p className="text-codeflow-muted text-sm">📊 El gráfico de historial aparecerá aquí cuando se procesen los primeros resultados del campeonato.</p>
+      </div>
+    );
+  }
+
+  // Build dataset: collect all players
+  const allPlayers = Array.from(new Set(history.flatMap(r => Object.keys(r.scores))));
+  const labels = history.map(r => r.race_name);
+
+  const datasets = allPlayers.map((player, i) => ({
+    label: player,
+    data: history.map(r => r.scores[player] ?? 0),
+    borderColor: PLAYER_COLORS[i % PLAYER_COLORS.length],
+    backgroundColor: PLAYER_COLORS[i % PLAYER_COLORS.length] + '20',
+    pointBackgroundColor: PLAYER_COLORS[i % PLAYER_COLORS.length],
+    pointRadius: 5,
+    pointHoverRadius: 8,
+    tension: 0.3,
+    fill: false,
+  }));
+
+  const chartData = { labels, datasets };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top' as const,
+        labels: {
+          color: 'rgba(255,255,255,0.7)',
+          font: { size: 12, family: 'Inter' },
+          boxWidth: 12,
+          padding: 16,
+        },
+      },
+      tooltip: {
+        backgroundColor: 'rgba(15,10,30,0.95)',
+        borderColor: 'rgba(168,85,247,0.3)',
+        borderWidth: 1,
+        titleColor: '#fff',
+        bodyColor: 'rgba(255,255,255,0.8)',
+        callbacks: {
+          label: (ctx: any) => `  ${ctx.dataset.label}: ${ctx.raw} pts`,
+        },
+      },
+    },
+    scales: {
+      x: {
+        grid: { color: 'rgba(255,255,255,0.04)' },
+        ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 11 } },
+      },
+      y: {
+        grid: { color: 'rgba(255,255,255,0.04)' },
+        ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 11 } },
+        beginAtZero: true,
+        title: { display: true, text: 'Puntos obtenidos', color: 'rgba(255,255,255,0.4)', font: { size: 11 } },
+      },
+    },
+  };
+
+  return (
+    <div className="glass-card p-6">
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-xl font-bold text-white flex items-center gap-2">
+          📊 Historial de Puntos por Carrera
+        </h3>
+        <span className="text-xs text-codeflow-muted italic">{history.length} {history.length === 1 ? 'carrera procesada' : 'carreras procesadas'}</span>
+      </div>
+      <div className="h-72">
+        <Line data={chartData} options={options} />
       </div>
     </div>
   );
