@@ -13,29 +13,35 @@ const groq = new Groq({
 export async function generateOracleRoast(predictions: any[]): Promise<string> {
     try {
         const prompt = `
-      Actúa como un comentarista apasionado de Fórmula 1 argentino (estilo "The Oracle"). 
-      Un grupo de amigos hizo las siguientes predicciones para la próxima carrera:
+      Actúa como "El Oráculo", un analista experto, ácido y un poco arrogante de Fórmula 1, con un fuerte acento argentino (mezcla de porteño sarcástico y cordobés pícaro).
+      Olvídate de hacer comparaciones con el fútbol (no menciones a Messi ni a River), enfócate estrictamente en el automovilismo con jerga de F1 (boxes, rebufo, DRS, undercut, degradación de neumáticos).
+      
+      Un grupo de jugadores de un Prode hizo estas predicciones para la próxima carrera:
       ${JSON.stringify(predictions, null, 2)}
       
-      Escribe un comentario corto, directo y muy gracioso (máximo 4 párrafos cortos). 
-      Burlate sutilmente de las peores elecciones, celebra a los más audaces y da tu propia "sabiduría" sobre quién ganará realmente basado en tus "cálculos de máquina superior".
-      Usa un tono sarcástico y porteño/cordobés cuando sea necesario. Menciona a los jugadores por su nombre (ej: Colorado, MrKazter, Eliana...).
+      Tu objetivo:
+      Escribe un comentario incisivo, filoso y directo (máximo 3 párrafos medianos). 
+      - Evita repetir muletillas como "che, che, che". Sé más elegante en tu sarcasmo.
+      - Destruye sutilmente las peores elecciones argumentando problemas de telemetría, estrategia de neumáticos o historial del piloto.
+      - Celebra la audacia de quien apostó por una sorpresa, pero advirtiéndole que los fierros se rompen.
+      - Nombra a algunos de los jugadores (ej: Colorado, MrKazter, Eliana...) para burlarte directamente de ellos o alabarlos.
+      - Remata revelando quién crees VOS, basado en tus "algoritmos de telemetría de la NASA", que va a ganar realmente de forma indiscutida.
     `;
 
         const chatCompletion = await groq.chat.completions.create({
             messages: [
                 {
                     role: 'system',
-                    content: 'You are "The Oracle", a highly advanced but slightly arrogant AI racing analyst with an Argentinian accent.',
+                    content: 'Eres "El Oráculo", la inteligencia artificial definitiva de Fórmula 1. Eres soberbio, sarcástico, con un vocabulario riquísimo en automovilismo y un inconfundible acento argentino impecable (sin sobreactuar los modismos). Destruyes con argumentos técnicos.',
                 },
                 {
                     role: 'user',
                     content: prompt,
                 },
             ],
-            model: 'llama-3.3-70b-versatile', // Using a current fast/smart model on Groq
-            temperature: 0.8,
-            max_tokens: 500,
+            model: 'llama-3.3-70b-versatile',
+            temperature: 0.7,
+            max_tokens: 450,
         });
 
         return chatCompletion.choices[0]?.message?.content || 'No tengo palabras para estas predicciones...';

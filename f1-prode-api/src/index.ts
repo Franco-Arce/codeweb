@@ -62,6 +62,18 @@ const initDb = async () => {
             SELECT 'MrKazter', 16 WHERE NOT EXISTS (SELECT 1 FROM leaderboard WHERE name = 'MrKazter');
             INSERT INTO leaderboard (name, pts)
             SELECT 'Eliana', 11 WHERE NOT EXISTS (SELECT 1 FROM leaderboard WHERE name = 'Eliana');
+
+            CREATE TABLE IF NOT EXISTS race_results (
+                id SERIAL PRIMARY KEY,
+                race_id VARCHAR(50) UNIQUE NOT NULL,
+                p1 VARCHAR(50),
+                p2 VARCHAR(50),
+                p3 VARCHAR(50),
+                p4 VARCHAR(50),
+                p5 VARCHAR(50),
+                pole_position VARCHAR(50),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
         `);
         console.log('✅ Base de datos inicializada');
     } catch (error) {
@@ -100,16 +112,62 @@ app.get('/api/auth/session', (req: Request, res: Response) => {
     }
 });
 
+// --- Official 2026 F1 Calendar ---
+const races2026 = [
+    { round: 1, country: "Australia", city: "Melbourne", name: "GP de Australia", date: "2026-03-08T03:00:00Z", circuit: "Albert Park", sprint: false },
+    { round: 2, country: "China", city: "Shanghai", name: "GP de China", date: "2026-03-15T04:00:00Z", circuit: "Shanghai International Circuit", sprint: true },
+    { round: 3, country: "Japón", city: "Suzuka", name: "GP de Japón", date: "2026-03-29T05:00:00Z", circuit: "Suzuka Circuit", sprint: false },
+    { round: 4, country: "Bahréin", city: "Sakhir", name: "GP de Bahréin", date: "2026-04-12T15:00:00Z", circuit: "Bahrain International Circuit", sprint: false },
+    { round: 5, country: "Arabia Saudita", city: "Jeddah", name: "GP de Arabia Saudita", date: "2026-04-19T17:00:00Z", circuit: "Jeddah Corniche Circuit", sprint: false },
+    { round: 6, country: "Estados Unidos", city: "Miami", name: "GP de Miami", date: "2026-05-03T20:00:00Z", circuit: "Miami International Autodrome", sprint: true },
+    { round: 7, country: "Canadá", city: "Montreal", name: "GP de Canadá", date: "2026-05-24T18:00:00Z", circuit: "Circuit Gilles Villeneuve", sprint: true },
+    { round: 8, country: "Mónaco", city: "Mónaco", name: "GP de Mónaco", date: "2026-06-07T13:00:00Z", circuit: "Circuit de Monaco", sprint: false },
+    { round: 9, country: "España", city: "Barcelona", name: "GP de España", date: "2026-06-14T13:00:00Z", circuit: "Circuit de Barcelona-Catalunya", sprint: false },
+    { round: 10, country: "Austria", city: "Spielberg", name: "GP de Austria", date: "2026-06-28T13:00:00Z", circuit: "Red Bull Ring", sprint: false },
+    { round: 11, country: "Reino Unido", city: "Silverstone", name: "GP de Reino Unido", date: "2026-07-05T14:00:00Z", circuit: "Silverstone Circuit", sprint: true },
+    { round: 12, country: "Bélgica", city: "Spa-Francorchamps", name: "GP de Bélgica", date: "2026-07-19T13:00:00Z", circuit: "Circuit de Spa-Francorchamps", sprint: false },
+    { round: 13, country: "Hungría", city: "Budapest", name: "GP de Hungría", date: "2026-07-26T13:00:00Z", circuit: "Hungaroring", sprint: false },
+    { round: 14, country: "Países Bajos", city: "Zandvoort", name: "GP de Países Bajos", date: "2026-08-23T13:00:00Z", circuit: "Circuit Zandvoort", sprint: true },
+    { round: 15, country: "Italia", city: "Monza", name: "GP de Italia", date: "2026-09-06T13:00:00Z", circuit: "Autodromo Nazionale Monza", sprint: false },
+    { round: 16, country: "España", city: "Madrid", name: "GP de Madrid", date: "2026-09-13T13:00:00Z", circuit: "Madrid Street Circuit", sprint: false },
+    { round: 17, country: "Azerbaiyán", city: "Bakú", name: "GP de Azerbaiyán", date: "2026-09-27T11:00:00Z", circuit: "Baku City Circuit", sprint: false },
+    { round: 18, country: "Singapur", city: "Singapur", name: "GP de Singapur", date: "2026-10-11T12:00:00Z", circuit: "Marina Bay Street Circuit", sprint: true },
+    { round: 19, country: "Estados Unidos", city: "Austin", name: "GP de Estados Unidos", date: "2026-10-25T19:00:00Z", circuit: "Circuit of the Americas", sprint: false },
+    { round: 20, country: "México", city: "CDMX", name: "GP de Ciudad de México", date: "2026-11-01T20:00:00Z", circuit: "Autódromo Hermanos Rodríguez", sprint: false },
+    { round: 21, country: "Brasil", city: "São Paulo", name: "GP de Brasil", date: "2026-11-08T17:00:00Z", circuit: "Autódromo José Carlos Pace", sprint: false },
+    { round: 22, country: "Estados Unidos", city: "Las Vegas", name: "GP de Las Vegas", date: "2026-11-21T06:00:00Z", circuit: "Las Vegas Strip Circuit", sprint: false },
+    { round: 23, country: "Qatar", city: "Lusail", name: "GP de Qatar", date: "2026-11-29T17:00:00Z", circuit: "Lusail International Circuit", sprint: false },
+    { round: 24, country: "Abu Dhabi", city: "Yas Marina", name: "GP de Abu Dabi", date: "2026-12-06T13:00:00Z", circuit: "Yas Marina Circuit", sprint: false },
+];
+
+function getNextRace() {
+    const now = new Date();
+    return races2026.find(r => new Date(r.date) > now) || races2026[races2026.length - 1];
+}
+
 // --- API Routes (Protected) ---
 
 app.get('/api/health', (req: Request, res: Response) => {
     res.json({ status: 'ok', message: 'F1 Prode Backend is running fast!' });
 });
 
-// Get predictions for the upcoming race
+// Get full 2026 Calendar
+app.get('/api/races/calendar', requireAuth, (req: Request, res: Response) => {
+    res.json(races2026);
+});
+
+// Get the next upcoming race
+app.get('/api/races/next', requireAuth, (req: Request, res: Response) => {
+    const next = getNextRace();
+    res.json(next);
+});
+
+// Get predictions for a race (defaults to next race)
 app.get('/api/predictions', requireAuth, async (req: Request, res: Response) => {
     try {
-        const result = await pool.query("SELECT * FROM predictions WHERE race_id = 'current' ORDER BY created_at DESC");
+        const nextRace = getNextRace();
+        const raceId = (req.query.race_id as string) || `round_${nextRace.round}`;
+        const result = await pool.query("SELECT * FROM predictions WHERE race_id = $1 ORDER BY created_at DESC", [raceId]);
         res.json(result.rows);
     } catch (error) {
         console.error('Error fetching predictions', error);
@@ -117,12 +175,12 @@ app.get('/api/predictions', requireAuth, async (req: Request, res: Response) => 
     }
 });
 
-// Submit a new prediction (o actualizar si ya existe para este jugador y carrera)
+// Submit a new prediction (linked to next race round)
 app.post('/api/predictions', requireAuth, async (req: Request, res: Response) => {
     try {
-        // race_id hardcoded temporalmente hasta conectar un calendario de F1
         const { player, p1, p2, p3, p4, p5, pole_position } = req.body;
-        const race_id = 'current';
+        const nextRace = getNextRace();
+        const race_id = `round_${nextRace.round}`;
 
         const result = await pool.query(
             `INSERT INTO predictions (player, race_id, p1, p2, p3, p4, p5, pole_position) 
@@ -153,13 +211,89 @@ app.get('/api/leaderboard', requireAuth, async (req: Request, res: Response) => 
 // Get 'The Oracle' analysis (Groq AI)
 app.get('/api/oracle/roast', requireAuth, async (req: Request, res: Response) => {
     try {
-        const result = await pool.query("SELECT * FROM predictions WHERE race_id = 'current' ORDER BY created_at DESC LIMIT 10");
+        const nextRace = getNextRace();
+        const raceId = `round_${nextRace.round}`;
+        const result = await pool.query("SELECT * FROM predictions WHERE race_id = $1 ORDER BY created_at DESC LIMIT 10", [raceId]);
         const predictions = result.rows;
         const roast = await generateOracleRoast(predictions);
-        res.json({ analysis: roast });
+        res.json({ analysis: roast, race: nextRace.name });
     } catch (error) {
         console.error('Error en Oracle:', error);
         res.status(500).json({ error: 'Failed to generate Oracle Analysis' });
+    }
+});
+
+// --- Admin: Submit official race results and calculate scores ---
+app.post('/api/admin/results', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const { race_round, p1, p2, p3, p4, p5, pole_position } = req.body;
+        const race_id = `round_${race_round}`;
+
+        // Save official results
+        await pool.query(
+            `INSERT INTO race_results (race_id, p1, p2, p3, p4, p5, pole_position)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (race_id)
+             DO UPDATE SET p1 = $2, p2 = $3, p3 = $4, p4 = $5, p5 = $6, pole_position = $7, created_at = CURRENT_TIMESTAMP`,
+            [race_id, p1, p2, p3, p4, p5, pole_position]
+        );
+
+        // Fetch all predictions for this race
+        const predictionsResult = await pool.query(
+            "SELECT * FROM predictions WHERE race_id = $1", [race_id]
+        );
+
+        const officialResult = { p1, p2, p3, p4, p5, pole_position };
+        const positionFields = ['p1', 'p2', 'p3', 'p4', 'p5'] as const;
+        const scoreUpdates: { player: string; scored: number }[] = [];
+
+        for (const pred of predictionsResult.rows) {
+            let scored = 0;
+            for (const pos of positionFields) {
+                if (pred[pos] && pred[pos] === (officialResult as any)[pos]) {
+                    scored += 10;
+                }
+            }
+            if (pred.pole_position && pred.pole_position === officialResult.pole_position) {
+                scored += 5;
+            }
+            if (scored > 0) {
+                scoreUpdates.push({ player: pred.player, scored });
+            }
+        }
+
+        // Update leaderboard scores
+        for (const update of scoreUpdates) {
+            await pool.query(
+                `INSERT INTO leaderboard (name, pts) VALUES ($1, $2)
+                 ON CONFLICT (name) DO UPDATE SET pts = leaderboard.pts + $2`,
+                [update.player, update.scored]
+            );
+        }
+
+        res.json({
+            message: `Resultados procesados para ${race_id}`,
+            scoreUpdates,
+            totalPredictions: predictionsResult.rows.length,
+        });
+    } catch (error) {
+        console.error('Error processing results:', error);
+        res.status(500).json({ error: 'Error processing race results' });
+    }
+});
+
+// Get official results for a specific race
+app.get('/api/admin/results/:round', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const raceId = `round_${req.params.round}`;
+        const result = await pool.query("SELECT * FROM race_results WHERE race_id = $1", [raceId]);
+        if (result.rows.length === 0) {
+            return res.json({ exists: false });
+        }
+        res.json({ exists: true, result: result.rows[0] });
+    } catch (error) {
+        console.error('Error fetching results:', error);
+        res.status(500).json({ error: 'Database error' });
     }
 });
 
