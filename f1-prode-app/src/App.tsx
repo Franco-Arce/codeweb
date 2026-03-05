@@ -104,7 +104,8 @@ function DashboardView() {
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    fetch('http://localhost:3001/api/leaderboard')
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    fetch(`${apiUrl}/api/leaderboard`)
       .then(res => res.json())
       .then(data => {
         setLeaderboard(data);
@@ -186,7 +187,8 @@ function F1ProdeView() {
 
   React.useEffect(() => {
     setLoadingOracle(true);
-    fetch('http://localhost:3001/api/oracle/roast')
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    fetch(`${apiUrl}/api/oracle/roast`)
       .then(res => res.json())
       .then(data => {
         setOracleInsight(data.analysis);
