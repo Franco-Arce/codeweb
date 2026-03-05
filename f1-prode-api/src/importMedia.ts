@@ -68,7 +68,7 @@ const importMedia = async () => {
                 if (!row.name || row.name === 'undefined') continue; // Saltar vacíos
 
                 await pool.query(
-\`INSERT INTO media_series (recommender, name, genre, description, rating, type) VALUES ($1, $2, $3, $4, $5, 'serie')\`,
+                    `INSERT INTO media_series (recommender, name, genre, description, rating, type) VALUES ($1, $2, $3, $4, $5, 'serie')`,
                     [row.recommender, row.name, row.genre, row.description, row.rating]
                 );
             }
@@ -77,7 +77,7 @@ const importMedia = async () => {
         // Hoja 2: animes (Lo meteremos en media_series con type anime)
         if (wb.SheetNames.includes('animes')) {
             const animeData: any[] = xlsx.utils.sheet_to_json(wb.Sheets['animes']);
-            console.log(`Importando ${ animeData.length } animes...`);
+            console.log(`Importando ${animeData.length} animes...`);
             for (const item of animeData) {
                 const row = {
                     recommender: String(item['Columna 1'] || ''),
@@ -89,7 +89,7 @@ const importMedia = async () => {
                 if (!row.name || row.name === 'undefined') continue;
 
                 await pool.query(
-                    \`INSERT INTO media_series (recommender, name, genre, description, rating, type) VALUES ($1, $2, $3, $4, $5, 'anime')\`,
+                    `INSERT INTO media_series (recommender, name, genre, description, rating, type) VALUES ($1, $2, $3, $4, $5, 'anime')`,
                     [row.recommender, row.name, row.genre, row.description, row.rating]
                 );
             }
@@ -98,7 +98,7 @@ const importMedia = async () => {
         // Hoja 3: Peliculas
         if (wb.SheetNames.includes('Peliculas')) {
             const moviesData: any[] = xlsx.utils.sheet_to_json(wb.Sheets['Peliculas']);
-            console.log(`Importando ${ moviesData.length } películas...`);
+            console.log(`Importando ${moviesData.length} películas...`);
             for (const item of moviesData) {
                 const row = {
                     recommender: String(item['Columna 1'] || ''),
@@ -110,17 +110,17 @@ const importMedia = async () => {
                 if (!row.name || row.name === 'undefined') continue;
 
                 await pool.query(
-                    \`INSERT INTO media_movies (recommender, name, genre, description, rating) VALUES ($1, $2, $3, $4, $5)\`,
+                    `INSERT INTO media_movies (recommender, name, genre, description, rating) VALUES ($1, $2, $3, $4, $5)`,
                     [row.recommender, row.name, row.genre, row.description, row.rating]
                 );
             }
         }
-        
+
         // Hoja 4: Peliculas_por_ver (Opcional, omitimos por ahora o las metemos igual)
         // Hoja 5: Juegos de Mesa
         if (wb.SheetNames.includes('Juegos de Mesa')) {
             const gamesData: any[] = xlsx.utils.sheet_to_json(wb.Sheets['Juegos de Mesa']);
-            console.log(`Importando ${ gamesData.length } juegos de mesa...`);
+            console.log(`Importando ${gamesData.length} juegos de mesa...`);
             for (const item of gamesData) {
                 const row = {
                     name: String(item['Nombre'] || ''),
@@ -133,7 +133,7 @@ const importMedia = async () => {
                 if (!row.name || row.name === 'undefined') continue;
 
                 await pool.query(
-                    \`INSERT INTO media_boardgames (name, game_type, players, duration, difficulty, notes) VALUES ($1, $2, $3, $4, $5, $6)\`,
+                    `INSERT INTO media_boardgames (name, game_type, players, duration, difficulty, notes) VALUES ($1, $2, $3, $4, $5, $6)`,
                     [row.name, row.game_type, row.players, row.duration, row.difficulty, row.notes]
                 );
             }

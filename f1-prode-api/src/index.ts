@@ -163,6 +163,61 @@ app.get('/api/oracle/roast', requireAuth, async (req: Request, res: Response) =>
     }
 });
 
+// --- Media Vault API Routes ---
+
+// GET Media by type (series, movies, boardgames)
+app.get('/api/media/:type', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const type = req.params.type;
+        let query = '';
+        if (type === 'series') query = "SELECT * FROM media_series WHERE type = 'serie' ORDER BY created_at DESC";
+        else if (type === 'animes') query = "SELECT * FROM media_series WHERE type = 'anime' ORDER BY created_at DESC";
+        else if (type === 'movies') query = "SELECT * FROM media_movies ORDER BY created_at DESC";
+        else if (type === 'boardgames') query = "SELECT * FROM media_boardgames ORDER BY created_at DESC";
+        else return res.status(400).json({ error: 'Invalid media type' });
+
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (e) {
+        console.error('Error fetching media:', e);
+        res.status(500).json({ error: 'Database error fetching media collection' });
+    }
+});
+
+// POST new Media Item
+app.post('/api/media/:type', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const type = req.params.type;
+        const body = req.body;
+        let result;
+
+        if (type === 'series' || type === 'animes') {
+            const mType = type === 'animes' ? 'anime' : 'serie';
+            result = await pool.query(
+                `INSERT INTO media_series (recommender, name, genre, description, rating, type) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+                [body.recommender, body.name, body.genre, body.description, body.rating, mType]
+            );
+        } else if (type === 'movies') {
+            result = await pool.query(
+                `INSERT INTO media_movies (recommender, name, genre, description, rating) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+                [body.recommender, body.name, body.genre, body.description, body.rating]
+            );
+        } else if (type === 'boardgames') {
+            result = await pool.query(
+                `INSERT INTO media_boardgames (name, game_type, players, duration, difficulty, notes) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+                [body.name, body.game_type, body.players, body.duration, body.difficulty, body.notes]
+            );
+        } else {
+            return res.status(400).json({ error: 'Invalid media type' });
+        }
+
+        res.status(201).json({ message: 'Saved successfully', item: result.rows[0] });
+    } catch (e) {
+        console.error('Error posting new media:', e);
+        res.status(500).json({ error: 'Database error saving new media item' });
+    }
+});
+
 // Start Server
 app.listen(port, () => {
     console.log(`🏎️ F1 Prode Backend running on http://localhost:${port}`);
