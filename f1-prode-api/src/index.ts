@@ -9,8 +9,7 @@ const port = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors({
-    origin: process.env.VITE_FRONTEND_URL || '*', // Ajustaremos esto en producción para que acepte Vercel
-    credentials: true,
+    origin: '*', // Permitir Vercel y local
 }));
 app.use(express.json());
 
