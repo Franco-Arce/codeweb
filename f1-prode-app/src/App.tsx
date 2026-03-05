@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Film, Gamepad2, Tv, LayoutDashboard, Settings } from 'lucide-react';
+import {
+  Trophy, Film, Gamepad2, Tv, LayoutDashboard, Settings,
+  RefreshCw, MessageSquare, User, Calendar, Clock, MapPin, Zap, ChevronRight
+} from 'lucide-react';
 import logoCodeflow from './assets/LogoOnly.png';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
@@ -966,6 +969,45 @@ function AdminView() {
       .catch(err => console.error(err));
   }, []);
 
+  const fetchOfficialResults = async () => {
+    if (!selectedRound) return;
+    setSubmitting(true);
+    setResultMessage(null);
+    try {
+      // 1. Fetch Winners (Race Results)
+      const resVal = await fetch(`https://api.jolpi.ca/ergast/f1/2026/${selectedRound}/results.json`);
+      const dataVal = await resVal.json();
+      const results = dataVal.MRData.RaceTable.Races[0]?.Results;
+
+      if (results && results.length >= 5) {
+        setP1(`${results[0].Driver.givenName} ${results[0].Driver.familyName}`);
+        setP2(`${results[1].Driver.givenName} ${results[1].Driver.familyName}`);
+        setP3(`${results[2].Driver.givenName} ${results[2].Driver.familyName}`);
+        setP4(`${results[3].Driver.givenName} ${results[3].Driver.familyName}`);
+        setP5(`${results[4].Driver.givenName} ${results[4].Driver.familyName}`);
+        setResultMessage({ message: "¡Resultados de carrera sincronizados!" });
+      }
+
+      // 2. Fetch Pole (Qualifying)
+      const resQual = await fetch(`https://api.jolpi.ca/ergast/f1/2026/${selectedRound}/qualifying.json`);
+      const dataQual = await resQual.json();
+      const qResults = dataQual.MRData.RaceTable.Races[0]?.QualifyingResults;
+      if (qResults && qResults[0]) {
+        setPole(`${qResults[0].Driver.givenName} ${qResults[0].Driver.familyName}`);
+        setResultMessage((prev: any) => ({ ...prev, message: (prev?.message || "") + " ¡Pole position sincronizada!" }));
+      }
+
+      if (!results && !qResults) {
+        setResultMessage({ error: "No hay datos oficiales todavía para este GP en la API de la FIA." });
+      }
+    } catch (err) {
+      console.error(err);
+      setResultMessage({ error: "Error conectando con la API de la FIA." });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRound) return;
@@ -1015,7 +1057,20 @@ function AdminView() {
 
           {selectedRound && (
             <>
-              <p className="text-sm text-codeflow-accent font-semibold">Resultados de: {selectedRaceName}</p>
+              <div className="flex justify-between items-center bg-codeflow-accent/10 border border-codeflow-accent/20 p-4 rounded-xl mb-4">
+                <div className="flex flex-col">
+                  <p className="text-sm text-codeflow-accent font-semibold">{selectedRaceName}</p>
+                  <p className="text-[10px] text-codeflow-muted uppercase tracking-tighter">Sincronización automática disponible</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchOfficialResults}
+                  className="bg-codeflow-accent/20 hover:bg-codeflow-accent/30 text-codeflow-accent text-xs font-bold px-4 py-2 rounded-lg transition-colors flex items-center gap-2 border border-codeflow-accent/30"
+                >
+                  <RefreshCw size={14} className={submitting ? 'animate-spin' : ''} />
+                  Sincronizar con API OfficiaL
+                </button>
+              </div>
 
               <div>
                 <label className="block text-xs uppercase font-bold text-codeflow-muted tracking-wider mb-1">Pole Position</label>
