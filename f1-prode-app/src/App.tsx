@@ -785,7 +785,10 @@ function F1ProdeView() {
               </p>
             </div>
           </div>
-          <button className="btn-secondary">
+          <button
+            onClick={() => setF1Tab('rules')}
+            className={`btn-secondary transition-all ${f1Tab === 'rules' ? 'bg-codeflow-accent/20 border-codeflow-accent/40 text-codeflow-accent' : ''}`}
+          >
             Reglas del Campeonato
           </button>
         </div>
@@ -816,6 +819,12 @@ function F1ProdeView() {
             Grilla de Pronósticos
             {f1Tab === 'grilla' && <motion.div layoutId="f1ActiveLine" className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-codeflow-accent" />}
           </button>
+          <button
+            onClick={() => setF1Tab('rules')}
+            className={`pb-3 font-semibold transition-colors relative whitespace-nowrap ${f1Tab === 'rules' ? 'text-codeflow-accent' : 'text-codeflow-muted hover:text-white'}`}>
+            📚 Reglas
+            {f1Tab === 'rules' && <motion.div layoutId="f1ActiveLine" className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-codeflow-accent" />}
+          </button>
         </div>
       </header>
 
@@ -827,6 +836,10 @@ function F1ProdeView() {
           exit={{ opacity: 0, x: 10 }}
           transition={{ duration: 0.2 }}
         >
+
+          {f1Tab === 'rules' && (
+            <F1RulesTab />
+          )}
 
           {f1Tab === 'prode' && (
             <div className="space-y-6">
@@ -1494,6 +1507,95 @@ function F1CalendarTab() {
     </div>
   )
 }
+// --- F1 Rules Tab Component ---
+function F1RulesTab() {
+  const sections = [
+    {
+      title: "🏁 ¿Cómo funciona el Prode?",
+      icon: <Trophy className="text-yellow-500" />,
+      content: "El Prode de CodeWeb es una competencia de predicciones para la temporada 2026 de Formula 1. El objetivo es acumular la mayor cantidad de puntos posible acertando los resultados de cada sesión de GP."
+    },
+    {
+      title: "🕒 Sesiones y Bloqueo",
+      icon: <RefreshCw className="text-codeflow-accent" />,
+      content: "Podés cargar o editar tus predicciones en cualquier momento hasta que comience oficialmente la sesión correspondiente. Unos minutos antes del inicio (Qualy de viernes/sábado, Sprint o Carrera de domingo), el sistema bloquea automáticamente la carga para ese GP para evitar trampas."
+    },
+    {
+      title: "📊 Sistema de Puntos",
+      icon: <CheckCircle className="text-green-500" />,
+      isPoints: true,
+      points: [
+        { label: "Pole Position (Sábado)", pts: "+5 pts", desc: "Acertar quién hace la Pole oficial el sábado." },
+        { label: "Carrera (Top 5)", pts: "+10 pts c/u", desc: "Cada posición del Top 5 que aciertes exactamente el domingo." },
+        { label: "Sprint Race (Top 3)", pts: "+8 pts c/u", desc: "Acertar los 3 primeros de la carrera corta." },
+        { label: "Clasificación (Top 3)", pts: "+10 pts c/u", desc: "Acertar los 3 pilotos más rápidos de la Qualy tradicional." },
+        { label: "Sprint Qualy (1°)", pts: "+5 pts", desc: "Acertar quién sale primero en la tanda del viernes." },
+      ]
+    },
+    {
+      title: "🔍 Visualización y Transparencia",
+      icon: <LayoutDashboard className="text-blue-500" />,
+      content: "Una vez que la sesión se bloquea, podés ver los pronósticos de todos en tiempo real en la pestaña 'Grilla de Pronósticos' para comparar estrategias. El Leaderboard se actualiza cuando los comisarios (Admin) cargan los resultados oficiales."
+    }
+  ];
+
+  return (
+    <div className="glass-card p-8 min-h-[500px] border-t-4 border-t-purple-500 rounded-t-none">
+      <div className="max-w-4xl mx-auto">
+        <header className="mb-10 text-center text-balance">
+          <h3 className="text-3xl font-display font-bold text-white mb-3 tracking-tight">Manual de Operaciones: CodeWeb F1</h3>
+          <p className="text-codeflow-muted text-lg">Todo lo que necesitás saber para dominar el paddock.</p>
+        </header>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {sections.map((sec, idx) => (
+            <motion.div
+              key={idx}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: idx * 0.1 }}
+              className="bg-white/5 border border-white/10 rounded-2xl p-6 hover:border-codeflow-accent/30 transition-all group"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-white/5 rounded-lg group-hover:bg-codeflow-accent/10 transition-colors">
+                  {sec.icon}
+                </div>
+                <h4 className="font-bold text-lg text-white">{sec.title}</h4>
+              </div>
+
+              {sec.isPoints ? (
+                <div className="space-y-3">
+                  {sec.points?.map((p, i) => (
+                    <div key={i} className="flex justify-between items-start border-b border-white/5 pb-2 last:border-0">
+                      <div>
+                        <p className="text-sm font-semibold text-white">{p.label}</p>
+                        <p className="text-[10px] text-codeflow-muted">{p.desc}</p>
+                      </div>
+                      <span className="text-xs font-bold text-codeflow-accent bg-codeflow-accent/10 px-2 py-1 rounded shrink-0">{p.pts}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-codeflow-text/80 leading-relaxed">
+                  {sec.content}
+                </p>
+              )}
+            </motion.div>
+          ))}
+        </div>
+
+        <div className="mt-12 p-8 rounded-2xl bg-gradient-to-br from-red-600/10 via-purple-600/10 to-transparent border border-white/10 text-center relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl rotate-12">🏁</div>
+          <p className="text-base text-white/80 italic font-medium relative z-10">
+            "Si todo parece estar bajo control, es que no vas lo suficientemente rápido."
+          </p>
+          <p className="text-xs font-bold text-codeflow-accent mt-3 uppercase tracking-[0.2em] relative z-10">— Mario Andretti</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- Admin Panel Component ---
 function AdminView() {
   const [races, setRaces] = React.useState<any[]>([]);
