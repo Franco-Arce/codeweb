@@ -51,22 +51,19 @@ function App() {
     <div className="min-h-screen bg-codeflow-dark relative flex overflow-hidden">
       {/* Background Animated Blobs for premium effect */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-codeflow-accent/20 rounded-full mix-blend-screen filter blur-[100px] animate-blob" />
-        <div className="absolute top-[20%] right-[-10%] w-[30%] h-[30%] bg-fuchsia-600/20 rounded-full mix-blend-screen filter blur-[100px] animate-blob animation-delay-2000" />
-        <div className="absolute bottom-[-20%] left-[20%] w-[50%] h-[50%] bg-purple-800/20 rounded-full mix-blend-screen filter blur-[120px] animate-blob animation-delay-4000" />
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-codeflow-accent/10 rounded-full mix-blend-lighten filter blur-[140px] animate-blob" />
+        <div className="absolute top-[20%] right-[-10%] w-[30%] h-[30%] bg-fuchsia-600/10 rounded-full mix-blend-lighten filter blur-[140px] animate-blob animation-delay-2000" />
+        <div className="absolute bottom-[-20%] left-[20%] w-[50%] h-[50%] bg-purple-800/10 rounded-full mix-blend-lighten filter blur-[150px] animate-blob animation-delay-4000" />
 
         {/* Grid pattern overlay */}
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+CjxwYXRoIGQ9Ik00MCAwaC0xTDBWMGgxbDM5LS4wMVoiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wMykiLz4KPC9zdmc+')] opacity-20" />
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+CjxwYXRoIGQ9Ik00MCAwaC0xTDBWMGgxbDM5LS4wMVoiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wMykiLz4KPC9zdmc+')] opacity-10" />
       </div>
 
-      {/* Sidebar Navigation */}
       <aside className="w-64 border-r border-white/5 bg-codeflow-base/80 backdrop-blur-3xl z-10 flex flex-col h-screen">
         <div className="p-6 flex items-center gap-3 border-b border-white/5">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-codeflow-accent to-fuchsia-600 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.5)] overflow-hidden">
-            <img src={logoCodeflow} alt="Codeflow" className="w-[70%] h-[70%] object-contain drop-shadow-md" />
-          </div>
+          <img src={logoCodeflow} alt="CodeWeb" className="w-10 h-10 object-contain drop-shadow-[0_0_8px_rgba(168,85,247,0.4)]" />
           <h1 className="font-display font-bold text-xl bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60">
-            F1 Friends
+            CodeWeb
           </h1>
         </div>
 
@@ -607,6 +604,7 @@ function MediaVaultView({ tab }: { tab: string }) {
   const [items, setItems] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [showForm, setShowForm] = React.useState(false);
+  const [selectedGenre, setSelectedGenre] = React.useState('All');
 
   // Form states
   const [formData, setFormData] = React.useState({ recommender: '', name: '', genre: '', description: '', rating: '', game_type: '', players: '', duration: '', difficulty: '', notes: '' });
@@ -622,10 +620,39 @@ function MediaVaultView({ tab }: { tab: string }) {
       .catch(err => { console.error('Error fetching media:', err); setLoading(false); });
   };
 
+  const isGame = tab === 'games';
+
   React.useEffect(() => {
     fetchMedia();
     setShowForm(false);
+    setSelectedGenre('All');
   }, [tab]);
+
+  const genres = React.useMemo(() => {
+    const all = items.map(i => isGame ? i.game_type : i.genre).filter(Boolean).flatMap(g => g.split(',').map((s: string) => s.trim()));
+    return ['All', ...Array.from(new Set(all))];
+  }, [items, isGame]);
+
+  const filteredItems = React.useMemo(() => {
+    if (selectedGenre === 'All') return items;
+    return items.filter(i => {
+      const val = isGame ? i.game_type : i.genre;
+      return val && val.includes(selectedGenre);
+    });
+  }, [items, selectedGenre, isGame]);
+
+  const getGenreColor = (genre: string) => {
+    if (!genre) return 'text-codeflow-accent bg-codeflow-accent/10';
+    const str = genre.toLowerCase();
+    if (str.includes('acción') || str.includes('action') || str.includes('estrategia') || str.includes('shonen')) return 'text-red-400 bg-red-400/10';
+    if (str.includes('comedia') || str.includes('comedy') || str.includes('familiar')) return 'text-yellow-400 bg-yellow-400/10';
+    if (str.includes('drama') || str.includes('misterio') || str.includes('seinen')) return 'text-blue-400 bg-blue-400/10';
+    if (str.includes('sci-fi') || str.includes('ciencia ficción') || str.includes('mecha')) return 'text-cyan-400 bg-cyan-400/10';
+    if (str.includes('terror') || str.includes('horror') || str.includes('suspenso')) return 'text-stone-400 bg-stone-400/10';
+    if (str.includes('aventura') || str.includes('rol') || str.includes('fantasy') || str.includes('fantasía')) return 'text-green-400 bg-green-400/10';
+    if (str.includes('romance') || str.includes('shojo') || str.includes('slice')) return 'text-pink-400 bg-pink-400/10';
+    return 'text-codeflow-accent bg-codeflow-accent/10';
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -647,8 +674,6 @@ function MediaVaultView({ tab }: { tab: string }) {
     }
   };
 
-  const isGame = tab === 'games';
-
   const translations: Record<string, string> = {
     'series': 'Series de TV',
     'animes': 'Animes de Culto',
@@ -658,14 +683,28 @@ function MediaVaultView({ tab }: { tab: string }) {
 
   return (
     <div className="space-y-8 animate-fade-in pb-12">
-      <header className="flex justify-between items-end mb-8">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
         <div>
           <h1 className="text-4xl font-display font-bold text-white mb-2">{translations[tab]}</h1>
           <p className="text-codeflow-muted text-lg">Bóveda de recomendaciones grupales.</p>
         </div>
-        <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancelar' : 'Añadir Nuevo'}
-        </button>
+        <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
+          {items.length > 0 && (
+            <select
+              value={selectedGenre}
+              onChange={(e) => setSelectedGenre(e.target.value)}
+              className="bg-codeflow-card border border-white/10 text-white text-sm rounded-xl focus:ring-codeflow-accent focus:border-codeflow-accent block px-4 py-3 outline-none cursor-pointer appearance-none pr-10 relative w-full sm:w-auto"
+              style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239CA3AF' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`, backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.5em 1.5em' }}
+            >
+              {genres.map(g => (
+                <option key={g} value={g}>{g === 'All' ? (isGame ? 'Todos los tipos' : 'Todos los géneros') : g}</option>
+              ))}
+            </select>
+          )}
+          <button className="btn-primary w-full sm:w-auto whitespace-nowrap" onClick={() => setShowForm(!showForm)}>
+            {showForm ? 'Cancelar' : 'Añadir Nuevo'}
+          </button>
+        </div>
       </header>
 
       <AnimatePresence>
@@ -710,22 +749,26 @@ function MediaVaultView({ tab }: { tab: string }) {
             <div key={i} className="h-48 glass-card animate-pulse bg-white/5 border-white/5" />
           ))}
         </div>
-      ) : items.length === 0 ? (
+      ) : filteredItems.length === 0 ? (
         <div className="text-center py-20 text-codeflow-muted text-xl border-2 border-dashed border-white/10 rounded-2xl">
-          Todavía no hay contenido en esta biblioteca. ¡Animate a ser el primero!
+          No hay elementos que coincidan con la búsqueda.
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {items.map((item, i) => (
+          {filteredItems.map((item, i) => (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} key={item.id} className="glass-card p-6 flex flex-col items-start gap-4 hover:border-codeflow-accent/40 group">
-              <div className="flex justify-between items-start w-full">
-                <h3 className="text-xl font-bold text-white group-hover:text-codeflow-accent transition-colors leading-tight pr-4">{item.name}</h3>
-                {!isGame && <span className="text-xs font-bold px-2 py-1 rounded-full bg-white/10 text-white/70 whitespace-nowrap">{item.rating || 'Sin nota'}</span>}
+              <div className="flex justify-between items-start w-full gap-2">
+                <h3 className="text-xl font-bold text-white group-hover:text-codeflow-accent transition-colors leading-tight">{item.name}</h3>
+                {!isGame && <span className="text-xs font-bold px-2 py-1 rounded-full bg-white/10 text-white/70 whitespace-nowrap shrink-0">{item.rating || 'Sin nota'}</span>}
               </div>
 
               {!isGame ? (
                 <>
-                  {item.genre && <span className="text-xs font-semibold text-codeflow-accent bg-codeflow-accent/10 px-2 py-1 rounded-md">{item.genre}</span>}
+                  {item.genre && (
+                    <div className="flex flex-wrap gap-2">
+                      {item.genre.split(',').map((g: string) => <span key={g} className={`text-xs font-semibold px-2 py-1 rounded-md ${getGenreColor(g.trim())}`}>{g.trim()}</span>)}
+                    </div>
+                  )}
                   <p className="text-sm text-codeflow-text/80 italic flex-1">{item.description}</p>
                   <div className="w-full pt-4 mt-auto border-t border-white/5 text-xs text-codeflow-muted flex justify-between items-center">
                     <span>Recomendó: <strong className="text-white">{item.recommender}</strong></span>
@@ -735,7 +778,7 @@ function MediaVaultView({ tab }: { tab: string }) {
               ) : (
                 <>
                   <div className="flex flex-wrap gap-2">
-                    {item.game_type && <span className="text-xs font-semibold text-blue-400 bg-blue-500/10 px-2 py-1 rounded-md">{item.game_type}</span>}
+                    {item.game_type && <span className={`text-xs font-semibold px-2 py-1 rounded-md ${getGenreColor(item.game_type)}`}>{item.game_type}</span>}
                     {item.difficulty && <span className="text-xs font-semibold text-purple-400 bg-purple-500/10 px-2 py-1 rounded-md">{item.difficulty}</span>}
                     {item.players && <span className="text-xs font-semibold text-green-400 bg-green-500/10 px-2 py-1 rounded-md">{item.players} Jug.</span>}
                     {item.duration && <span className="text-xs font-semibold text-orange-400 bg-orange-500/10 px-2 py-1 rounded-md">⏱ {item.duration}</span>}
