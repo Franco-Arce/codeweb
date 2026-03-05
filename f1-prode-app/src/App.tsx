@@ -349,7 +349,27 @@ function F1ProdeView() {
   const [p4, setP4] = React.useState('');
   const [p5, setP5] = React.useState('');
 
+  // --- Constantes y Estados Dinámicos ---
+  const USERS = ["MrKazter", "Eliana", "NestorMcNestor", "GuilleGb", "Rubiola", "Colorado", "MrFori"];
+  const [DRIVERS, setDRIVERS] = React.useState<string[]>([
+    "Max Verstappen", "Lando Norris", "Charles Leclerc", "Carlos Sainz", "Oscar Piastri",
+    "Lewis Hamilton", "George Russell", "Fernando Alonso", "Lance Stroll", "Yuki Tsunoda",
+    "Liam Lawson", "Nico Hülkenberg", "Esteban Ocon", "Pierre Gasly", "Jack Doohan",
+    "Alexander Albon", "Franco Colapinto", "Oliver Bearman", "Andrea Kimi Antonelli", "Gabriel Bortoleto"
+  ]);
+
   React.useEffect(() => {
+    // Fetch Drivers de la API Oficial Ergast F1 (Fork Jolpi 2026+)
+    fetch('https://api.jolpi.ca/ergast/f1/2026/drivers.json')
+      .then(res => res.json())
+      .then(data => {
+        const d = data.MRData.DriverTable.Drivers.map((driver: any) => `${driver.givenName} ${driver.familyName}`);
+        setDRIVERS(d.sort());
+      })
+      .catch(err => {
+        console.error("Error trayendo lista oficial de la FIA:", err);
+      });
+
     setLoadingOracle(true);
     fetchWithAuth('/api/oracle/roast')
       .then(res => res.json())
@@ -363,15 +383,6 @@ function F1ProdeView() {
         setLoadingOracle(false);
       });
   }, []);
-
-  // --- Constantes para Selects ---
-  const USERS = ["MrKazter", "Eliana", "NestorMcNestor", "GuilleGb", "Rubiola", "Colorado", "MrFori"];
-  const DRIVERS = [
-    "Max Verstappen", "Lando Norris", "Charles Leclerc", "Carlos Sainz", "Oscar Piastri",
-    "Lewis Hamilton", "George Russell", "Fernando Alonso", "Lance Stroll", "Yuki Tsunoda",
-    "Liam Lawson", "Nico Hülkenberg", "Esteban Ocon", "Pierre Gasly", "Jack Doohan",
-    "Alexander Albon", "Franco Colapinto", "Oliver Bearman", "Andrea Kimi Antonelli", "Gabriel Bortoleto"
-  ].sort();
 
   const handlePredictSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
