@@ -1,12 +1,50 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useContext, createContext } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Trophy, Film, Gamepad2, Tv, LayoutDashboard, Settings,
-  RefreshCw, MessageSquare, User, Calendar, Clock, MapPin, Zap, ChevronRight
+  RefreshCw, AlertCircle, CheckCircle, XCircle
 } from 'lucide-react';
 import logoCodeflow from './assets/LogoOnly.png';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+// --- Toast System ---
+type Toast = { id: number; type: 'success' | 'error' | 'warning'; message: string };
+const ToastContext = createContext<{ addToast: (type: Toast['type'], message: string) => void }>({ addToast: () => { } });
+const useToast = () => useContext(ToastContext);
+
+function ToastProvider({ children }: { children: React.ReactNode }) {
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const addToast = useCallback((type: Toast['type'], message: string) => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, type, message }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+  }, []);
+  return (
+    <ToastContext.Provider value={{ addToast }}>
+      {children}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none">
+        <AnimatePresence>
+          {toasts.map(toast => (
+            <motion.div
+              key={toast.id}
+              initial={{ opacity: 0, x: 60, scale: 0.9 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 60, scale: 0.9 }}
+              className={`pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl border backdrop-blur-xl text-sm font-medium ${toast.type === 'success' ? 'bg-green-500/20 border-green-500/40 text-green-300' :
+                toast.type === 'error' ? 'bg-red-500/20 border-red-500/40 text-red-300' :
+                  'bg-yellow-500/20 border-yellow-500/40 text-yellow-300'
+                }`}
+            >
+              {toast.type === 'success' ? <CheckCircle size={16} /> : toast.type === 'error' ? <XCircle size={16} /> : <AlertCircle size={16} />}
+              {toast.message}
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+    </ToastContext.Provider>
+  );
+}
 
 // --- API Helpers ---
 const fetchWithAuth = async (endpoint: string, options: RequestInit = {}) => {
@@ -33,32 +71,35 @@ function App() {
   const [isLoading, setIsLoading] = React.useState(true);
 
   React.useEffect(() => {
-    // Check auth
     const token = localStorage.getItem('prode_auth_token');
     if (token === 'f1_pepe_logged_in_token') {
       setIsAuthenticated(true);
     } else {
-      // Remove stale tokens to force re-login if needed
       localStorage.removeItem('prode_auth_token');
     }
     setIsLoading(false);
   }, []);
 
-  if (isLoading) return <div className="min-h-screen bg-codeflow-dark flex items-center justify-center">Loading...</div>;
+  if (isLoading) return <div className="min-h-screen bg-codeflow-dark flex items-center justify-center"><div className="w-8 h-8 border-2 border-codeflow-accent border-t-transparent rounded-full animate-spin" /></div>;
 
   if (!isAuthenticated) {
-    return <LoginView onLogin={() => setIsAuthenticated(true)} />;
+    return <ToastProvider><LoginView onLogin={() => setIsAuthenticated(true)} /></ToastProvider>;
   }
 
   return (
+    <ToastProvider>
+      <AppShell activeTab={activeTab} setActiveTab={setActiveTab} setIsAuthenticated={setIsAuthenticated} />
+    </ToastProvider>
+  );
+}
+
+function AppShell({ activeTab, setActiveTab, setIsAuthenticated }: { activeTab: string; setActiveTab: (t: string) => void; setIsAuthenticated: (v: boolean) => void }) {
+  return (
     <div className="min-h-screen bg-codeflow-dark relative flex overflow-hidden">
-      {/* Background Animated Blobs for premium effect */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-codeflow-accent/10 rounded-full mix-blend-lighten filter blur-[140px] animate-blob" />
         <div className="absolute top-[20%] right-[-10%] w-[30%] h-[30%] bg-fuchsia-600/10 rounded-full mix-blend-lighten filter blur-[140px] animate-blob animation-delay-2000" />
         <div className="absolute bottom-[-20%] left-[20%] w-[50%] h-[50%] bg-purple-800/10 rounded-full mix-blend-lighten filter blur-[150px] animate-blob animation-delay-4000" />
-
-        {/* Grid pattern overlay */}
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+CjxwYXRoIGQ9Ik00MCAwaC0xTDBWMGgxbDM5LS4wMVoiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wMykiLz4KPC9zdmc+')] opacity-10" />
       </div>
 
@@ -98,25 +139,27 @@ function App() {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 h-screen overflow-y-auto relative z-10 p-8">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeTab}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3 }}
-            className="h-full"
-          >
-            {activeTab === 'dashboard' && <DashboardView />}
-            {activeTab === 'f1' && <F1ProdeView />}
-            {activeTab === 'admin' && <AdminView />}
-            {['series', 'animes', 'movies', 'games'].includes(activeTab) && (
-              <MediaVaultView tab={activeTab} />
-            )}
-          </motion.div>
-        </AnimatePresence>
-      </main>
+      <ActiveTabContext.Provider value={setActiveTab}>
+        <main className="flex-1 h-screen overflow-y-auto relative z-10 p-8">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+              className="h-full"
+            >
+              {activeTab === 'dashboard' && <DashboardView />}
+              {activeTab === 'f1' && <F1ProdeView />}
+              {activeTab === 'admin' && <AdminView />}
+              {['series', 'animes', 'movies', 'games'].includes(activeTab) && (
+                <MediaVaultView tab={activeTab} />
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </main>
+      </ActiveTabContext.Provider>
     </div>
   );
 }
@@ -256,119 +299,190 @@ function DashboardView() {
   const [leaderboard, setLeaderboard] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [nextRace, setNextRace] = React.useState<any>(null);
+  const [predictions, setPredictions] = React.useState<any[]>([]);
   const [countdown, setCountdown] = React.useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
-  React.useEffect(() => {
-    fetchWithAuth('/api/leaderboard')
-      .then(res => res.json())
-      .then(data => {
-        setLeaderboard(data);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error("No se pudo cargar el leaderboard", err);
-        setLoading(false);
-      });
+  const setActiveTab = React.useContext(ActiveTabContext);
 
-    fetchWithAuth('/api/races/next')
-      .then(res => res.json())
-      .then(data => setNextRace(data))
-      .catch(err => console.error("Error cargando próxima carrera:", err));
+  React.useEffect(() => {
+    Promise.all([
+      fetchWithAuth('/api/leaderboard').then(r => r.json()),
+      fetchWithAuth('/api/races/next').then(r => r.json()),
+      fetchWithAuth('/api/predictions').then(r => r.json()),
+    ]).then(([lb, race, preds]) => {
+      setLeaderboard(lb);
+      setNextRace(race);
+      setPredictions(preds);
+      setLoading(false);
+    }).catch(err => { console.error(err); setLoading(false); });
   }, []);
 
-  // Real-time countdown
   React.useEffect(() => {
     if (!nextRace) return;
     const tick = () => {
-      const now = new Date().getTime();
-      const target = new Date(nextRace.date).getTime();
-      const diff = Math.max(0, target - now);
+      const diff = Math.max(0, new Date(nextRace.date).getTime() - Date.now());
       setCountdown({
-        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
-        hours: Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
-        minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
-        seconds: Math.floor((diff % (1000 * 60)) / 1000),
+        days: Math.floor(diff / 86400000),
+        hours: Math.floor((diff % 86400000) / 3600000),
+        minutes: Math.floor((diff % 3600000) / 60000),
+        seconds: Math.floor((diff % 60000) / 1000),
       });
     };
     tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
   }, [nextRace]);
 
   const pad = (n: number) => String(n).padStart(2, '0');
+  const leader = leaderboard[0];
+  const playersWithPrediction = new Set(predictions.map((p: any) => p.player));
 
   return (
-    <div className="space-y-8 animate-fade-in pb-12">
+    <div className="space-y-6 animate-fade-in pb-12">
       <header>
-        <h1 className="text-4xl font-display font-bold text-white mb-2">Bienvenido a CodeWeb <span className="text-codeflow-accent">🚀</span></h1>
-        <p className="text-codeflow-muted text-lg">Tu plataforma centralizada para deportes, métricas y entretenimiento multimedia.</p>
+        <h1 className="text-4xl font-display font-bold text-white mb-1">Panel Principal <span className="text-codeflow-accent">🚀</span></h1>
+        <p className="text-codeflow-muted">Tu plataforma centralizada para deportes, métricas y entretenimiento.</p>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Next Race Card */}
-        <div className="glass-card p-6 md:col-span-2 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-64 h-full bg-gradient-to-l from-codeflow-accent/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-          <div className="flex justify-between items-start mb-8 relative z-10">
-            <div>
-              <span className="px-3 py-1 rounded-full bg-codeflow-accent/20 text-codeflow-accent text-sm font-semibold border border-codeflow-accent/30 mb-4 inline-block">Siguiente Carrera</span>
-              <h2 className="text-2xl font-display font-bold text-white">
-                {nextRace ? nextRace.name : 'Cargando...'}
-              </h2>
-              <p className="text-codeflow-muted mt-1">
-                {nextRace ? `${nextRace.circuit}, ${nextRace.city}` : ''}
-              </p>
-              {nextRace?.sprint && (
-                <span className="mt-2 inline-block text-[10px] bg-orange-500/20 text-orange-400 border border-orange-500/30 px-2 py-0.5 rounded font-bold uppercase">Fin de Semana Sprint</span>
-              )}
-            </div>
-            <div className="text-right">
-              <div className="text-3xl font-bold font-display text-white tabular-nums">
-                {pad(countdown.days)} : {pad(countdown.hours)} : {pad(countdown.minutes)} : {pad(countdown.seconds)}
+      {/* ===== HERO FULL-WIDTH COUNTDOWN ===== */}
+      <div className="relative overflow-hidden rounded-2xl border border-codeflow-accent/20 bg-gradient-to-br from-codeflow-accent/10 via-purple-900/10 to-codeflow-dark p-8 shadow-[0_0_80px_rgba(168,85,247,0.08)]">
+        {/* Background decoration */}
+        <div className="absolute top-0 right-0 w-64 h-full bg-gradient-to-l from-red-600/10 to-transparent pointer-events-none" />
+        <div className="absolute -bottom-8 -right-8 text-[12rem] leading-none opacity-5 pointer-events-none select-none">🏎️</div>
+
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
+          <div className="flex-1">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/20 text-red-400 text-xs font-bold border border-red-500/30 uppercase tracking-wider mb-4">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+              Siguiente Carrera
+            </span>
+            {loading || !nextRace ? (
+              <div className="space-y-2">
+                <div className="h-8 w-72 bg-white/5 rounded-lg animate-pulse" />
+                <div className="h-4 w-48 bg-white/5 rounded-lg animate-pulse" />
               </div>
-              <p className="text-codeflow-muted text-sm">Días : Hrs : Min : Seg</p>
-            </div>
+            ) : (
+              <>
+                <h2 className="text-3xl font-display font-bold text-white mb-1">{nextRace.name}</h2>
+                <p className="text-codeflow-muted">{nextRace.circuit} · {nextRace.city}</p>
+                {nextRace.sprint && (
+                  <span className="mt-2 inline-block text-[10px] bg-orange-500/20 text-orange-400 border border-orange-500/30 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+                    🏃 Fin de Semana Sprint
+                  </span>
+                )}
+              </>
+            )}
           </div>
 
-          <div className="relative z-10">
-            <button className="btn-primary w-full md:w-auto">
-              Cargar Pronósticos
+          <div className="flex flex-col items-center md:items-end gap-4">
+            {/* Big Countdown */}
+            <div className="flex items-end gap-2 md:gap-4">
+              {[
+                { v: countdown.days, l: 'Días' },
+                { v: countdown.hours, l: 'Hrs' },
+                { v: countdown.minutes, l: 'Min' },
+                { v: countdown.seconds, l: 'Seg' },
+              ].map((unit, i) => (
+                <React.Fragment key={unit.l}>
+                  {i > 0 && <span className="text-2xl text-white/30 font-bold mb-4">:</span>}
+                  <div className="flex flex-col items-center">
+                    <span className="text-4xl md:text-5xl font-display font-extrabold text-white tabular-nums leading-none">
+                      {pad(unit.v)}
+                    </span>
+                    <span className="text-[10px] text-codeflow-muted uppercase tracking-widest mt-1">{unit.l}</span>
+                  </div>
+                </React.Fragment>
+              ))}
+            </div>
+
+            {/* CTA */}
+            <button
+              onClick={() => setActiveTab('f1')}
+              className="w-full md:w-auto bg-gradient-to-r from-codeflow-accent to-fuchsia-600 hover:opacity-90 text-white font-bold py-3 px-8 rounded-xl transition-all shadow-[0_0_20px_rgba(168,85,247,0.3)] hover:shadow-[0_0_30px_rgba(168,85,247,0.5)] text-sm tracking-wide"
+            >
+              🏁 Cargar mi Pronóstico
             </button>
           </div>
         </div>
+      </div>
 
-        {/* Prode Leaderboard Snapshot */}
-        <div className="glass-card p-6 relative flex flex-col">
-          <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-            <Trophy size={18} className="text-yellow-500" /> Top Analistas
+      {/* ===== FULL LEADERBOARD ===== */}
+      <div className="glass-card p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-xl font-bold text-white flex items-center gap-2">
+            <Trophy size={20} className="text-yellow-500" /> Tabla de Analistas
           </h3>
-          <div className="space-y-4 flex-1 flex flex-col justify-center">
-            {loading ? (
-              <div className="text-center text-codeflow-muted text-sm animate-pulse flex flex-col items-center gap-2 py-4">
-                <div className="w-6 h-6 border-2 border-codeflow-accent border-t-transparent rounded-full animate-spin"></div>
-                Cargando métricas en vivo...
-              </div>
-            ) : leaderboard.length === 0 ? (
-              <p className="text-sm text-codeflow-muted text-center my-auto">Revisa la pestaña F1 para ver la tabla completa.</p>
-            ) : (
-              leaderboard.slice(0, 3).map((user: any, i: number) => (
-                <div key={user.name} className="flex items-center justify-between p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors cursor-pointer border border-transparent hover:border-white/10">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs ${i === 0 ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/50' : 'bg-white/10 text-white/70'}`}>
-                      {i + 1}
-                    </div>
-                    <span className="font-medium text-white">{user.name}</span>
-                  </div>
-                  <span className="font-display font-bold text-codeflow-accent">{user.pts} pts</span>
-                </div>
-              ))
-            )}
-          </div>
-          <button className="text-sm text-codeflow-muted hover:text-white mt-auto transition-colors pt-4">Ver posiciones completas →</button>
+          <span className="text-xs text-codeflow-muted italic">
+            {nextRace ? `Pronósticos para ${nextRace.name}` : ''}
+          </span>
         </div>
+
+        {loading ? (
+          <div className="space-y-3">
+            {[1, 2, 3, 4, 5].map(i => (
+              <div key={i} className="h-16 w-full bg-white/5 rounded-xl border border-white/5 flex items-center px-5 gap-4 animate-pulse">
+                <div className="w-9 h-9 rounded-full bg-white/10" />
+                <div className="h-4 w-36 bg-white/10 rounded" />
+                <div className="ml-auto flex gap-3">
+                  <div className="h-6 w-16 bg-white/10 rounded-full" />
+                  <div className="h-6 w-20 bg-codeflow-accent/10 rounded" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : leaderboard.length === 0 ? (
+          <p className="text-codeflow-muted text-center py-10">Nadie tiene puntos todavía. ¡El campeonato está abierto!</p>
+        ) : (
+          <div className="space-y-2">
+            {leaderboard.map((user: any, i: number) => {
+              const gapToLeader = leader && i > 0 ? leader.pts - user.pts : 0;
+              const hasSubmitted = playersWithPrediction.has(user.name);
+              const medalStyle = i === 0
+                ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50 shadow-yellow-500/10'
+                : i === 1 ? 'bg-gray-400/20 text-gray-300 border-gray-400/50'
+                  : i === 2 ? 'bg-orange-600/20 text-orange-400 border-orange-600/50'
+                    : 'bg-white/5 text-white/40 border-white/10';
+
+              return (
+                <motion.div
+                  key={user.name}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.04 }}
+                  className={`flex items-center gap-4 p-4 rounded-xl border transition-all hover:bg-white/5 ${i === 0 ? 'bg-yellow-500/5 border-yellow-500/20' : 'bg-white/[0.02] border-white/5'}`}
+                >
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm border shadow-sm ${medalStyle}`}>
+                    {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <span className="font-bold text-white block truncate">{user.name}</span>
+                    {i > 0 && (
+                      <span className="text-xs text-red-400/70">-{gapToLeader} pts del líder</span>
+                    )}
+                    {i === 0 && <span className="text-xs text-yellow-400/70">Líder del campeonato</span>}
+                  </div>
+
+                  {/* Prediction submitted badge */}
+                  <div className={`flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full border ${hasSubmitted ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-orange-500/10 text-orange-400 border-orange-500/30'}`}>
+                    {hasSubmitted ? <><CheckCircle size={10} /> SÍ</> : <><AlertCircle size={10} /> PENDIENTE</>}
+                  </div>
+
+                  <span className="font-display font-extrabold text-xl text-white tabular-nums">
+                    {user.pts} <span className="text-xs font-normal text-codeflow-muted">PTS</span>
+                  </span>
+                </motion.div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
 }
+
+// Context for navigating from Dashboard CTA
+const ActiveTabContext = React.createContext<(tab: string) => void>(() => { });
 
 function F1ProdeView() {
   const [f1Tab, setF1Tab] = React.useState('prode'); // 'prode', 'leaderboard', 'calendar'
@@ -378,7 +492,6 @@ function F1ProdeView() {
   const [nextRace, setNextRace] = React.useState<any>(null);
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
-  const [success, setSuccess] = React.useState('');
 
   // Form State
   const [pName, setPName] = React.useState('');
@@ -398,11 +511,20 @@ function F1ProdeView() {
     "Alexander Albon", "Franco Colapinto", "Oliver Bearman", "Andrea Kimi Antonelli", "Gabriel Bortoleto"
   ]);
 
+  const { addToast } = useToast();
+  const [existingPrediction, setExistingPrediction] = React.useState<any>(null);
+  const [predictionsClosed, setPredictionsClosed] = React.useState(false);
+
   React.useEffect(() => {
     // Fetch next race info
     fetchWithAuth('/api/races/next')
       .then(res => res.json())
-      .then(data => setNextRace(data))
+      .then(data => {
+        setNextRace(data);
+        // Close predictions 1 hour before race
+        const raceDate = new Date(data.date).getTime();
+        setPredictionsClosed(Date.now() > raceDate - 3600000);
+      })
       .catch(err => console.error("Error cargando próxima carrera:", err));
 
     // Fetch Drivers de la API Oficial Ergast F1 (Fork Jolpi 2026+)
@@ -412,9 +534,7 @@ function F1ProdeView() {
         const d = data.MRData.DriverTable.Drivers.map((driver: any) => `${driver.givenName} ${driver.familyName}`);
         setDRIVERS(d.sort());
       })
-      .catch(err => {
-        console.error("Error trayendo lista oficial de la FIA:", err);
-      });
+      .catch(err => console.error("Error trayendo lista oficial de la FIA:", err));
 
     setLoadingOracle(true);
     fetchWithAuth('/api/oracle/roast')
@@ -434,27 +554,58 @@ function F1ProdeView() {
       });
   }, []);
 
+  // When player changes, load their existing prediction
+  React.useEffect(() => {
+    if (!pName) return;
+    fetchWithAuth('/api/predictions')
+      .then(r => r.json())
+      .then((preds: any[]) => {
+        const mine = preds.find(p => p.player === pName);
+        if (mine) {
+          setExistingPrediction(mine);
+          setPPole(mine.pole_position || '');
+          setP1(mine.p1 || ''); setP2(mine.p2 || ''); setP3(mine.p3 || '');
+          setP4(mine.p4 || ''); setP5(mine.p5 || '');
+          addToast('warning', `Cargando tu pronóstico existente para ${pName}`);
+        } else {
+          setExistingPrediction(null);
+        }
+      })
+      .catch(console.error);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pName]);
+
+  // Duplicate driver validation
+  const allPicks = [p1, p2, p3, p4, p5].filter(Boolean);
+  const hasDuplicates = new Set(allPicks).size !== allPicks.length;
+  const isDuplicateField = (v: string) => v && allPicks.filter(p => p === v).length > 1;
+
   const handlePredictSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (hasDuplicates) {
+      addToast('error', '¡Tenés pilotos repetidos en el Top 5!');
+      return;
+    }
+    if (predictionsClosed) {
+      addToast('error', 'Las predicciones ya están cerradas para este GP.');
+      return;
+    }
+    if (existingPrediction) {
+      const confirm = window.confirm(`Ya tenés un pronóstico cargado para ${pName}. ¿Confirmar actualización?`);
+      if (!confirm) return;
+    }
     setIsSubmitting(true);
-    setSuccess('');
-
     try {
       const res = await fetchWithAuth('/api/predictions', {
         method: 'POST',
-        body: JSON.stringify({
-          player: pName,
-          pole_position: pPole,
-          p1, p2, p3, p4, p5
-        })
+        body: JSON.stringify({ player: pName, pole_position: pPole, p1, p2, p3, p4, p5 })
       });
-      if (!res.ok) throw new Error("Falla al guardar métricas");
-
-      setSuccess('¡Pronóstico guardado en boxes! 🏎️💨');
-      setPName(''); setPPole(''); setP1(''); setP2(''); setP3(''); setP4(''); setP5('');
+      if (!res.ok) throw new Error("Falla al guardar");
+      addToast('success', `¡Pronóstico de ${pName} guardado en boxes! 🏎️`);
+      setExistingPrediction({ player: pName, pole_position: pPole, p1, p2, p3, p4, p5 });
     } catch (err) {
       console.error(err);
-      alert("Error de motor guardando el pronóstico. Intenta verificar la conexión.");
+      addToast('error', 'Error de motor guardando el pronóstico. Verificá la conexión.');
     } finally {
       setIsSubmitting(false);
     }
@@ -551,11 +702,19 @@ function F1ProdeView() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Prediction Form */}
                 <div className="glass-card p-6 flex flex-col">
-                  <div className="flex items-center gap-3 mb-6 border-b border-white/5 pb-4">
-                    <Trophy size={24} className="text-codeflow-accent" />
-                    <h3 className="text-xl font-bold text-white">Enviar Valoraciones</h3>
+                  <div className="flex items-center justify-between mb-4 border-b border-white/5 pb-4">
+                    <div className="flex items-center gap-3">
+                      <Trophy size={24} className="text-codeflow-accent" />
+                      <h3 className="text-xl font-bold text-white">Enviar Pronóstico</h3>
+                    </div>
+                    <div className={`flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border ${predictionsClosed
+                      ? 'bg-red-500/10 text-red-400 border-red-500/30'
+                      : 'bg-green-500/10 text-green-400 border-green-500/30'
+                      }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${predictionsClosed ? 'bg-red-400' : 'bg-green-400 animate-pulse'}`} />
+                      {predictionsClosed ? 'CERRADO' : 'ABIERTO'}
+                    </div>
                   </div>
-
                   <form onSubmit={handlePredictSubmit} className="space-y-4 flex-1">
                     <div>
                       <label className="block text-xs uppercase font-bold text-codeflow-muted tracking-wider mb-1">Nombre Jugador</label>
@@ -575,11 +734,19 @@ function F1ProdeView() {
                       </select>
                     </div>
 
+
                     <div className="pt-2">
-                      <label className="block text-xs uppercase font-bold text-codeflow-accent/70 tracking-wider mb-3">Top 5 Domingo (10 pts c/u)</label>
+                      <div className="flex items-center justify-between mb-3">
+                        <label className="text-xs uppercase font-bold text-codeflow-accent/70 tracking-wider">Top 5 Domingo (10 pts c/u)</label>
+                        {hasDuplicates && (
+                          <span className="text-[10px] text-red-400 font-bold flex items-center gap-1">
+                            <AlertCircle size={10} /> Pilotos repetidos
+                          </span>
+                        )}
+                      </div>
                       <div className="space-y-2">
                         {[
-                          { l: '1° (Ganador)', v: p1, s: setP1, c: 'border-yellow-500/30 focus:border-yellow-500 bg-yellow-500/5' },
+                          { l: '1° Ganador', v: p1, s: setP1, c: 'border-yellow-500/30 focus:border-yellow-500 bg-yellow-500/5' },
                           { l: '2° Puesto', v: p2, s: setP2, c: 'border-gray-400/30 focus:border-gray-400 bg-gray-400/5' },
                           { l: '3° Puesto', v: p3, s: setP3, c: 'border-orange-500/30 focus:border-orange-500 bg-orange-500/5' },
                           { l: '4° Puesto', v: p4, s: setP4, c: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
@@ -587,7 +754,13 @@ function F1ProdeView() {
                         ].map((item, i) => (
                           <div key={i} className="flex items-center gap-3">
                             <span className="text-sm font-bold text-white/50 w-24">{item.l}</span>
-                            <select value={item.v} onChange={e => item.s(e.target.value)} required className={`flex-1 rounded-lg px-3 py-2 text-white outline-none border ${item.c} appearance-none cursor-pointer`}>
+                            <select
+                              value={item.v}
+                              onChange={e => item.s(e.target.value)}
+                              required
+                              className={`flex-1 rounded-lg px-3 py-2 text-white outline-none border appearance-none cursor-pointer transition-colors ${isDuplicateField(item.v) ? 'border-red-500/60 bg-red-500/10' : item.c
+                                }`}
+                            >
                               <option value="" disabled className="bg-codeflow-dark text-codeflow-muted">Elegir piloto...</option>
                               {DRIVERS.map(d => <option key={d} value={d} className="bg-codeflow-dark text-white">{d}</option>)}
                             </select>
@@ -597,9 +770,22 @@ function F1ProdeView() {
                     </div>
 
                     <div className="pt-4">
-                      {success && <p className="text-sm text-green-400 mb-3 text-center">{success}</p>}
-                      <button type="submit" disabled={isSubmitting} className="w-full bg-white/10 border border-white/20 hover:bg-white/20 hover:border-codeflow-accent/50 text-white font-bold py-3 rounded-lg transition-colors">
-                        {isSubmitting ? 'Enviando telemetría...' : 'Enviar Pronóstico'}
+                      {existingPrediction && (
+                        <p className="text-[10px] text-yellow-400/70 mb-2 flex items-center gap-1">
+                          <AlertCircle size={10} /> Actualizarás tu pronóstico existente
+                        </p>
+                      )}
+                      <button
+                        type="submit"
+                        disabled={isSubmitting || hasDuplicates || predictionsClosed}
+                        className="w-full bg-gradient-to-r from-codeflow-accent to-fuchsia-600 hover:opacity-90 text-white font-bold py-3 rounded-lg transition-all shadow-lg disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {isSubmitting ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            Enviando telemetría...
+                          </span>
+                        ) : predictionsClosed ? '🚫 Carga cerrada' : existingPrediction ? '🔄 Actualizar Pronóstico' : '🏁 Enviar Pronóstico'}
                       </button>
                     </div>
                   </form>
