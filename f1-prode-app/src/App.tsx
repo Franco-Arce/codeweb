@@ -370,14 +370,18 @@ function F1ProdeView() {
 
     setLoadingOracle(true);
     fetchWithAuth('/api/oracle/roast')
-      .then(res => res.json())
+      .then(async res => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falla en el backend del oráculo");
+        return data;
+      })
       .then(data => {
-        setOracleInsight(data.analysis);
+        setOracleInsight(data.analysis || "No tengo palabras...");
         setLoadingOracle(false);
       })
       .catch(err => {
         console.error("Oráculo caído", err);
-        setOracleInsight("El oráculo tuvo una falla en el motor (Servidor Caído). Probablemente sea culpa de Sargeant.");
+        setOracleInsight("El oráculo tuvo una falla en su motor lógico. Volvé a intentarlo en breve.");
         setLoadingOracle(false);
       });
   }, []);
@@ -815,86 +819,79 @@ function MediaVaultView({ tab }: { tab: string }) {
       )}
     </div>
   );
-}
-
-// --- API-Sports F1 Calendar Component ---
+}      // --- Official 2026 F1 Calendar Component ---
 function F1CalendarTab() {
-  const [races, setRaces] = React.useState<any[]>([]);
-  const [loading, setLoading] = React.useState(true);
-
-  React.useEffect(() => {
-    // Para asegurar data, buscaremos la temporada actual/última disponible en esta API.
-    fetch('https://v1.formula-1.api-sports.io/races?season=2024&type=Race', {
-      headers: {
-        'x-apisports-key': '7b588a324f14eaf659992aa35d3bf9bb'
-      }
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.results > 0) {
-          // Ordenamos por fecha
-          const sorted = data.response.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
-          setRaces(sorted);
-        }
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error("No se pudo cargar el calendario oficial", err);
-        setLoading(false);
-      });
-  }, []);
+  const races2026 = [
+    { id: 1, country: "Australia", city: "Melbourne", name: "GP de Australia", date: "2026-03-08T03:00:00Z", sprint: false },
+    { id: 2, country: "China", city: "Shanghai", name: "GP de China", date: "2026-03-15T04:00:00Z", sprint: true },
+    { id: 3, country: "Japón", city: "Suzuka", name: "GP de Japón", date: "2026-03-29T05:00:00Z", sprint: false },
+    { id: 4, country: "Bahréin", city: "Sakhir", name: "GP de Bahréin", date: "2026-04-12T15:00:00Z", sprint: false },
+    { id: 5, country: "Arabia Saudita", city: "Jeddah", name: "GP de Arabia Saudita", date: "2026-04-19T17:00:00Z", sprint: false },
+    { id: 6, country: "Estados Unidos", city: "Miami", name: "GP de Miami", date: "2026-05-03T20:00:00Z", sprint: true },
+    { id: 7, country: "Canadá", city: "Montreal", name: "GP de Canadá", date: "2026-05-24T18:00:00Z", sprint: true },
+    { id: 8, country: "Mónaco", city: "Mónaco", name: "GP de Mónaco", date: "2026-06-07T13:00:00Z", sprint: false },
+    { id: 9, country: "España", city: "Barcelona", name: "GP de España", date: "2026-06-14T13:00:00Z", sprint: false },
+    { id: 10, country: "Austria", city: "Spielberg", name: "GP de Austria", date: "2026-06-28T13:00:00Z", sprint: false },
+    { id: 11, country: "Reino Unido", city: "Silverstone", name: "GP de Reino Unido", date: "2026-07-05T14:00:00Z", sprint: true },
+    { id: 12, country: "Bélgica", city: "Spa-Francorchamps", name: "GP de Bélgica", date: "2026-07-19T13:00:00Z", sprint: false },
+    { id: 13, country: "Hungría", city: "Budapest", name: "GP de Hungría", date: "2026-07-26T13:00:00Z", sprint: false },
+    { id: 14, country: "Países Bajos", city: "Zandvoort", name: "GP de Países Bajos", date: "2026-08-23T13:00:00Z", sprint: true },
+    { id: 15, country: "Italia", city: "Monza", name: "GP de Italia", date: "2026-09-06T13:00:00Z", sprint: false },
+    { id: 16, country: "España", city: "Madrid", name: "GP de Madrid", date: "2026-09-13T13:00:00Z", sprint: false },
+    { id: 17, country: "Azerbaiyán", city: "Bakú", name: "GP de Azerbaiyán", date: "2026-09-27T11:00:00Z", sprint: false },
+    { id: 18, country: "Singapur", city: "Singapur", name: "GP de Singapur", date: "2026-10-11T12:00:00Z", sprint: true },
+    { id: 19, country: "Estados Unidos", city: "Austin", name: "GP de Estados Unidos", date: "2026-10-25T19:00:00Z", sprint: false },
+    { id: 20, country: "México", city: "CDMX", name: "GP de Ciudad de México", date: "2026-11-01T20:00:00Z", sprint: false },
+    { id: 21, country: "Brasil", city: "São Paulo", name: "GP de Brasil", date: "2026-11-08T17:00:00Z", sprint: false },
+    { id: 22, country: "Estados Unidos", city: "Las Vegas", name: "GP de Las Vegas", date: "2026-11-21T06:00:00Z", sprint: false },
+    { id: 23, country: "Qatar", city: "Lusail", name: "GP de Qatar", date: "2026-11-29T17:00:00Z", sprint: false },
+    { id: 24, country: "Abu Dhabi", city: "Yas Marina", name: "GP de Abu Dabi", date: "2026-12-06T13:00:00Z", sprint: false },
+  ];
 
   return (
     <div className="glass-card p-8 min-h-[500px] border-t-4 border-t-red-500 rounded-t-none">
       <h3 className="text-2xl font-bold text-white mb-2 flex items-center gap-3">
-        Calendario Oficial <span className="text-[10px] uppercase font-bold tracking-wider bg-red-500/20 border border-red-500/30 px-2 py-1 rounded text-red-400">api-sports</span>
+        Calendario Oficial 2026 <span className="text-[10px] uppercase font-bold tracking-wider bg-red-500/20 border border-red-500/30 px-2 py-1 rounded text-red-400">FIA</span>
       </h3>
-      <p className="text-codeflow-muted italic text-sm mb-8">Fechas y horarios ajustados automáticamente a tu zona horaria (AR).</p>
+      <p className="text-codeflow-muted italic text-sm mb-8">24 carreras confirmadas para la temporada 2026.</p>
 
-      {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[1, 2, 3, 4, 5, 6].map(i => (
-            <div key={i} className="h-32 w-full bg-white/5 rounded-xl border border-white/5 animate-pulse" />
-          ))}
-        </div>
-      ) : races.length === 0 ? (
-        <p className="text-codeflow-muted text-center py-10 text-lg">No hay carreras programadas en este calendario aún.</p>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {races.map((race) => {
-            const dateObj = new Date(race.date);
-            const isCompleted = race.status === 'Completed';
-            return (
-              <div key={race.id} className={`p-5 rounded-2xl border transition-all ${isCompleted ? 'bg-codeflow-card/50 border-white/5 grayscale-[0.8]' : 'bg-white/5 border-white/10 hover:border-codeflow-accent/50 group'}`}>
-                <div className="flex justify-between items-start mb-3">
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold uppercase tracking-wider text-codeflow-accent mb-1">{race.competition.location.country}</span>
-                    <h4 className="font-bold text-lg leading-tight text-white group-hover:text-codeflow-accent transition-colors">{race.competition.name}</h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {races2026.map((race, idx) => {
+          const dateObj = new Date(race.date);
+          const now = new Date();
+          const isCompleted = dateObj < now;
+          return (
+            <div key={race.id} className={`p-5 rounded-2xl border transition-all ${isCompleted ? 'bg-codeflow-card/50 border-white/5 grayscale-[0.8]' : 'bg-white/5 border-white/10 hover:border-codeflow-accent/50 group'}`}>
+              <div className="flex justify-between items-start mb-3 gap-2">
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-bold uppercase tracking-wider text-codeflow-accent">Ronda {idx + 1} - {race.country}</span>
+                    {race.sprint && <span className="text-[9px] bg-orange-500/20 text-orange-400 border border-orange-500/30 px-1.5 py-0.5 rounded font-bold uppercase">Sprint</span>}
                   </div>
-                  {isCompleted && <span className="text-[10px] bg-white/10 px-2 py-1 rounded text-white/50 border border-white/10">FINALIZADA</span>}
+                  <h4 className="font-bold text-lg leading-tight text-white group-hover:text-codeflow-accent transition-colors">{race.name}</h4>
                 </div>
+                {isCompleted && <span className="text-[10px] bg-white/10 px-2 py-1 rounded text-white/50 border border-white/10 shrink-0">FINALIZADA</span>}
+              </div>
 
-                <p className="text-xs text-codeflow-muted mb-4">{race.circuit.name}</p>
+              <p className="text-xs text-codeflow-muted mb-4">{race.city}</p>
 
-                <div className="mt-auto border-t border-white/10 pt-4 flex items-center justify-between">
-                  <div className="flex flex-col">
-                    <span className="text-xs font-semibold text-white/50">Día de Carrera</span>
-                    <span className="text-sm font-bold text-white">
-                      {dateObj.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })}
-                    </span>
-                  </div>
-                  <div className="flex flex-col items-end">
-                    <span className="text-xs font-semibold text-white/50">Hora (AR)</span>
-                    <span className="text-sm font-bold text-fuchsia-400">
-                      {dateObj.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })} hs
-                    </span>
-                  </div>
+              <div className="mt-auto border-t border-white/10 pt-4 flex items-center justify-between">
+                <div className="flex flex-col">
+                  <span className="text-xs font-semibold text-white/50">Día de Carrera</span>
+                  <span className="text-sm font-bold text-white">
+                    {dateObj.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                  </span>
+                </div>
+                <div className="flex flex-col flex-1 items-end pl-2">
+                  <span className="text-xs font-semibold text-white/50 w-full text-right" style={{ 'textWrap': 'nowrap' } as any}>
+                    *Horario ARG. no confirmado
+                  </span>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   )
 }
