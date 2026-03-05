@@ -1,9 +1,35 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trophy, Film, Gamepad2, Tv, LayoutDashboard, Settings } from 'lucide-react';
+import logoCodeflow from './assets/LogoOnly.png';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+// --- API Helpers ---
+// const fetchWithAuth = async (endpoint: string, options: RequestInit = {}) => {
+//   ...
+// };
+
+// --- Main App Component ---
 function App() {
   const [activeTab, setActiveTab] = React.useState('dashboard');
+  const [isAuthenticated, setIsAuthenticated] = React.useState<boolean>(false);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    // Check auth
+    const token = localStorage.getItem('prode_auth_token');
+    if (token === 'pepe_is_logged_in') {
+      setIsAuthenticated(true);
+    }
+    setIsLoading(false);
+  }, []);
+
+  if (isLoading) return <div className="min-h-screen bg-codeflow-dark flex items-center justify-center">Loading...</div>;
+
+  if (!isAuthenticated) {
+    return <LoginView onLogin={() => setIsAuthenticated(true)} />;
+  }
 
   return (
     <div className="min-h-screen bg-codeflow-dark relative flex overflow-hidden">
@@ -20,8 +46,8 @@ function App() {
       {/* Sidebar Navigation */}
       <aside className="w-64 border-r border-white/5 bg-codeflow-base/80 backdrop-blur-3xl z-10 flex flex-col h-screen">
         <div className="p-6 flex items-center gap-3 border-b border-white/5">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-codeflow-accent to-fuchsia-600 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.5)]">
-            <span className="font-display font-bold text-xl text-white">CF</span>
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-codeflow-accent to-fuchsia-600 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.5)] overflow-hidden">
+            <img src={logoCodeflow} alt="Codeflow" className="w-[70%] h-[70%] object-contain drop-shadow-md" />
           </div>
           <h1 className="font-display font-bold text-xl bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60">
             F1 Friends
@@ -38,10 +64,18 @@ function App() {
           <NavItem icon={<Gamepad2 size={20} />} label="Board Games" active={activeTab === 'games'} onClick={() => setActiveTab('games')} />
         </nav>
 
-        <div className="p-4 border-t border-white/5">
+        <div className="p-4 border-t border-white/5 space-y-2">
           <button className="flex items-center gap-3 px-3 py-2 w-full rounded-lg text-codeflow-muted hover:text-white hover:bg-white/5 transition-colors">
             <Settings size={20} />
             <span className="font-medium">Settings</span>
+          </button>
+          <button
+            onClick={() => {
+              localStorage.removeItem('prode_auth_token');
+              setIsAuthenticated(false);
+            }}
+            className="flex items-center gap-3 px-3 py-2 w-full rounded-lg text-red-500/70 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+            <span className="font-medium text-sm">Logout</span>
           </button>
         </div>
       </aside>
@@ -99,14 +133,110 @@ function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, labe
   );
 }
 
+// --- Login View Component ---
+function LoginView({ onLogin }: { onLogin: () => void }) {
+  const [user, setUser] = useState('');
+  const [pass, setPass] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    // Hardcoded check via Backend idealmente, pero para evitar problemas de CORS temporalmente mockeamos la auth básica del plan
+    if (user.toLowerCase() === 'pepe' && pass === 'pepon') {
+      localStorage.setItem('prode_auth_token', 'pepe_is_logged_in');
+      setTimeout(() => {
+        onLogin();
+      }, 500);
+    } else {
+      setError('Credenciales inválidas');
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-codeflow-dark relative flex items-center justify-center p-4">
+      {/* Background Animated Blobs for premium effect */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-codeflow-accent/20 rounded-full mix-blend-screen filter blur-[100px] animate-blob" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-fuchsia-600/20 rounded-full mix-blend-screen filter blur-[120px] animate-blob" />
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+CjxwYXRoIGQ9Ik00MCAwaC0xTDBWMGgxbDM5LS4wMVoiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wMykiLz4KPC9zdmc+')] opacity-20" />
+      </div>
+
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="glass-card p-10 max-w-md w-full relative z-10 flex flex-col items-center border border-white/10 shadow-2xl"
+      >
+        <div className="w-20 h-20 mb-6 bg-gradient-to-br from-codeflow-accent to-fuchsia-600 rounded-2xl flex items-center justify-center shadow-[0_0_30px_rgba(168,85,247,0.5)] p-2">
+          <img src={logoCodeflow} alt="Logo" className="w-full h-full object-contain filter drop-shadow-md" />
+        </div>
+
+        <h1 className="text-3xl font-display font-bold text-white mb-2">Paddock Access</h1>
+        <p className="text-codeflow-muted mb-8 text-center">F1 Prode Internal System</p>
+
+        <form onSubmit={handleSubmit} className="w-full space-y-4">
+          <div>
+            <input
+              type="text"
+              placeholder="Username"
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-codeflow-accent transition-colors"
+              value={user}
+              onChange={(e) => { setUser(e.target.value); setError(''); }}
+              required
+            />
+          </div>
+          <div>
+            <input
+              type="password"
+              placeholder="Password"
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-codeflow-accent transition-colors"
+              value={pass}
+              onChange={(e) => { setPass(e.target.value); setError(''); }}
+              required
+            />
+          </div>
+
+          <AnimatePresence>
+            {error && (
+              <motion.p
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="text-red-400 text-sm font-medium text-center"
+              >
+                {error}
+              </motion.p>
+            )}
+          </AnimatePresence>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-gradient-to-r from-codeflow-accent to-fuchsia-600 hover:opacity-90 text-white font-bold py-3 rounded-xl transition-all shadow-[0_0_15px_rgba(168,85,247,0.3)] mt-4 disabled:opacity-50 flex justify-center items-center h-[52px]"
+          >
+            {loading ? (
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            ) : "Enter Paddock"}
+          </button>
+        </form>
+      </motion.div>
+    </div>
+  );
+}
+
 function DashboardView() {
   const [leaderboard, setLeaderboard] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-    fetch(`${apiUrl}/api/leaderboard`)
-      .then(res => res.json())
+    // Simulamos la request de auth, como ya estamos logueados pedimos data
+    fetch(`${API_URL}/api/leaderboard`)
+      .then(res => {
+        if (!res.ok) throw new Error("Auth block");
+        return res.json()
+      })
       .then(data => {
         setLeaderboard(data);
         setLoading(false);
@@ -185,10 +315,21 @@ function F1ProdeView() {
   const [oracleInsight, setOracleInsight] = React.useState<string | null>(null);
   const [loadingOracle, setLoadingOracle] = React.useState(false);
 
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [success, setSuccess] = React.useState('');
+
+  // Form State
+  const [pName, setPName] = React.useState('');
+  const [pPole, setPPole] = React.useState('');
+  const [p1, setP1] = React.useState('');
+  const [p2, setP2] = React.useState('');
+  const [p3, setP3] = React.useState('');
+  const [p4, setP4] = React.useState('');
+  const [p5, setP5] = React.useState('');
+
   React.useEffect(() => {
     setLoadingOracle(true);
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-    fetch(`${apiUrl}/api/oracle/roast`)
+    fetch(`${API_URL}/api/oracle/roast`)
       .then(res => res.json())
       .then(data => {
         setOracleInsight(data.analysis);
@@ -196,10 +337,37 @@ function F1ProdeView() {
       })
       .catch(err => {
         console.error("Failed to load Oracle roast", err);
-        setOracleInsight("El oráculo tuvo una falla en el motor. Intenta recargar la página.");
+        setOracleInsight("El oráculo tuvo una falla en el motor. Probablemente sea culpa de Sargeant.");
         setLoadingOracle(false);
       });
   }, []);
+
+  const handlePredictSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setSuccess('');
+
+    try {
+      const res = await fetch(`${API_URL}/api/predictions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          player: pName,
+          pole_position: pPole,
+          p1, p2, p3, p4, p5
+        })
+      });
+      if (!res.ok) throw new Error("Failed to save");
+
+      setSuccess('¡Predicción guardada en boxes! 🏎️💨');
+      setPName(''); setPPole(''); setP1(''); setP2(''); setP3(''); setP4(''); setP5('');
+    } catch (err) {
+      console.error(err);
+      alert("Error de motor. Revisa consola.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -247,13 +415,51 @@ function F1ProdeView() {
 
       {/* Prediction Forms and Leaderboard sections will go here */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="glass-card p-6 min-h-[400px] flex items-center justify-center">
-          <div className="text-center">
-            <Trophy size={48} className="mx-auto text-codeflow-muted mb-4 opacity-50" />
-            <h3 className="text-xl font-bold text-white mb-2">Submit Your Predictions</h3>
-            <p className="text-codeflow-muted mb-6">Select Winner, Best Team, and your Top 5 drivers.</p>
-            <button className="btn-primary">Open Prediction Form</button>
+        {/* Prediction Form */}
+        <div className="glass-card p-6 flex flex-col">
+          <div className="flex items-center gap-3 mb-6 border-b border-white/5 pb-4">
+            <Trophy size={24} className="text-codeflow-accent" />
+            <h3 className="text-xl font-bold text-white">Submit Appraisals</h3>
           </div>
+
+          <form onSubmit={handlePredictSubmit} className="space-y-4 flex-1">
+            <div>
+              <label className="block text-xs uppercase font-bold text-codeflow-muted tracking-wider mb-1">Nombre Jugador (Debe ser exacto)</label>
+              <input type="text" value={pName} onChange={e => setPName(e.target.value)} required className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-codeflow-accent" placeholder="Ej: MrKazter" />
+            </div>
+            <div>
+              <label className="block text-xs uppercase font-bold text-codeflow-muted tracking-wider mb-1 flex justify-between">
+                <span>Pole Position (Sábado)</span>
+                <span className="text-codeflow-accent/60">+5 pts</span>
+              </label>
+              <input type="text" value={pPole} onChange={e => setPPole(e.target.value)} required className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-codeflow-accent" placeholder="Piloto" />
+            </div>
+
+            <div className="pt-2">
+              <label className="block text-xs uppercase font-bold text-purple-400 tracking-wider mb-3">Top 5 Domingo (10 pts c/u)</label>
+              <div className="space-y-2">
+                {[
+                  { l: '1° (Ganador)', v: p1, s: setP1, c: 'border-yellow-500/50 focus:border-yellow-500 bg-yellow-500/5' },
+                  { l: '2° Puesto', v: p2, s: setP2, c: 'border-gray-400/50 focus:border-gray-400 bg-gray-400/5' },
+                  { l: '3° Puesto', v: p3, s: setP3, c: 'border-orange-500/50 focus:border-orange-500 bg-orange-500/5' },
+                  { l: '4° Puesto', v: p4, s: setP4, c: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
+                  { l: '5° Puesto', v: p5, s: setP5, c: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
+                ].map((item, i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    <span className="text-sm font-bold text-white/50 w-24">{item.l}</span>
+                    <input type="text" value={item.v} onChange={e => item.s(e.target.value)} required className={`flex-1 rounded-lg px-3 py-1.5 text-white outline-none border ${item.c}`} placeholder="Piloto" />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-4">
+              {success && <p className="text-sm text-green-400 mb-3 text-center">{success}</p>}
+              <button type="submit" disabled={isSubmitting} className="w-full bg-codeflow-accent hover:bg-codeflow-accent/80 text-white font-bold py-3 rounded-lg transition-colors">
+                {isSubmitting ? 'Enviando telemetría...' : 'Enviar Pronóstico'}
+              </button>
+            </div>
+          </form>
         </div>
         <div className="glass-card p-6 min-h-[400px]">
           <h3 className="text-xl font-bold text-white mb-4">Live Prode Standings</h3>
