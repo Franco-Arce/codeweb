@@ -222,7 +222,7 @@ function LoginView({ onLogin }: { onLogin: () => void }) {
         localStorage.setItem('prode_auth_token', data.token); // Guardamos JWT o Token real
         onLogin();
       } else {
-        setError(data.message || 'Bandera negra: Credenciales inválidas');
+        setError(data.message || 'Error: Credenciales inválidas');
       }
     } catch (err) {
       console.error(err);
@@ -248,8 +248,8 @@ function LoginView({ onLogin }: { onLogin: () => void }) {
       >
         <img src={logoCodeflow} alt="CodeWeb" className="w-20 h-20 mb-6 object-contain drop-shadow-[0_0_15px_rgba(168,85,247,0.6)]" />
 
-        <h1 className="text-3xl font-display font-bold text-white mb-2">Acceso al Paddock</h1>
-        <p className="text-codeflow-muted mb-8 text-center">Sistema Interno F1 Prode</p>
+        <h1 className="text-3xl font-display font-bold text-white mb-2">Acceso a CodeWeb</h1>
+        <p className="text-codeflow-muted mb-8 text-center">Plataforma Central</p>
 
         <form onSubmit={handleSubmit} className="w-full space-y-4">
           <div>
