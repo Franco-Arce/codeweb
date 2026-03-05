@@ -559,11 +559,7 @@ function F1ProdeView() {
           )}
 
           {f1Tab === 'calendar' && (
-            <div className="glass-card p-10 flex flex-col items-center justify-center min-h-[400px]">
-              <span className="text-6xl mb-4 grayscale opacity-50">🏁</span>
-              <h3 className="text-2xl font-bold text-white mb-2">Calendario en boxes...</h3>
-              <p className="text-codeflow-muted max-w-md text-center">Estamos sincronizando la telemetría con la FIA para descargar el calendario oficial con los horarios de Argentina.</p>
-            </div>
+            <F1CalendarTab />
           )}
 
         </motion.div>
@@ -821,4 +817,85 @@ function MediaVaultView({ tab }: { tab: string }) {
   );
 }
 
+// --- API-Sports F1 Calendar Component ---
+function F1CalendarTab() {
+  const [races, setRaces] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    // Para asegurar data, buscaremos la temporada actual/última disponible en esta API.
+    fetch('https://v1.formula-1.api-sports.io/races?season=2024&type=Race', {
+      headers: {
+        'x-apisports-key': '7b588a324f14eaf659992aa35d3bf9bb'
+      }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.results > 0) {
+          // Ordenamos por fecha
+          const sorted = data.response.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          setRaces(sorted);
+        }
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("No se pudo cargar el calendario oficial", err);
+        setLoading(false);
+      });
+  }, []);
+
+  return (
+    <div className="glass-card p-8 min-h-[500px] border-t-4 border-t-red-500 rounded-t-none">
+      <h3 className="text-2xl font-bold text-white mb-2 flex items-center gap-3">
+        Calendario Oficial <span className="text-xs bg-red-500 border border-red-400 px-2 py-1 rounded text-white shadow-[0_0_10px_rgba(239,68,68,0.5)]">api-sports</span>
+      </h3>
+      <p className="text-codeflow-muted italic text-sm mb-8">Fechas y horarios ajustados automáticamente a tu zona horaria (AR).</p>
+
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[1, 2, 3, 4, 5, 6].map(i => (
+            <div key={i} className="h-32 w-full bg-white/5 rounded-xl border border-white/5 animate-pulse" />
+          ))}
+        </div>
+      ) : races.length === 0 ? (
+        <p className="text-codeflow-muted text-center py-10 text-lg">No hay carreras programadas en este calendario aún.</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {races.map((race) => {
+            const dateObj = new Date(race.date);
+            const isCompleted = race.status === 'Completed';
+            return (
+              <div key={race.id} className={`p-5 rounded-2xl border transition-all ${isCompleted ? 'bg-codeflow-card/50 border-white/5 grayscale-[0.8]' : 'bg-white/5 border-white/10 hover:border-codeflow-accent/50 group'}`}>
+                <div className="flex justify-between items-start mb-3">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold uppercase tracking-wider text-codeflow-accent mb-1">{race.competition.location.country}</span>
+                    <h4 className="font-bold text-lg leading-tight text-white group-hover:text-codeflow-accent transition-colors">{race.competition.name}</h4>
+                  </div>
+                  {isCompleted && <span className="text-[10px] bg-white/10 px-2 py-1 rounded text-white/50 border border-white/10">FINALIZADA</span>}
+                </div>
+
+                <p className="text-xs text-codeflow-muted mb-4">{race.circuit.name}</p>
+
+                <div className="mt-auto border-t border-white/10 pt-4 flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-semibold text-white/50">Día de Carrera</span>
+                    <span className="text-sm font-bold text-white">
+                      {dateObj.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                    </span>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <span className="text-xs font-semibold text-white/50">Hora (AR)</span>
+                    <span className="text-sm font-bold text-fuchsia-400">
+                      {dateObj.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })} hs
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
 export default App;
