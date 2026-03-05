@@ -847,7 +847,7 @@ function F1CalendarTab() {
   return (
     <div className="glass-card p-8 min-h-[500px] border-t-4 border-t-red-500 rounded-t-none">
       <h3 className="text-2xl font-bold text-white mb-2 flex items-center gap-3">
-        Calendario Oficial <span className="text-xs bg-red-500 border border-red-400 px-2 py-1 rounded text-white shadow-[0_0_10px_rgba(239,68,68,0.5)]">api-sports</span>
+        Calendario Oficial <span className="text-[10px] uppercase font-bold tracking-wider bg-red-500/20 border border-red-500/30 px-2 py-1 rounded text-red-400">api-sports</span>
       </h3>
       <p className="text-codeflow-muted italic text-sm mb-8">Fechas y horarios ajustados automáticamente a tu zona horaria (AR).</p>
 
