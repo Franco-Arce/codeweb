@@ -270,8 +270,8 @@ function DashboardView() {
   return (
     <div className="space-y-8 animate-fade-in pb-12">
       <header>
-        <h1 className="text-4xl font-display font-bold text-white mb-2">¡Eje Central de la Tribuna! <span className="text-codeflow-accent">🏎️</span></h1>
-        <p className="text-codeflow-muted text-lg">Tu centro de métricas unificado para pronósticos F1 y recomendaciones grupales.</p>
+        <h1 className="text-4xl font-display font-bold text-white mb-2">Bienvenido a CodeWeb <span className="text-codeflow-accent">🚀</span></h1>
+        <p className="text-codeflow-muted text-lg">Tu plataforma centralizada para deportes, métricas y entretenimiento multimedia.</p>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
