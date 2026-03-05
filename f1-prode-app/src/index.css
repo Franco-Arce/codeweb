@@ -8,25 +8,36 @@
   body {
     @apply bg-codeflow-dark text-codeflow-text font-sans antialiased overflow-x-hidden;
   }
-  
-  h1, h2, h3, h4, h5, h6 {
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-display tracking-tight;
   }
 }
 
 @layer components {
+
   /* Premium Glassmorphism Card Style */
   .glass-card {
     @apply bg-codeflow-card/80 backdrop-blur-xl border border-codeflow-border rounded-2xl shadow-xl transition-all duration-300;
   }
-  
+
   .glass-card:hover {
     @apply border-codeflow-accent/40 shadow-[0_0_30px_-5px_var(--tw-shadow-color)] shadow-codeflow-accent/20;
   }
 
   /* Purple Gradient Button */
   .btn-primary {
-    @apply relative inline-flex items-center justify-center px-6 py-3 font-semibold text-white transition-all duration-300 rounded-xl bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-500 hover:to-fuchsia-500 shadow-[0_0_20px_rgba(168,85,247,0.4)] hover:shadow-[0_0_30px_rgba(168,85,247,0.6)] hover:-translate-y-0.5 active:translate-y-0;
+    @apply relative inline-flex items-center justify-center px-6 py-3 font-semibold text-white transition-all duration-300 rounded-xl bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-500 hover:to-fuchsia-500 hover:-translate-y-0.5 active:translate-y-0;
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 0 30px rgba(168, 85, 247, 0.6);
   }
 
   /* Subtle Secondary Button */
@@ -39,13 +50,37 @@
 ::-webkit-scrollbar {
   width: 8px;
 }
+
 ::-webkit-scrollbar-track {
   background: #050508;
 }
+
 ::-webkit-scrollbar-thumb {
   background: #241f3d;
   border-radius: 4px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: #3b2f63;
+}
+
+/* Skeleton Loader */
+.skeleton {
+  @apply bg-white/5 relative overflow-hidden rounded-lg;
+}
+
+.skeleton::after {
+  content: "";
+  @apply absolute inset-0 -translate-x-full;
+  background: linear-gradient(90deg,
+      transparent,
+      rgba(255, 255, 255, 0.03),
+      transparent);
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
 }

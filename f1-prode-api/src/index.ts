@@ -440,24 +440,47 @@ app.get('/api/tmdb/search', requireAuth, async (req: Request, res: Response) => 
         const apiKey = process.env.TMDB_API_KEY;
         if (!apiKey) return res.status(500).json({ error: 'TMDB_API_KEY not configured' });
 
-        const endpoint = type === 'tv'
-            ? `https://api.themoviedb.org/3/search/tv?api_key=${apiKey}&query=${encodeURIComponent(query)}&language=es-AR`
-            : type === 'movie'
-                ? `https://api.themoviedb.org/3/search/movie?api_key=${apiKey}&query=${encodeURIComponent(query)}&language=es-AR`
-                : `https://api.themoviedb.org/3/search/multi?api_key=${apiKey}&query=${encodeURIComponent(query)}&language=es-AR`;
+        const performSearch = async (q: string) => {
+            const endpoint = type === 'tv'
+                ? `https://api.themoviedb.org/3/search/tv?api_key=${apiKey}&query=${encodeURIComponent(q)}&language=es-AR`
+                : type === 'movie'
+                    ? `https://api.themoviedb.org/3/search/movie?api_key=${apiKey}&query=${encodeURIComponent(q)}&language=es-AR`
+                    : `https://api.themoviedb.org/3/search/multi?api_key=${apiKey}&query=${encodeURIComponent(q)}&language=es-AR`;
+            const resp = await fetch(endpoint);
+            if (!resp.ok) return [];
+            const data = await resp.json();
+            return data.results || [];
+        };
 
-        const resp = await fetch(endpoint);
-        if (!resp.ok) return res.status(502).json({ error: 'TMDB API error' });
-        const data = await resp.json();
-        const results = (data.results || []).slice(0, 5).map((r: any) => ({
+        let results = await performSearch(query);
+
+        // Fallback: If no results, try cleaning the query or searching just the first few words
+        if (results.length === 0) {
+            // 1. Try cleaning special characters and trailing/leading noise
+            const cleanQuery = query.replace(/[^\w\s]/gi, '').trim();
+            if (cleanQuery && cleanQuery !== query) {
+                results = await performSearch(cleanQuery);
+            }
+
+            // 2. If still no results, try only the first 2 words if it's long
+            if (results.length === 0) {
+                const words = query.split(/\s+/);
+                if (words.length > 2) {
+                    const shortQuery = words.slice(0, 2).join(' ');
+                    results = await performSearch(shortQuery);
+                }
+            }
+        }
+
+        const formattedResults = results.slice(0, 5).map((r: any) => ({
             id: r.id,
             title: r.title || r.name,
-            media_type: r.media_type || type,
+            media_type: r.media_type || (type === 'multi' ? (r.name ? 'tv' : 'movie') : type),
             year: (r.release_date || r.first_air_date || '').slice(0, 4),
             poster: r.poster_path ? `https://image.tmdb.org/t/p/w300${r.poster_path}` : null,
             overview: r.overview,
         }));
-        res.json(results);
+        res.json(formattedResults);
     } catch (error) {
         console.error('TMDB error:', error);
         res.status(500).json({ error: 'Error fetching from TMDB' });

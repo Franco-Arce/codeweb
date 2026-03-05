@@ -2,7 +2,7 @@ import React, { useState, useCallback, useContext, createContext } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Trophy, Film, Gamepad2, Tv, LayoutDashboard, Settings,
-  RefreshCw, AlertCircle, CheckCircle, XCircle
+  RefreshCw, AlertCircle, CheckCircle, XCircle, Menu
 } from 'lucide-react';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement,
@@ -101,39 +101,69 @@ function App() {
 }
 
 function AppShell({ activeTab, setActiveTab, setIsAuthenticated }: { activeTab: string; setActiveTab: (t: string) => void; setIsAuthenticated: (v: boolean) => void }) {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+
+  // Close menu on navigation for mobile
+  const handleNavClick = (tab: string) => {
+    setActiveTab(tab);
+    setIsMobileMenuOpen(false);
+  };
+
   return (
-    <div className="min-h-screen bg-codeflow-dark relative flex overflow-hidden">
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-codeflow-accent/10 rounded-full mix-blend-lighten filter blur-[140px] animate-blob" />
-        <div className="absolute top-[20%] right-[-10%] w-[30%] h-[30%] bg-fuchsia-600/10 rounded-full mix-blend-lighten filter blur-[140px] animate-blob animation-delay-2000" />
-        <div className="absolute bottom-[-20%] left-[20%] w-[50%] h-[50%] bg-purple-800/10 rounded-full mix-blend-lighten filter blur-[150px] animate-blob animation-delay-4000" />
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+CjxwYXRoIGQ9Ik00MCAwaC0xTDBWMGgxbDM5LS4wMVoiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wMykiLz4KPC9zdmc+')] opacity-10" />
+    <div className="flex min-h-screen bg-codeflow-dark relative overflow-hidden">
+      {/* Background blobs for depth */}
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-600/10 rounded-full blur-[120px] pointer-events-none animate-blob" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-600/10 rounded-full blur-[120px] pointer-events-none animate-blob [animation-delay:2s]" />
+
+      {/* Mobile Top Bar */}
+      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-codeflow-base/80 backdrop-blur-xl border-b border-white/5 z-50 flex items-center justify-between px-6">
+        <div className="flex items-center gap-3">
+          <img src={logoCodeflow} alt="CodeWeb" className="w-8 h-8 object-contain" />
+          <span className="font-display font-bold text-lg text-white">CodeWeb</span>
+        </div>
+        <button
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          className="p-2 text-white hover:bg-white/5 rounded-lg transition-colors"
+        >
+          {isMobileMenuOpen ? <XCircle size={24} /> : <Menu size={24} />}
+        </button>
       </div>
 
-      <aside className="w-64 border-r border-white/5 bg-codeflow-base/80 backdrop-blur-3xl z-10 flex flex-col h-screen">
-        <div className="p-6 flex items-center gap-3 border-b border-white/5">
+      {/* Sidebar - Desktop fixed, Mobile hidden/absolute */}
+      <aside className={`
+        fixed md:sticky top-0 left-0 bottom-0 z-40
+        w-64 border-r border-white/5 bg-codeflow-base/80 backdrop-blur-3xl 
+        flex flex-col h-screen transition-transform duration-300 ease-in-out
+        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+      `}>
+        <div className="p-6 hidden md:flex items-center gap-3 border-b border-white/5">
           <img src={logoCodeflow} alt="CodeWeb" className="w-10 h-10 object-contain drop-shadow-[0_0_8px_rgba(168,85,247,0.4)]" />
           <h1 className="font-display font-bold text-xl bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60">
             CodeWeb
           </h1>
         </div>
 
-        <nav className="flex-1 p-4 space-y-2">
-          <NavItem icon={<LayoutDashboard size={20} />} label="Panel Principal" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
-          <div className="pt-4 pb-2 px-3 text-xs font-semibold text-codeflow-muted tracking-wider uppercase">Deportes</div>
-          <NavItem icon={<Trophy size={20} />} label="F1" active={activeTab === 'f1'} onClick={() => setActiveTab('f1')} />
-          <div className="pt-4 pb-2 px-3 text-xs font-semibold text-codeflow-muted tracking-wider uppercase">Bóveda Multimedia</div>
-          <NavItem icon={<Tv size={20} />} label="Series" active={activeTab === 'series'} onClick={() => setActiveTab('series')} />
-          <NavItem icon={<Tv size={20} />} label="Animes" active={activeTab === 'animes'} onClick={() => setActiveTab('animes')} />
-          <NavItem icon={<Film size={20} />} label="Películas" active={activeTab === 'movies'} onClick={() => setActiveTab('movies')} />
-          <NavItem icon={<Gamepad2 size={20} />} label="Juegos de Mesa" active={activeTab === 'games'} onClick={() => setActiveTab('games')} />
-        </nav>
+        {/* Mobile menu padding top */}
+        <div className="md:hidden h-20" />
 
-        <div className="p-4 border-t border-white/5 space-y-2">
-          <button onClick={() => setActiveTab('admin')} className={`flex items-center gap-3 px-3 py-2 w-full rounded-lg transition-colors ${activeTab === 'admin' ? 'text-white bg-white/10' : 'text-codeflow-muted hover:text-white hover:bg-white/5'}`}>
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+          <NavItem icon={<LayoutDashboard size={20} />} label="Panel Principal" active={activeTab === 'dashboard'} onClick={() => handleNavClick('dashboard')} />
+          <div className="pt-4 pb-2 px-3 text-xs font-semibold text-codeflow-muted tracking-wider uppercase">Deportes</div>
+          <NavItem icon={<Trophy size={20} />} label="F1" active={activeTab === 'f1'} onClick={() => handleNavClick('f1')} />
+          <div className="pt-4 pb-2 px-3 text-xs font-semibold text-codeflow-muted tracking-wider uppercase">Bóveda Multimedia</div>
+          <NavItem icon={<Tv size={20} />} label="Series" active={activeTab === 'series'} onClick={() => handleNavClick('series')} />
+          <NavItem icon={<Tv size={20} />} label="Animes" active={activeTab === 'animes'} onClick={() => handleNavClick('animes')} />
+          <NavItem icon={<Film size={20} />} label="Películas" active={activeTab === 'movies'} onClick={() => handleNavClick('movies')} />
+          <NavItem icon={<Gamepad2 size={20} />} label="Juegos de Mesa" active={activeTab === 'games'} onClick={() => handleNavClick('games')} />
+
+          <div className="pt-4 pb-2 px-3 text-xs font-semibold text-codeflow-muted tracking-wider uppercase">Admin</div>
+          <button onClick={() => handleNavClick('admin')} className={`flex items-center gap-3 px-3 py-2 w-full rounded-lg transition-colors ${activeTab === 'admin' ? 'text-white bg-white/10' : 'text-codeflow-muted hover:text-white hover:bg-white/5'}`}>
             <Settings size={20} />
             <span className="font-medium">Admin Panel</span>
           </button>
+        </nav>
+
+        <div className="p-4 border-t border-white/5">
           <button
             onClick={() => {
               localStorage.removeItem('prode_auth_token');
@@ -145,9 +175,16 @@ function AppShell({ activeTab, setActiveTab, setIsAuthenticated }: { activeTab: 
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <ActiveTabContext.Provider value={setActiveTab}>
-        <main className="flex-1 h-screen overflow-y-auto relative z-10 p-8">
+      {/* Mobile Overlay */}
+      {isMobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-codeflow-dark/60 backdrop-blur-sm z-30 md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      <main className="flex-1 p-4 md:p-8 relative z-0 overflow-x-hidden md:mt-0 mt-16">
+        <ActiveTabContext.Provider value={setActiveTab}>
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -165,8 +202,8 @@ function AppShell({ activeTab, setActiveTab, setIsAuthenticated }: { activeTab: 
               )}
             </motion.div>
           </AnimatePresence>
-        </main>
-      </ActiveTabContext.Provider>
+        </ActiveTabContext.Provider>
+      </main>
     </div>
   );
 }
@@ -773,57 +810,53 @@ function F1ProdeView() {
     <div className="space-y-8 animate-fade-in pb-12">
       {/* Header F1 & Nav Tabs */}
       <header className="flex flex-col gap-6 mb-8">
-        <div className="flex justify-between items-end">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center p-2 shadow-lg">
+            <div className="w-14 h-14 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center p-2 shadow-lg shrink-0">
               <img src={logoCodeflow} alt="F1 Codeflow" className="w-full h-full object-contain filter drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]" />
             </div>
             <div>
-              <h1 className="text-4xl font-display font-bold text-white mb-2">Formula 1 HUB</h1>
-              <p className="text-codeflow-muted text-lg">
+              <h1 className="text-3xl md:text-4xl font-display font-bold text-white mb-1">Formula 1 HUB</h1>
+              <p className="text-codeflow-muted text-sm md:text-lg max-w-xl">
                 {nextRace ? `Próxima parada: ${nextRace.name} — ${nextRace.circuit}` : 'Métricas impulsadas por IA, predicciones del finde y tabla oficial.'}
               </p>
             </div>
           </div>
           <button
             onClick={() => setF1Tab('rules')}
-            className={`btn-secondary transition-all ${f1Tab === 'rules' ? 'bg-codeflow-accent/20 border-codeflow-accent/40 text-codeflow-accent' : ''}`}
+            className={`w-full md:w-auto btn-secondary transition-all flex items-center justify-center gap-2 ${f1Tab === 'rules' ? 'bg-codeflow-accent/20 border-codeflow-accent/40 text-codeflow-accent' : ''}`}
           >
-            Reglas del Campeonato
+            <AlertCircle size={18} />
+            <span>Reglas del Campeonato</span>
           </button>
         </div>
 
         {/* F1 Sub-Navigation */}
-        <div className="flex border-b border-white/10 w-full overflow-x-auto gap-8">
+        <div className="flex items-center gap-1 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 overflow-x-auto no-scrollbar scroll-smooth">
           <button
             onClick={() => setF1Tab('prode')}
-            className={`pb-3 font-semibold transition-colors relative whitespace-nowrap ${f1Tab === 'prode' ? 'text-codeflow-accent' : 'text-codeflow-muted hover:text-white'}`}>
-            Cargar Predicciones (Prode)
-            {f1Tab === 'prode' && <motion.div layoutId="f1ActiveLine" className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-codeflow-accent" />}
+            className={`flex-1 flex justify-center items-center px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${f1Tab === 'prode' ? 'text-white bg-white/10 border border-white/10 shadow-lg' : 'text-codeflow-muted hover:text-white hover:bg-white/5'}`}>
+            🔮 Prode
           </button>
           <button
             onClick={() => setF1Tab('leaderboard')}
-            className={`pb-3 font-semibold transition-colors relative whitespace-nowrap ${f1Tab === 'leaderboard' ? 'text-codeflow-accent' : 'text-codeflow-muted hover:text-white'}`}>
-            Tabla de Analistas Oficial
-            {f1Tab === 'leaderboard' && <motion.div layoutId="f1ActiveLine" className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-codeflow-accent" />}
+            className={`flex-1 flex justify-center items-center px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${f1Tab === 'leaderboard' ? 'text-white bg-white/10 border border-white/10 shadow-lg' : 'text-codeflow-muted hover:text-white hover:bg-white/5'}`}>
+            📊 Tabla
           </button>
           <button
             onClick={() => setF1Tab('calendar')}
-            className={`pb-3 font-semibold transition-colors relative whitespace-nowrap ${f1Tab === 'calendar' ? 'text-codeflow-accent' : 'text-codeflow-muted hover:text-white'}`}>
-            Calendario Oficial (Hora AR)
-            {f1Tab === 'calendar' && <motion.div layoutId="f1ActiveLine" className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-codeflow-accent" />}
+            className={`flex-1 flex justify-center items-center px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${f1Tab === 'calendar' ? 'text-white bg-white/10 border border-white/10 shadow-lg' : 'text-codeflow-muted hover:text-white hover:bg-white/5'}`}>
+            📅 Calendario
           </button>
           <button
             onClick={() => setF1Tab('grilla')}
-            className={`pb-3 font-semibold transition-colors relative whitespace-nowrap ${f1Tab === 'grilla' ? 'text-codeflow-accent' : 'text-codeflow-muted hover:text-white'}`}>
-            Grilla de Pronósticos
-            {f1Tab === 'grilla' && <motion.div layoutId="f1ActiveLine" className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-codeflow-accent" />}
+            className={`flex-1 flex justify-center items-center px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${f1Tab === 'grilla' ? 'text-white bg-white/10 border border-white/10 shadow-lg' : 'text-codeflow-muted hover:text-white hover:bg-white/5'}`}>
+            🏁 Grilla
           </button>
           <button
             onClick={() => setF1Tab('rules')}
-            className={`pb-3 font-semibold transition-colors relative whitespace-nowrap ${f1Tab === 'rules' ? 'text-codeflow-accent' : 'text-codeflow-muted hover:text-white'}`}>
+            className={`flex-1 flex justify-center items-center px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${f1Tab === 'rules' ? 'text-white bg-white/10 border border-white/10 shadow-lg' : 'text-codeflow-muted hover:text-white hover:bg-white/5'}`}>
             📚 Reglas
-            {f1Tab === 'rules' && <motion.div layoutId="f1ActiveLine" className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-codeflow-accent" />}
           </button>
         </div>
       </header>
@@ -1416,9 +1449,16 @@ function MediaVaultView({ tab }: { tab: string }) {
       </AnimatePresence>
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {[1, 2, 3, 4, 5, 6].map(i => (
-            <div key={i} className="h-48 glass-card animate-pulse bg-white/5 border-white/5" />
+            <div key={i} className="glass-card p-6 flex items-start gap-4">
+              <div className="w-16 h-24 skeleton shrink-0" />
+              <div className="flex-1 space-y-3">
+                <div className="h-4 w-3/4 skeleton" />
+                <div className="h-3 w-1/2 skeleton" />
+                <div className="h-10 w-full skeleton" />
+              </div>
+            </div>
           ))}
         </div>
       ) : filteredItems.length === 0 ? (

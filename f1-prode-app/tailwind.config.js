@@ -41,6 +41,10 @@ export default {
           '33%': { transform: 'translate(30px, -50px) scale(1.1)' },
           '66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
           '100%': { transform: 'translate(0px, 0px) scale(1)' },
+        },
+        boxShadow: {
+          'premium-purple': '0 0 20px rgba(168, 85, 247, 0.4)',
+          'premium-purple-hover': '0 0 30px rgba(168, 85, 247, 0.6)',
         }
       }
     },
