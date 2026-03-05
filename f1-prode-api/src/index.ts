@@ -297,6 +297,55 @@ app.get('/api/admin/results/:round', requireAuth, async (req: Request, res: Resp
     }
 });
 
+// --- Score History per race (for Chart.js) ---
+app.get('/api/leaderboard/history', requireAuth, async (req: Request, res: Response) => {
+    try {
+        // Get all official results that have been processed
+        const resultsQuery = await pool.query('SELECT race_id FROM race_results ORDER BY created_at ASC');
+        const raceIds = resultsQuery.rows.map((r: any) => r.race_id);
+
+        if (raceIds.length === 0) return res.json([]);
+
+        const history: any[] = [];
+
+        for (const raceId of raceIds) {
+            // Get official result for this race
+            const rr = await pool.query('SELECT * FROM race_results WHERE race_id = $1', [raceId]);
+            const official = rr.rows[0];
+            if (!official) continue;
+
+            // Get all predictions for this race
+            const preds = await pool.query('SELECT * FROM predictions WHERE race_id = $1', [raceId]);
+
+            const raceScores: Record<string, number> = {};
+
+            for (const pred of preds.rows) {
+                let scored = 0;
+                for (const pos of ['p1', 'p2', 'p3', 'p4', 'p5'] as const) {
+                    if (pred[pos] && pred[pos] === official[pos]) scored += 10;
+                }
+                if (pred.pole_position && pred.pole_position === official.pole_position) scored += 5;
+                raceScores[pred.player] = scored;
+            }
+
+            // Get race name from calendar
+            const roundNum = parseInt(raceId.replace('round_', ''));
+            const raceInfo = races2026.find(r => r.round === roundNum);
+
+            history.push({
+                race_id: raceId,
+                race_name: raceInfo ? raceInfo.name.replace('Gran Premio de ', 'GP ').replace('Grand Prix', 'GP') : raceId,
+                scores: raceScores,
+            });
+        }
+
+        res.json(history);
+    } catch (error) {
+        console.error('Error fetching score history:', error);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+
 // --- Media Vault API Routes ---
 
 // GET Media by type (series, movies, boardgames)
