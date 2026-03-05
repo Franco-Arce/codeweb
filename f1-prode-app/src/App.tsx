@@ -79,9 +79,9 @@ function App() {
         </nav>
 
         <div className="p-4 border-t border-white/5 space-y-2">
-          <button className="flex items-center gap-3 px-3 py-2 w-full rounded-lg text-codeflow-muted hover:text-white hover:bg-white/5 transition-colors">
+          <button onClick={() => setActiveTab('admin')} className={`flex items-center gap-3 px-3 py-2 w-full rounded-lg transition-colors ${activeTab === 'admin' ? 'text-white bg-white/10' : 'text-codeflow-muted hover:text-white hover:bg-white/5'}`}>
             <Settings size={20} />
-            <span className="font-medium">Configuración</span>
+            <span className="font-medium">Admin Panel</span>
           </button>
           <button
             onClick={() => {
@@ -107,6 +107,7 @@ function App() {
           >
             {activeTab === 'dashboard' && <DashboardView />}
             {activeTab === 'f1' && <F1ProdeView />}
+            {activeTab === 'admin' && <AdminView />}
             {['series', 'animes', 'movies', 'games'].includes(activeTab) && (
               <MediaVaultView tab={activeTab} />
             )}
@@ -251,6 +252,8 @@ function LoginView({ onLogin }: { onLogin: () => void }) {
 function DashboardView() {
   const [leaderboard, setLeaderboard] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [nextRace, setNextRace] = React.useState<any>(null);
+  const [countdown, setCountdown] = React.useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
   React.useEffect(() => {
     fetchWithAuth('/api/leaderboard')
@@ -263,7 +266,33 @@ function DashboardView() {
         console.error("No se pudo cargar el leaderboard", err);
         setLoading(false);
       });
+
+    fetchWithAuth('/api/races/next')
+      .then(res => res.json())
+      .then(data => setNextRace(data))
+      .catch(err => console.error("Error cargando próxima carrera:", err));
   }, []);
+
+  // Real-time countdown
+  React.useEffect(() => {
+    if (!nextRace) return;
+    const tick = () => {
+      const now = new Date().getTime();
+      const target = new Date(nextRace.date).getTime();
+      const diff = Math.max(0, target - now);
+      setCountdown({
+        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+        hours: Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+        minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
+        seconds: Math.floor((diff % (1000 * 60)) / 1000),
+      });
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [nextRace]);
+
+  const pad = (n: number) => String(n).padStart(2, '0');
 
   return (
     <div className="space-y-8 animate-fade-in pb-12">
@@ -279,12 +308,21 @@ function DashboardView() {
           <div className="flex justify-between items-start mb-8 relative z-10">
             <div>
               <span className="px-3 py-1 rounded-full bg-codeflow-accent/20 text-codeflow-accent text-sm font-semibold border border-codeflow-accent/30 mb-4 inline-block">Siguiente Carrera</span>
-              <h2 className="text-2xl font-display font-bold text-white">Gran Premio de Australia</h2>
-              <p className="text-codeflow-muted mt-1">Circuito de Albert Park, Melbourne</p>
+              <h2 className="text-2xl font-display font-bold text-white">
+                {nextRace ? nextRace.name : 'Cargando...'}
+              </h2>
+              <p className="text-codeflow-muted mt-1">
+                {nextRace ? `${nextRace.circuit}, ${nextRace.city}` : ''}
+              </p>
+              {nextRace?.sprint && (
+                <span className="mt-2 inline-block text-[10px] bg-orange-500/20 text-orange-400 border border-orange-500/30 px-2 py-0.5 rounded font-bold uppercase">Fin de Semana Sprint</span>
+              )}
             </div>
             <div className="text-right">
-              <div className="text-3xl font-bold font-display text-white">04 : 12 : 35</div>
-              <p className="text-codeflow-muted text-sm">Días : Hrs : Min</p>
+              <div className="text-3xl font-bold font-display text-white tabular-nums">
+                {pad(countdown.days)} : {pad(countdown.hours)} : {pad(countdown.minutes)} : {pad(countdown.seconds)}
+              </div>
+              <p className="text-codeflow-muted text-sm">Días : Hrs : Min : Seg</p>
             </div>
           </div>
 
@@ -334,6 +372,7 @@ function F1ProdeView() {
 
   const [oracleInsight, setOracleInsight] = React.useState<string | null>(null);
   const [loadingOracle, setLoadingOracle] = React.useState(false);
+  const [nextRace, setNextRace] = React.useState<any>(null);
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [success, setSuccess] = React.useState('');
@@ -357,6 +396,12 @@ function F1ProdeView() {
   ]);
 
   React.useEffect(() => {
+    // Fetch next race info
+    fetchWithAuth('/api/races/next')
+      .then(res => res.json())
+      .then(data => setNextRace(data))
+      .catch(err => console.error("Error cargando próxima carrera:", err));
+
     // Fetch Drivers de la API Oficial Ergast F1 (Fork Jolpi 2026+)
     fetch('https://api.jolpi.ca/ergast/f1/2026/drivers.json')
       .then(res => res.json())
@@ -423,7 +468,9 @@ function F1ProdeView() {
             </div>
             <div>
               <h1 className="text-4xl font-display font-bold text-white mb-2">Formula 1 HUB</h1>
-              <p className="text-codeflow-muted text-lg">Métricas impulsadas por IA, predicciones del finde y tabla oficial.</p>
+              <p className="text-codeflow-muted text-lg">
+                {nextRace ? `Próxima parada: ${nextRace.name} — ${nextRace.circuit}` : 'Métricas impulsadas por IA, predicciones del finde y tabla oficial.'}
+              </p>
             </div>
           </div>
           <button className="btn-secondary">
@@ -819,34 +866,18 @@ function MediaVaultView({ tab }: { tab: string }) {
       )}
     </div>
   );
-}      // --- Official 2026 F1 Calendar Component ---
+}
+// --- Official 2026 F1 Calendar Component ---
 function F1CalendarTab() {
-  const races2026 = [
-    { id: 1, country: "Australia", city: "Melbourne", name: "GP de Australia", date: "2026-03-08T03:00:00Z", sprint: false },
-    { id: 2, country: "China", city: "Shanghai", name: "GP de China", date: "2026-03-15T04:00:00Z", sprint: true },
-    { id: 3, country: "Japón", city: "Suzuka", name: "GP de Japón", date: "2026-03-29T05:00:00Z", sprint: false },
-    { id: 4, country: "Bahréin", city: "Sakhir", name: "GP de Bahréin", date: "2026-04-12T15:00:00Z", sprint: false },
-    { id: 5, country: "Arabia Saudita", city: "Jeddah", name: "GP de Arabia Saudita", date: "2026-04-19T17:00:00Z", sprint: false },
-    { id: 6, country: "Estados Unidos", city: "Miami", name: "GP de Miami", date: "2026-05-03T20:00:00Z", sprint: true },
-    { id: 7, country: "Canadá", city: "Montreal", name: "GP de Canadá", date: "2026-05-24T18:00:00Z", sprint: true },
-    { id: 8, country: "Mónaco", city: "Mónaco", name: "GP de Mónaco", date: "2026-06-07T13:00:00Z", sprint: false },
-    { id: 9, country: "España", city: "Barcelona", name: "GP de España", date: "2026-06-14T13:00:00Z", sprint: false },
-    { id: 10, country: "Austria", city: "Spielberg", name: "GP de Austria", date: "2026-06-28T13:00:00Z", sprint: false },
-    { id: 11, country: "Reino Unido", city: "Silverstone", name: "GP de Reino Unido", date: "2026-07-05T14:00:00Z", sprint: true },
-    { id: 12, country: "Bélgica", city: "Spa-Francorchamps", name: "GP de Bélgica", date: "2026-07-19T13:00:00Z", sprint: false },
-    { id: 13, country: "Hungría", city: "Budapest", name: "GP de Hungría", date: "2026-07-26T13:00:00Z", sprint: false },
-    { id: 14, country: "Países Bajos", city: "Zandvoort", name: "GP de Países Bajos", date: "2026-08-23T13:00:00Z", sprint: true },
-    { id: 15, country: "Italia", city: "Monza", name: "GP de Italia", date: "2026-09-06T13:00:00Z", sprint: false },
-    { id: 16, country: "España", city: "Madrid", name: "GP de Madrid", date: "2026-09-13T13:00:00Z", sprint: false },
-    { id: 17, country: "Azerbaiyán", city: "Bakú", name: "GP de Azerbaiyán", date: "2026-09-27T11:00:00Z", sprint: false },
-    { id: 18, country: "Singapur", city: "Singapur", name: "GP de Singapur", date: "2026-10-11T12:00:00Z", sprint: true },
-    { id: 19, country: "Estados Unidos", city: "Austin", name: "GP de Estados Unidos", date: "2026-10-25T19:00:00Z", sprint: false },
-    { id: 20, country: "México", city: "CDMX", name: "GP de Ciudad de México", date: "2026-11-01T20:00:00Z", sprint: false },
-    { id: 21, country: "Brasil", city: "São Paulo", name: "GP de Brasil", date: "2026-11-08T17:00:00Z", sprint: false },
-    { id: 22, country: "Estados Unidos", city: "Las Vegas", name: "GP de Las Vegas", date: "2026-11-21T06:00:00Z", sprint: false },
-    { id: 23, country: "Qatar", city: "Lusail", name: "GP de Qatar", date: "2026-11-29T17:00:00Z", sprint: false },
-    { id: 24, country: "Abu Dhabi", city: "Yas Marina", name: "GP de Abu Dabi", date: "2026-12-06T13:00:00Z", sprint: false },
-  ];
+  const [races, setRaces] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    fetchWithAuth('/api/races/calendar')
+      .then(res => res.json())
+      .then(data => { setRaces(data); setLoading(false); })
+      .catch(err => { console.error("Error cargando calendario:", err); setLoading(false); });
+  }, []);
 
   return (
     <div className="glass-card p-8 min-h-[500px] border-t-4 border-t-red-500 rounded-t-none">
@@ -855,44 +886,198 @@ function F1CalendarTab() {
       </h3>
       <p className="text-codeflow-muted italic text-sm mb-8">24 carreras confirmadas para la temporada 2026.</p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {races2026.map((race, idx) => {
-          const dateObj = new Date(race.date);
-          const now = new Date();
-          const isCompleted = dateObj < now;
-          return (
-            <div key={race.id} className={`p-5 rounded-2xl border transition-all ${isCompleted ? 'bg-codeflow-card/50 border-white/5 grayscale-[0.8]' : 'bg-white/5 border-white/10 hover:border-codeflow-accent/50 group'}`}>
-              <div className="flex justify-between items-start mb-3 gap-2">
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-bold uppercase tracking-wider text-codeflow-accent">Ronda {idx + 1} - {race.country}</span>
-                    {race.sprint && <span className="text-[9px] bg-orange-500/20 text-orange-400 border border-orange-500/30 px-1.5 py-0.5 rounded font-bold uppercase">Sprint</span>}
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3, 4, 5, 6].map(i => (
+            <div key={i} className="h-44 rounded-2xl bg-white/5 border border-white/5 animate-pulse" />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {races.map((race, idx) => {
+            const dateObj = new Date(race.date);
+            const now = new Date();
+            const isCompleted = dateObj < now;
+            const isNext = !isCompleted && (idx === 0 || new Date(races[idx - 1]?.date) < now);
+            return (
+              <div key={race.round} className={`p-5 rounded-2xl border transition-all relative ${isCompleted ? 'bg-codeflow-card/50 border-white/5 opacity-60' : isNext ? 'bg-codeflow-accent/5 border-codeflow-accent/40 ring-1 ring-codeflow-accent/20 group' : 'bg-white/5 border-white/10 hover:border-codeflow-accent/50 group'}`}>
+                {isNext && (
+                  <span className="absolute -top-3 left-4 text-[10px] bg-codeflow-accent text-white px-2 py-0.5 rounded font-bold uppercase shadow-lg">Próxima</span>
+                )}
+                <div className="flex justify-between items-start mb-3 gap-2">
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-bold uppercase tracking-wider text-codeflow-accent">Ronda {race.round} - {race.country}</span>
+                      {race.sprint && <span className="text-[9px] bg-orange-500/20 text-orange-400 border border-orange-500/30 px-1.5 py-0.5 rounded font-bold uppercase">Sprint</span>}
+                    </div>
+                    <h4 className="font-bold text-lg leading-tight text-white group-hover:text-codeflow-accent transition-colors">{race.name}</h4>
                   </div>
-                  <h4 className="font-bold text-lg leading-tight text-white group-hover:text-codeflow-accent transition-colors">{race.name}</h4>
+                  {isCompleted && <span className="text-[10px] bg-white/10 px-2 py-1 rounded text-white/50 border border-white/10 shrink-0">FINALIZADA</span>}
                 </div>
-                {isCompleted && <span className="text-[10px] bg-white/10 px-2 py-1 rounded text-white/50 border border-white/10 shrink-0">FINALIZADA</span>}
-              </div>
 
-              <p className="text-xs text-codeflow-muted mb-4">{race.city}</p>
+                <p className="text-xs text-codeflow-muted mb-4">{race.circuit}, {race.city}</p>
 
-              <div className="mt-auto border-t border-white/10 pt-4 flex items-center justify-between">
-                <div className="flex flex-col">
-                  <span className="text-xs font-semibold text-white/50">Día de Carrera</span>
-                  <span className="text-sm font-bold text-white">
-                    {dateObj.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })}
-                  </span>
-                </div>
-                <div className="flex flex-col flex-1 items-end pl-2">
-                  <span className="text-xs font-semibold text-white/50 w-full text-right" style={{ 'textWrap': 'nowrap' } as any}>
-                    *Horario ARG. no confirmado
-                  </span>
+                <div className="mt-auto border-t border-white/10 pt-4 flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-semibold text-white/50">Día de Carrera</span>
+                    <span className="text-sm font-bold text-white">
+                      {dateObj.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                    </span>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <span className="text-xs font-semibold text-white/50">Hora ARG</span>
+                    <span className="text-sm font-bold text-white">
+                      {dateObj.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' })}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   )
 }
+// --- Admin Panel Component ---
+function AdminView() {
+  const [races, setRaces] = React.useState<any[]>([]);
+  const [selectedRound, setSelectedRound] = React.useState('');
+  const [pole, setPole] = React.useState('');
+  const [p1, setP1] = React.useState('');
+  const [p2, setP2] = React.useState('');
+  const [p3, setP3] = React.useState('');
+  const [p4, setP4] = React.useState('');
+  const [p5, setP5] = React.useState('');
+  const [submitting, setSubmitting] = React.useState(false);
+  const [resultMessage, setResultMessage] = React.useState<any>(null);
+
+  const DRIVERS = [
+    "Max Verstappen", "Lando Norris", "Charles Leclerc", "Carlos Sainz", "Oscar Piastri",
+    "Lewis Hamilton", "George Russell", "Fernando Alonso", "Lance Stroll", "Yuki Tsunoda",
+    "Liam Lawson", "Nico Hülkenberg", "Esteban Ocon", "Pierre Gasly", "Jack Doohan",
+    "Alexander Albon", "Franco Colapinto", "Oliver Bearman", "Andrea Kimi Antonelli", "Gabriel Bortoleto"
+  ].sort();
+
+  React.useEffect(() => {
+    fetchWithAuth('/api/races/calendar')
+      .then(res => res.json())
+      .then(data => setRaces(data))
+      .catch(err => console.error(err));
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedRound) return;
+    setSubmitting(true);
+    setResultMessage(null);
+    try {
+      const res = await fetchWithAuth('/api/admin/results', {
+        method: 'POST',
+        body: JSON.stringify({ race_round: Number(selectedRound), p1, p2, p3, p4, p5, pole_position: pole })
+      });
+      const data = await res.json();
+      setResultMessage(data);
+    } catch (err) {
+      console.error(err);
+      setResultMessage({ error: 'Error procesando resultados' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const selectedRaceName = races.find(r => String(r.round) === selectedRound)?.name || '';
+
+  return (
+    <div className="space-y-8 animate-fade-in pb-12">
+      <header>
+        <h1 className="text-4xl font-display font-bold text-white mb-2">Panel de Administración <span className="text-codeflow-accent">⚙️</span></h1>
+        <p className="text-codeflow-muted text-lg">Cargá los resultados oficiales de cada GP para calcular los puntajes automáticamente.</p>
+      </header>
+
+      <div className="glass-card p-8 max-w-2xl">
+        <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+          <Settings size={22} className="text-codeflow-accent" /> Cargar Resultados Oficiales
+        </h3>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <label className="block text-xs uppercase font-bold text-codeflow-muted tracking-wider mb-1">Seleccionar Carrera</label>
+            <select value={selectedRound} onChange={e => { setSelectedRound(e.target.value); setResultMessage(null); }} required className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-codeflow-accent appearance-none cursor-pointer">
+              <option value="" disabled className="bg-codeflow-dark text-codeflow-muted">Elegir GP...</option>
+              {races.map(r => (
+                <option key={r.round} value={r.round} className="bg-codeflow-dark text-white">
+                  Ronda {r.round} — {r.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {selectedRound && (
+            <>
+              <p className="text-sm text-codeflow-accent font-semibold">Resultados de: {selectedRaceName}</p>
+
+              <div>
+                <label className="block text-xs uppercase font-bold text-codeflow-muted tracking-wider mb-1">Pole Position</label>
+                <select value={pole} onChange={e => setPole(e.target.value)} required className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-codeflow-accent appearance-none cursor-pointer">
+                  <option value="" disabled className="bg-codeflow-dark text-codeflow-muted">Poleman oficial...</option>
+                  {DRIVERS.map(d => <option key={d} value={d} className="bg-codeflow-dark text-white">{d}</option>)}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-xs uppercase font-bold text-codeflow-accent/70 tracking-wider">Top 5 Oficial</label>
+                {[
+                  { l: '1° Ganador', v: p1, s: setP1, c: 'border-yellow-500/30 focus:border-yellow-500 bg-yellow-500/5' },
+                  { l: '2° Puesto', v: p2, s: setP2, c: 'border-gray-400/30 focus:border-gray-400 bg-gray-400/5' },
+                  { l: '3° Puesto', v: p3, s: setP3, c: 'border-orange-500/30 focus:border-orange-500 bg-orange-500/5' },
+                  { l: '4° Puesto', v: p4, s: setP4, c: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
+                  { l: '5° Puesto', v: p5, s: setP5, c: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
+                ].map((item, i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    <span className="text-sm font-bold text-white/50 w-24">{item.l}</span>
+                    <select value={item.v} onChange={e => item.s(e.target.value)} required className={`flex-1 rounded-lg px-3 py-2 text-white outline-none border ${item.c} appearance-none cursor-pointer`}>
+                      <option value="" disabled className="bg-codeflow-dark text-codeflow-muted">Elegir piloto...</option>
+                      {DRIVERS.map(d => <option key={d} value={d} className="bg-codeflow-dark text-white">{d}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+
+              <button type="submit" disabled={submitting} className="w-full bg-gradient-to-r from-red-600 to-orange-600 hover:opacity-90 text-white font-bold py-3 rounded-xl transition-all shadow-lg mt-4 disabled:opacity-50">
+                {submitting ? 'Procesando resultados y puntajes...' : '🏁 Procesar Resultados y Calcular Puntajes'}
+              </button>
+            </>
+          )}
+        </form>
+
+        {resultMessage && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-6 p-4 rounded-xl bg-green-500/10 border border-green-500/30">
+            {resultMessage.error ? (
+              <p className="text-red-400 font-medium">{resultMessage.error}</p>
+            ) : (
+              <>
+                <p className="text-green-400 font-bold mb-2">✅ {resultMessage.message}</p>
+                <p className="text-codeflow-muted text-sm mb-3">Predicciones procesadas: {resultMessage.totalPredictions}</p>
+                {resultMessage.scoreUpdates?.length > 0 ? (
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-white">Puntajes otorgados:</p>
+                    {resultMessage.scoreUpdates.map((u: any) => (
+                      <p key={u.player} className="text-sm text-codeflow-text">
+                        <span className="font-bold text-codeflow-accent">{u.player}</span>: +{u.scored} pts
+                      </p>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-codeflow-muted italic">Nadie acertó esta vez. 😅</p>
+                )}
+              </>
+            )}
+          </motion.div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default App;
