@@ -76,6 +76,7 @@ function App() {
           <NavItem icon={<Trophy size={20} />} label="F1" active={activeTab === 'f1'} onClick={() => setActiveTab('f1')} />
           <div className="pt-4 pb-2 px-3 text-xs font-semibold text-codeflow-muted tracking-wider uppercase">Bóveda Multimedia</div>
           <NavItem icon={<Tv size={20} />} label="Series" active={activeTab === 'series'} onClick={() => setActiveTab('series')} />
+          <NavItem icon={<Tv size={20} />} label="Animes" active={activeTab === 'animes'} onClick={() => setActiveTab('animes')} />
           <NavItem icon={<Film size={20} />} label="Películas" active={activeTab === 'movies'} onClick={() => setActiveTab('movies')} />
           <NavItem icon={<Gamepad2 size={20} />} label="Juegos de Mesa" active={activeTab === 'games'} onClick={() => setActiveTab('games')} />
         </nav>
@@ -109,13 +110,8 @@ function App() {
           >
             {activeTab === 'dashboard' && <DashboardView />}
             {activeTab === 'f1' && <F1ProdeView />}
-            {['series', 'movies', 'games'].includes(activeTab) && (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                  <h2 className="text-3xl font-display font-bold text-white mb-2 capitalize">Bóveda de {activeTab === 'games' ? 'Juegos' : activeTab}</h2>
-                  <p className="text-codeflow-muted">Módulo de contenido en construcción...</p>
-                </div>
-              </div>
+            {['series', 'animes', 'movies', 'games'].includes(activeTab) && (
+              <MediaVaultView tab={activeTab} />
             )}
           </motion.div>
         </AnimatePresence>
@@ -604,6 +600,155 @@ function F1LeaderboardTab() {
       )}
     </div>
   )
+}
+
+// --- Media Vault Component ---
+function MediaVaultView({ tab }: { tab: string }) {
+  const [items, setItems] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [showForm, setShowForm] = React.useState(false);
+
+  // Form states
+  const [formData, setFormData] = React.useState({ recommender: '', name: '', genre: '', description: '', rating: '', game_type: '', players: '', duration: '', difficulty: '', notes: '' });
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+  const endpointTab = tab === 'games' ? 'boardgames' : tab;
+
+  const fetchMedia = () => {
+    setLoading(true);
+    fetchWithAuth(`/api/media/${endpointTab}`)
+      .then(res => res.json())
+      .then(data => { setItems(data); setLoading(false); })
+      .catch(err => { console.error('Error fetching media:', err); setLoading(false); });
+  };
+
+  React.useEffect(() => {
+    fetchMedia();
+    setShowForm(false);
+  }, [tab]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`/api/media/${endpointTab}`, {
+        method: 'POST',
+        body: JSON.stringify(formData)
+      });
+      if (res.ok) {
+        setShowForm(false);
+        setFormData({ recommender: '', name: '', genre: '', description: '', rating: '', game_type: '', players: '', duration: '', difficulty: '', notes: '' });
+        fetchMedia();
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const isGame = tab === 'games';
+
+  const translations: Record<string, string> = {
+    'series': 'Series de TV',
+    'animes': 'Animes de Culto',
+    'movies': 'Cine y Películas',
+    'games': 'Juegos de Mesa'
+  };
+
+  return (
+    <div className="space-y-8 animate-fade-in pb-12">
+      <header className="flex justify-between items-end mb-8">
+        <div>
+          <h1 className="text-4xl font-display font-bold text-white mb-2">{translations[tab]}</h1>
+          <p className="text-codeflow-muted text-lg">Bóveda de recomendaciones grupales.</p>
+        </div>
+        <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
+          {showForm ? 'Cancelar' : 'Añadir Nuevo'}
+        </button>
+      </header>
+
+      <AnimatePresence>
+        {showForm && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+            <div className="glass-card p-6 mb-8 border border-codeflow-accent/40 bg-codeflow-card/95">
+              <h3 className="text-xl font-bold text-white mb-4">Añadir a la Bóveda de {translations[tab]}</h3>
+              <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {!isGame && (
+                  <>
+                    <input type="text" placeholder="Recomendado por..." required className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.recommender} onChange={e => setFormData({ ...formData, recommender: e.target.value })} />
+                    <input type="text" placeholder="Nombre completo" required className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
+                    <input type="text" placeholder="Género (Ej: Comedia, Acción)" className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.genre} onChange={e => setFormData({ ...formData, genre: e.target.value })} />
+                    <input type="text" placeholder="Rating (Ej: Obra Maestra, Mediocre)" className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.rating} onChange={e => setFormData({ ...formData, rating: e.target.value })} />
+                    <textarea placeholder="¿De qué trata? / Sinopsis breve" required className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent md:col-span-2 min-h-[100px]" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} />
+                  </>
+                )}
+                {isGame && (
+                  <>
+                    <input type="text" placeholder="Nombre del Juego" required className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
+                    <input type="text" placeholder="Tipo (Estrategia, Cartas, etc)" className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.game_type} onChange={e => setFormData({ ...formData, game_type: e.target.value })} />
+                    <input type="text" placeholder="Jugadores (Ej: 2-5)" className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.players} onChange={e => setFormData({ ...formData, players: e.target.value })} />
+                    <input type="text" placeholder="Duración (Ej: 60 min)" className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.duration} onChange={e => setFormData({ ...formData, duration: e.target.value })} />
+                    <input type="text" placeholder="Dificultad (Ej: Media, Familiar)" className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.difficulty} onChange={e => setFormData({ ...formData, difficulty: e.target.value })} />
+                    <textarea placeholder="Notas / Impresiones" className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent md:col-span-2 min-h-[100px]" value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} />
+                  </>
+                )}
+                <div className="md:col-span-2 flex justify-end mt-2">
+                  <button type="submit" disabled={isSubmitting} className="btn-primary w-full md:w-auto">
+                    {isSubmitting ? 'Guardando en la bóveda...' : 'Añadir Item'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {[1, 2, 3, 4, 5, 6].map(i => (
+            <div key={i} className="h-48 glass-card animate-pulse bg-white/5 border-white/5" />
+          ))}
+        </div>
+      ) : items.length === 0 ? (
+        <div className="text-center py-20 text-codeflow-muted text-xl border-2 border-dashed border-white/10 rounded-2xl">
+          Todavía no hay contenido en esta biblioteca. ¡Animate a ser el primero!
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {items.map((item, i) => (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} key={item.id} className="glass-card p-6 flex flex-col items-start gap-4 hover:border-codeflow-accent/40 group">
+              <div className="flex justify-between items-start w-full">
+                <h3 className="text-xl font-bold text-white group-hover:text-codeflow-accent transition-colors leading-tight pr-4">{item.name}</h3>
+                {!isGame && <span className="text-xs font-bold px-2 py-1 rounded-full bg-white/10 text-white/70 whitespace-nowrap">{item.rating || 'Sin nota'}</span>}
+              </div>
+
+              {!isGame ? (
+                <>
+                  {item.genre && <span className="text-xs font-semibold text-codeflow-accent bg-codeflow-accent/10 px-2 py-1 rounded-md">{item.genre}</span>}
+                  <p className="text-sm text-codeflow-text/80 italic flex-1">{item.description}</p>
+                  <div className="w-full pt-4 mt-auto border-t border-white/5 text-xs text-codeflow-muted flex justify-between items-center">
+                    <span>Recomendó: <strong className="text-white">{item.recommender}</strong></span>
+                    <span>{new Date(item.created_at).toLocaleDateString()}</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    {item.game_type && <span className="text-xs font-semibold text-blue-400 bg-blue-500/10 px-2 py-1 rounded-md">{item.game_type}</span>}
+                    {item.difficulty && <span className="text-xs font-semibold text-purple-400 bg-purple-500/10 px-2 py-1 rounded-md">{item.difficulty}</span>}
+                    {item.players && <span className="text-xs font-semibold text-green-400 bg-green-500/10 px-2 py-1 rounded-md">{item.players} Jug.</span>}
+                    {item.duration && <span className="text-xs font-semibold text-orange-400 bg-orange-500/10 px-2 py-1 rounded-md">⏱ {item.duration}</span>}
+                  </div>
+                  {item.notes && <p className="text-sm text-codeflow-text/80 italic flex-1">{item.notes}</p>}
+                </>
+              )}
+            </motion.div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default App;
