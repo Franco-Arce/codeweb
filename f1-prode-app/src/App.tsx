@@ -32,8 +32,11 @@ function App() {
   React.useEffect(() => {
     // Check auth
     const token = localStorage.getItem('prode_auth_token');
-    if (token === 'pepe_is_logged_in') {
+    if (token === 'f1_pepe_logged_in_token') {
       setIsAuthenticated(true);
+    } else {
+      // Remove stale tokens to force re-login if needed
+      localStorage.removeItem('prode_auth_token');
     }
     setIsLoading(false);
   }, []);
