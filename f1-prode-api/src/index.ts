@@ -31,22 +31,34 @@ const pool = new Pool({
     },
 });
 
-// Create tables if they don't exist
+// Session types for the prode
+export type SessionType = 'race' | 'qualifying' | 'sprint' | 'sprint_qualifying';
+
+// Points per session type
+const SESSION_POINTS: Record<SessionType, { pick: number; pole?: number }> = {
+    race: { pick: 10, pole: 5 },
+    qualifying: { pick: 10 },
+    sprint: { pick: 8 },
+    sprint_qualifying: { pick: 5 },
+};
+
+// Create and migrate tables
 const initDb = async () => {
     try {
+        // Core tables (idempotent)
         await pool.query(`
             CREATE TABLE IF NOT EXISTS predictions (
                 id SERIAL PRIMARY KEY,
                 player VARCHAR(100) NOT NULL,
                 race_id VARCHAR(50) NOT NULL DEFAULT 'current',
-                p1 VARCHAR(50),
-                p2 VARCHAR(50),
-                p3 VARCHAR(50),
-                p4 VARCHAR(50),
-                p5 VARCHAR(50),
-                pole_position VARCHAR(50),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(player, race_id)
+                session_type VARCHAR(30) NOT NULL DEFAULT 'race',
+                p1 VARCHAR(100),
+                p2 VARCHAR(100),
+                p3 VARCHAR(100),
+                p4 VARCHAR(100),
+                p5 VARCHAR(100),
+                pole_position VARCHAR(100),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
             CREATE TABLE IF NOT EXISTS leaderboard (
@@ -55,27 +67,83 @@ const initDb = async () => {
                 pts INTEGER DEFAULT 0
             );
 
-            -- Insert some initial leaderboard data if empty
-            INSERT INTO leaderboard (name, pts)
-            SELECT 'Colorado', 19 WHERE NOT EXISTS (SELECT 1 FROM leaderboard WHERE name = 'Colorado');
-            INSERT INTO leaderboard (name, pts)
-            SELECT 'MrKazter', 16 WHERE NOT EXISTS (SELECT 1 FROM leaderboard WHERE name = 'MrKazter');
-            INSERT INTO leaderboard (name, pts)
-            SELECT 'Eliana', 11 WHERE NOT EXISTS (SELECT 1 FROM leaderboard WHERE name = 'Eliana');
+            INSERT INTO leaderboard (name, pts) SELECT 'Colorado', 19 WHERE NOT EXISTS (SELECT 1 FROM leaderboard WHERE name = 'Colorado');
+            INSERT INTO leaderboard (name, pts) SELECT 'MrKazter', 16 WHERE NOT EXISTS (SELECT 1 FROM leaderboard WHERE name = 'MrKazter');
+            INSERT INTO leaderboard (name, pts) SELECT 'Eliana', 11  WHERE NOT EXISTS (SELECT 1 FROM leaderboard WHERE name = 'Eliana');
+            INSERT INTO leaderboard (name, pts) SELECT 'NestorMcNestor', 0 WHERE NOT EXISTS (SELECT 1 FROM leaderboard WHERE name = 'NestorMcNestor');
+            INSERT INTO leaderboard (name, pts) SELECT 'GuilleGb', 0 WHERE NOT EXISTS (SELECT 1 FROM leaderboard WHERE name = 'GuilleGb');
+            INSERT INTO leaderboard (name, pts) SELECT 'Rubiola', 0  WHERE NOT EXISTS (SELECT 1 FROM leaderboard WHERE name = 'Rubiola');
+            INSERT INTO leaderboard (name, pts) SELECT 'MrFori', 0   WHERE NOT EXISTS (SELECT 1 FROM leaderboard WHERE name = 'MrFori');
 
             CREATE TABLE IF NOT EXISTS race_results (
                 id SERIAL PRIMARY KEY,
-                race_id VARCHAR(50) UNIQUE NOT NULL,
-                p1 VARCHAR(50),
-                p2 VARCHAR(50),
-                p3 VARCHAR(50),
-                p4 VARCHAR(50),
-                p5 VARCHAR(50),
-                pole_position VARCHAR(50),
+                race_id VARCHAR(50) NOT NULL,
+                session_type VARCHAR(30) NOT NULL DEFAULT 'race',
+                p1 VARCHAR(100),
+                p2 VARCHAR(100),
+                p3 VARCHAR(100),
+                p4 VARCHAR(100),
+                p5 VARCHAR(100),
+                pole_position VARCHAR(100),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);
-        console.log('✅ Base de datos inicializada');
+
+        // --- Non-destructive migrations ---
+
+        // 1. Add session_type to predictions if it doesn't exist
+        await pool.query(`
+            ALTER TABLE predictions ADD COLUMN IF NOT EXISTS session_type VARCHAR(30) NOT NULL DEFAULT 'race';
+        `);
+
+        // 2. Add session_type to race_results if it doesn't exist
+        await pool.query(`
+            ALTER TABLE race_results ADD COLUMN IF NOT EXISTS session_type VARCHAR(30) NOT NULL DEFAULT 'race';
+        `);
+
+        // 3. Fix unique constraint on predictions: (player, race_id, session_type)
+        await pool.query(`
+            DO $$ BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM pg_constraint WHERE conname = 'predictions_player_race_id_key'
+                ) THEN
+                    ALTER TABLE predictions DROP CONSTRAINT predictions_player_race_id_key;
+                END IF;
+            END $$;
+        `);
+        await pool.query(`
+            DO $$ BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint WHERE conname = 'predictions_player_race_session_unique'
+                ) THEN
+                    ALTER TABLE predictions ADD CONSTRAINT predictions_player_race_session_unique
+                    UNIQUE (player, race_id, session_type);
+                END IF;
+            END $$;
+        `);
+
+        // 4. Fix unique constraint on race_results: (race_id, session_type)
+        await pool.query(`
+            DO $$ BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM pg_constraint WHERE conname = 'race_results_race_id_key'
+                ) THEN
+                    ALTER TABLE race_results DROP CONSTRAINT race_results_race_id_key;
+                END IF;
+            END $$;
+        `);
+        await pool.query(`
+            DO $$ BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint WHERE conname = 'race_results_race_session_unique'
+                ) THEN
+                    ALTER TABLE race_results ADD CONSTRAINT race_results_race_session_unique
+                    UNIQUE (race_id, session_type);
+                END IF;
+            END $$;
+        `);
+
+        console.log('✅ Base de datos inicializada y migrada');
     } catch (error) {
         console.error('❌ Error configurando base de datos:', error);
     }
@@ -162,12 +230,22 @@ app.get('/api/races/next', requireAuth, (req: Request, res: Response) => {
     res.json(next);
 });
 
-// Get predictions for a race (defaults to next race)
+// Get predictions for a race+session (defaults to next race, 'race' session)
 app.get('/api/predictions', requireAuth, async (req: Request, res: Response) => {
     try {
         const nextRace = getNextRace();
         const raceId = (req.query.race_id as string) || `round_${nextRace.round}`;
-        const result = await pool.query("SELECT * FROM predictions WHERE race_id = $1 ORDER BY created_at DESC", [raceId]);
+        const sessionType = (req.query.session_type as string) || null;
+        let query: string;
+        let params: any[];
+        if (sessionType) {
+            query = "SELECT * FROM predictions WHERE race_id = $1 AND session_type = $2 ORDER BY created_at DESC";
+            params = [raceId, sessionType];
+        } else {
+            query = "SELECT * FROM predictions WHERE race_id = $1 ORDER BY created_at DESC";
+            params = [raceId];
+        }
+        const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (error) {
         console.error('Error fetching predictions', error);
@@ -175,22 +253,22 @@ app.get('/api/predictions', requireAuth, async (req: Request, res: Response) => 
     }
 });
 
-// Submit a new prediction (linked to next race round)
+// Submit a prediction — supports all session types
 app.post('/api/predictions', requireAuth, async (req: Request, res: Response) => {
     try {
-        const { player, p1, p2, p3, p4, p5, pole_position } = req.body;
+        const { player, p1, p2, p3, p4, p5, pole_position, session_type = 'race' } = req.body;
         const nextRace = getNextRace();
         const race_id = `round_${nextRace.round}`;
 
         const result = await pool.query(
-            `INSERT INTO predictions (player, race_id, p1, p2, p3, p4, p5, pole_position) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
-             ON CONFLICT (player, race_id) 
-             DO UPDATE SET p1 = $3, p2 = $4, p3 = $5, p4 = $6, p5 = $7, pole_position = $8, created_at = CURRENT_TIMESTAMP
+            `INSERT INTO predictions (player, race_id, session_type, p1, p2, p3, p4, p5, pole_position)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             ON CONFLICT (player, race_id, session_type)
+             DO UPDATE SET p1 = $4, p2 = $5, p3 = $6, p4 = $7, p5 = $8, pole_position = $9, created_at = CURRENT_TIMESTAMP
              RETURNING *`,
-            [player, race_id, p1, p2, p3, p4, p5, pole_position]
+            [player, race_id, session_type, p1, p2, p3, p4, p5, pole_position]
         );
-        res.status(201).json({ message: 'Prediction saved successfully', prediction: result.rows[0] });
+        res.status(201).json({ message: 'Prediction saved', prediction: result.rows[0] });
     } catch (error) {
         console.error('Error saving prediction', error);
         res.status(500).json({ error: 'Database error' });
@@ -223,46 +301,148 @@ app.get('/api/oracle/roast', requireAuth, async (req: Request, res: Response) =>
     }
 });
 
+// --- Session schedule — fetches times from Jolpica (UTC→ARG)
+app.get('/api/races/:round/schedule', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const round = parseInt(String(req.params.round));
+        const local = races2026.find(r => r.round === round);
+        if (!local) return res.status(404).json({ error: 'Round not found' });
+
+        const ARG_OFFSET_MS = -3 * 60 * 60 * 1000;
+        const toArg = (utcStr?: string | null): string | null => {
+            if (!utcStr) return null;
+            const d = new Date(utcStr);
+            if (isNaN(d.getTime())) return null;
+            return new Date(d.getTime() + ARG_OFFSET_MS).toISOString().replace('Z', '-03:00');
+        };
+        const isOpen = (utcStr?: string | null): boolean => {
+            if (!utcStr) return false;
+            const sessionTime = new Date(utcStr).getTime();
+            const now = Date.now();
+            return now < sessionTime - 60000; // open until 1 min before session
+        };
+
+        // Fetch race data from Jolpica
+        let jolpicaData: any = null;
+        try {
+            const resp = await fetch(`https://api.jolpi.ca/ergast/f1/2026/${round}.json`);
+            if (resp.ok) jolpicaData = await resp.json();
+        } catch { /* use fallback */ }
+
+        const raceInfo = jolpicaData?.MRData?.RaceTable?.Races?.[0];
+
+        // Build the session list
+        const sessions: any[] = [];
+
+        // Qualifying (always)
+        const qualyDate = raceInfo?.Qualifying
+            ? `${raceInfo.Qualifying.date}T${raceInfo.Qualifying.time || '00:00:00Z'}`
+            : null;
+        sessions.push({
+            type: 'qualifying',
+            label: '🏎️ Clasificación',
+            date_utc: qualyDate,
+            date_arg: toArg(qualyDate),
+            isOpen: isOpen(qualyDate),
+            points_per_pick: 10,
+            picks: ['q1', 'q2', 'q3'],
+        });
+
+        // Sprint weekend?
+        if (local.sprint) {
+            const sqDate = raceInfo?.SprintQualifying
+                ? `${raceInfo.SprintQualifying.date}T${raceInfo.SprintQualifying.time || '00:00:00Z'}`
+                : null;
+            sessions.push({
+                type: 'sprint_qualifying',
+                label: '⚡ Sprint Qualifying',
+                date_utc: sqDate,
+                date_arg: toArg(sqDate),
+                isOpen: isOpen(sqDate),
+                points_per_pick: 5,
+                picks: ['p1'],
+            });
+
+            const sprintDate = raceInfo?.Sprint
+                ? `${raceInfo.Sprint.date}T${raceInfo.Sprint.time || '00:00:00Z'}`
+                : null;
+            sessions.push({
+                type: 'sprint',
+                label: '🏃 Sprint Race',
+                date_utc: sprintDate,
+                date_arg: toArg(sprintDate),
+                isOpen: isOpen(sprintDate),
+                points_per_pick: 8,
+                picks: ['p1', 'p2', 'p3'],
+            });
+        }
+
+        // Main race
+        const raceDate = raceInfo?.date
+            ? `${raceInfo.date}T${raceInfo.time || '00:00:00Z'}`
+            : local.date;
+        sessions.push({
+            type: 'race',
+            label: '🏁 Carrera',
+            date_utc: raceDate,
+            date_arg: toArg(raceDate),
+            isOpen: isOpen(raceDate),
+            points_per_pick: 10,
+            points_pole: 5,
+            picks: ['pole_position', 'p1', 'p2', 'p3', 'p4', 'p5'],
+        });
+
+        res.json({
+            round,
+            name: local.name,
+            circuit: local.circuit,
+            city: local.city,
+            isSprint: local.sprint,
+            sessions,
+        });
+    } catch (error) {
+        console.error('Error fetching schedule:', error);
+        res.status(500).json({ error: 'Error fetching session schedule' });
+    }
+});
+
 // --- Admin: Submit official race results and calculate scores ---
 app.post('/api/admin/results', requireAuth, async (req: Request, res: Response) => {
     try {
-        const { race_round, p1, p2, p3, p4, p5, pole_position } = req.body;
+        const { race_round, session_type = 'race', p1, p2, p3, p4, p5, pole_position } = req.body;
         const race_id = `round_${race_round}`;
+        const pts = SESSION_POINTS[session_type as SessionType] || SESSION_POINTS.race;
 
         // Save official results
         await pool.query(
-            `INSERT INTO race_results (race_id, p1, p2, p3, p4, p5, pole_position)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
-             ON CONFLICT (race_id)
-             DO UPDATE SET p1 = $2, p2 = $3, p3 = $4, p4 = $5, p5 = $6, pole_position = $7, created_at = CURRENT_TIMESTAMP`,
-            [race_id, p1, p2, p3, p4, p5, pole_position]
+            `INSERT INTO race_results (race_id, session_type, p1, p2, p3, p4, p5, pole_position)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             ON CONFLICT (race_id, session_type)
+             DO UPDATE SET p1 = $3, p2 = $4, p3 = $5, p4 = $6, p5 = $7, pole_position = $8, created_at = CURRENT_TIMESTAMP`,
+            [race_id, session_type, p1, p2, p3, p4, p5, pole_position]
         );
 
-        // Fetch all predictions for this race
+        // Score predictions for this race+session
         const predictionsResult = await pool.query(
-            "SELECT * FROM predictions WHERE race_id = $1", [race_id]
+            "SELECT * FROM predictions WHERE race_id = $1 AND session_type = $2",
+            [race_id, session_type]
         );
 
         const officialResult = { p1, p2, p3, p4, p5, pole_position };
-        const positionFields = ['p1', 'p2', 'p3', 'p4', 'p5'] as const;
+        const posFields = ['p1', 'p2', 'p3', 'p4', 'p5'] as const;
         const scoreUpdates: { player: string; scored: number }[] = [];
 
         for (const pred of predictionsResult.rows) {
             let scored = 0;
-            for (const pos of positionFields) {
-                if (pred[pos] && pred[pos] === (officialResult as any)[pos]) {
-                    scored += 10;
-                }
+            for (const pos of posFields) {
+                if (pred[pos] && pred[pos] === (officialResult as any)[pos]) scored += pts.pick;
             }
-            if (pred.pole_position && pred.pole_position === officialResult.pole_position) {
-                scored += 5;
+            if (pts.pole && pred.pole_position && pred.pole_position === officialResult.pole_position) {
+                scored += pts.pole;
             }
-            if (scored > 0) {
-                scoreUpdates.push({ player: pred.player, scored });
-            }
+            if (scored > 0) scoreUpdates.push({ player: pred.player, scored });
         }
 
-        // Update leaderboard scores
         for (const update of scoreUpdates) {
             await pool.query(
                 `INSERT INTO leaderboard (name, pts) VALUES ($1, $2)
@@ -272,7 +452,7 @@ app.post('/api/admin/results', requireAuth, async (req: Request, res: Response) 
         }
 
         res.json({
-            message: `Resultados procesados para ${race_id}`,
+            message: `Resultados de ${session_type} procesados para ${race_id}`,
             scoreUpdates,
             totalPredictions: predictionsResult.rows.length,
         });
