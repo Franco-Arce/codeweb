@@ -69,8 +69,8 @@ function App() {
 
         <nav className="flex-1 p-4 space-y-2">
           <NavItem icon={<LayoutDashboard size={20} />} label="Panel Principal" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
-          <div className="pt-4 pb-2 px-3 text-xs font-semibold text-codeflow-muted tracking-wider uppercase">Prode Formula 1</div>
-          <NavItem icon={<Trophy size={20} />} label="F1 Oráculo y Prode" active={activeTab === 'f1'} onClick={() => setActiveTab('f1')} />
+          <div className="pt-4 pb-2 px-3 text-xs font-semibold text-codeflow-muted tracking-wider uppercase">Deportes</div>
+          <NavItem icon={<Trophy size={20} />} label="F1" active={activeTab === 'f1'} onClick={() => setActiveTab('f1')} />
           <div className="pt-4 pb-2 px-3 text-xs font-semibold text-codeflow-muted tracking-wider uppercase">Bóveda Multimedia</div>
           <NavItem icon={<Tv size={20} />} label="Series" active={activeTab === 'series'} onClick={() => setActiveTab('series')} />
           <NavItem icon={<Film size={20} />} label="Películas" active={activeTab === 'movies'} onClick={() => setActiveTab('movies')} />
@@ -313,7 +313,7 @@ function DashboardView() {
                 Cargando métricas en vivo...
               </div>
             ) : leaderboard.length === 0 ? (
-              <p className="text-sm text-codeflow-muted text-center my-auto">Sin registros oficiales todavía.</p>
+              <p className="text-sm text-codeflow-muted text-center my-auto">Revisa la pestaña F1 para ver la tabla completa.</p>
             ) : (
               leaderboard.slice(0, 3).map((user: any, i: number) => (
                 <div key={user.name} className="flex items-center justify-between p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors cursor-pointer border border-transparent hover:border-white/10">
@@ -336,6 +336,8 @@ function DashboardView() {
 }
 
 function F1ProdeView() {
+  const [f1Tab, setF1Tab] = React.useState('prode'); // 'prode', 'leaderboard', 'calendar'
+
   const [oracleInsight, setOracleInsight] = React.useState<string | null>(null);
   const [loadingOracle, setLoadingOracle] = React.useState(false);
 
@@ -393,114 +395,212 @@ function F1ProdeView() {
   };
 
   return (
-    <div className="space-y-8">
-      <header className="flex justify-between items-end mb-8">
-        <div>
-          <h1 className="text-4xl font-display font-bold text-white mb-2">F1 Oráculo y Prode</h1>
-          <p className="text-codeflow-muted text-lg">Métricas impulsadas por IA, predicciones del finde y tabla oficial.</p>
+    <div className="space-y-8 animate-fade-in pb-12">
+      {/* Header F1 & Nav Tabs */}
+      <header className="flex flex-col gap-6 mb-8">
+        <div className="flex justify-between items-end">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center p-2 shadow-lg">
+              <img src={logoCodeflow} alt="F1 Codeflow" className="w-full h-full object-contain filter drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]" />
+            </div>
+            <div>
+              <h1 className="text-4xl font-display font-bold text-white mb-2">Formula 1 HUB</h1>
+              <p className="text-codeflow-muted text-lg">Métricas impulsadas por IA, predicciones del finde y tabla oficial.</p>
+            </div>
+          </div>
+          <button className="btn-secondary">
+            Reglas del Campeonato
+          </button>
         </div>
-        <button className="btn-secondary">
-          Reglas del Campeonato
-        </button>
+
+        {/* F1 Sub-Navigation */}
+        <div className="flex border-b border-white/10 w-full overflow-x-auto gap-8">
+          <button
+            onClick={() => setF1Tab('prode')}
+            className={`pb-3 font-semibold transition-colors relative whitespace-nowrap ${f1Tab === 'prode' ? 'text-codeflow-accent' : 'text-codeflow-muted hover:text-white'}`}>
+            Cargar Predicciones (Prode)
+            {f1Tab === 'prode' && <motion.div layoutId="f1ActiveLine" className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-codeflow-accent" />}
+          </button>
+          <button
+            onClick={() => setF1Tab('leaderboard')}
+            className={`pb-3 font-semibold transition-colors relative whitespace-nowrap ${f1Tab === 'leaderboard' ? 'text-codeflow-accent' : 'text-codeflow-muted hover:text-white'}`}>
+            Tabla de Analistas Oficial
+            {f1Tab === 'leaderboard' && <motion.div layoutId="f1ActiveLine" className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-codeflow-accent" />}
+          </button>
+          <button
+            onClick={() => setF1Tab('calendar')}
+            className={`pb-3 font-semibold transition-colors relative whitespace-nowrap ${f1Tab === 'calendar' ? 'text-codeflow-accent' : 'text-codeflow-muted hover:text-white'}`}>
+            Calendario Oficial (Hora AR)
+            {f1Tab === 'calendar' && <motion.div layoutId="f1ActiveLine" className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-codeflow-accent" />}
+          </button>
+        </div>
       </header>
 
-      {/* Claude Oracle Section */}
-      <div className="glass-card p-1 pb-6 relative overflow-hidden min-h-[140px]">
-        {/* Fancy border effect */}
-        <div className="absolute inset-0 bg-gradient-to-r from-codeflow-accent via-fuchsia-600 to-purple-800 opacity-20" />
-        <div className="m-5 relative z-10">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-purple-600 to-blue-600 p-[1px] shadow-lg shadow-purple-500/20 shrink-0">
-              <div className="w-full h-full bg-codeflow-card rounded-xl flex items-center justify-center">
-                <span className="text-2xl">🤖</span>
-              </div>
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <h3 className="font-bold text-lg text-white">El Oráculo (Groq)</h3>
-                <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 text-xs font-semibold mr-auto">Análisis Sensorial</span>
-              </div>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={f1Tab}
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: 10 }}
+          transition={{ duration: 0.2 }}
+        >
 
-              {loadingOracle ? (
-                <div className="text-codeflow-muted text-sm animate-pulse flex items-center gap-3 py-2">
-                  <div className="w-4 h-4 border-2 border-codeflow-accent border-t-transparent rounded-full animate-spin"></div>
-                  Procesando telemetría de trolls...
-                </div>
-              ) : (
-                <p className="text-codeflow-text/90 leading-relaxed italic border-l-2 border-codeflow-accent/40 pl-4 py-1 whitespace-pre-wrap">
-                  "{oracleInsight}"
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+          {f1Tab === 'prode' && (
+            <div className="space-y-6">
+              {/* Claude Oracle Section */}
+              <div className="glass-card p-1 pb-6 relative overflow-hidden min-h-[140px]">
+                {/* Fancy border effect */}
+                <div className="absolute inset-0 bg-gradient-to-r from-codeflow-accent via-fuchsia-600 to-purple-800 opacity-20" />
+                <div className="m-5 relative z-10">
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-purple-600 to-blue-600 p-[1px] shadow-lg shadow-purple-500/20 shrink-0">
+                      <div className="w-full h-full bg-codeflow-card rounded-xl flex items-center justify-center">
+                        <span className="text-2xl">🤖</span>
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-bold text-lg text-white">El Oráculo (Groq)</h3>
+                        <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 text-xs font-semibold mr-auto">Análisis Sensorial</span>
+                      </div>
 
-      {/* Prediction Forms and Leaderboard sections will go here */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Prediction Form */}
-        <div className="glass-card p-6 flex flex-col">
-          <div className="flex items-center gap-3 mb-6 border-b border-white/5 pb-4">
-            <Trophy size={24} className="text-codeflow-accent" />
-            <h3 className="text-xl font-bold text-white">Enviar Valoraciones</h3>
-          </div>
-
-          <form onSubmit={handlePredictSubmit} className="space-y-4 flex-1">
-            <div>
-              <label className="block text-xs uppercase font-bold text-codeflow-muted tracking-wider mb-1">Nombre Jugador (Debe ser exacto)</label>
-              <input type="text" value={pName} onChange={e => setPName(e.target.value)} required className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-codeflow-accent" placeholder="Ej: MrKazter" />
-            </div>
-            <div>
-              <label className="block text-xs uppercase font-bold text-codeflow-muted tracking-wider mb-1 flex justify-between">
-                <span>Pole Position (Sábado)</span>
-                <span className="text-codeflow-accent/60">+5 pts</span>
-              </label>
-              <input type="text" value={pPole} onChange={e => setPPole(e.target.value)} required className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-codeflow-accent" placeholder="Piloto" />
-            </div>
-
-            <div className="pt-2">
-              <label className="block text-xs uppercase font-bold text-purple-400 tracking-wider mb-3">Top 5 Domingo (10 pts c/u)</label>
-              <div className="space-y-2">
-                {[
-                  { l: '1° (Ganador)', v: p1, s: setP1, c: 'border-yellow-500/50 focus:border-yellow-500 bg-yellow-500/5' },
-                  { l: '2° Puesto', v: p2, s: setP2, c: 'border-gray-400/50 focus:border-gray-400 bg-gray-400/5' },
-                  { l: '3° Puesto', v: p3, s: setP3, c: 'border-orange-500/50 focus:border-orange-500 bg-orange-500/5' },
-                  { l: '4° Puesto', v: p4, s: setP4, c: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
-                  { l: '5° Puesto', v: p5, s: setP5, c: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
-                ].map((item, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <span className="text-sm font-bold text-white/50 w-24">{item.l}</span>
-                    <input type="text" value={item.v} onChange={e => item.s(e.target.value)} required className={`flex-1 rounded-lg px-3 py-1.5 text-white outline-none border ${item.c}`} placeholder="Piloto" />
+                      {loadingOracle ? (
+                        <div className="text-codeflow-muted text-sm animate-pulse flex items-center gap-3 py-2">
+                          <div className="w-4 h-4 border-2 border-codeflow-accent border-t-transparent rounded-full animate-spin"></div>
+                          Procesando telemetría de trolls...
+                        </div>
+                      ) : (
+                        <p className="text-codeflow-text/90 leading-relaxed italic border-l-2 border-codeflow-accent/40 pl-4 py-1 whitespace-pre-wrap">
+                          "{oracleInsight}"
+                        </p>
+                      )}
+                    </div>
                   </div>
-                ))}
+                </div>
               </div>
-            </div>
 
-            <div className="pt-4">
-              {success && <p className="text-sm text-green-400 mb-3 text-center">{success}</p>}
-              <button type="submit" disabled={isSubmitting} className="w-full bg-codeflow-accent hover:bg-codeflow-accent/80 text-white font-bold py-3 rounded-lg transition-colors">
-                {isSubmitting ? 'Enviando telemetría...' : 'Enviar Pronóstico'}
-              </button>
-            </div>
-          </form>
-        </div>
-        <div className="glass-card p-6 min-h-[400px]">
-          <h3 className="text-xl font-bold text-white mb-4">Posiciones Oficiales</h3>
-          <p className="text-codeflow-muted italic text-sm mb-6">Las posiciones se actualizarán al bajar la bandera a cuadros.</p>
-          {/* Mockup empty state */}
-          <div className="space-y-3">
-            {[1, 2, 3, 4, 5].map(i => (
-              <div key={i} className="h-12 w-full bg-white/5 rounded-lg border border-white/5 flex items-center px-4 animate-pulse">
-                <div className="w-6 h-6 rounded bg-white/10 mr-4" />
-                <div className="h-4 w-32 bg-white/10 rounded mr-auto" />
-                <div className="h-4 w-12 bg-codeflow-accent/20 rounded" />
+              {/* Prediction Forms and Leaderboard sections will go here */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Prediction Form */}
+                <div className="glass-card p-6 flex flex-col">
+                  <div className="flex items-center gap-3 mb-6 border-b border-white/5 pb-4">
+                    <Trophy size={24} className="text-codeflow-accent" />
+                    <h3 className="text-xl font-bold text-white">Enviar Valoraciones</h3>
+                  </div>
+
+                  <form onSubmit={handlePredictSubmit} className="space-y-4 flex-1">
+                    <div>
+                      <label className="block text-xs uppercase font-bold text-codeflow-muted tracking-wider mb-1">Nombre Jugador (Debe ser exacto)</label>
+                      <input type="text" value={pName} onChange={e => setPName(e.target.value)} required className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-codeflow-accent" placeholder="Ej: MrKazter" />
+                    </div>
+                    <div>
+                      <label className="block text-xs uppercase font-bold text-codeflow-muted tracking-wider mb-1 flex justify-between">
+                        <span>Pole Position (Sábado)</span>
+                        <span className="text-codeflow-accent/60">+5 pts</span>
+                      </label>
+                      <input type="text" value={pPole} onChange={e => setPPole(e.target.value)} required className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-codeflow-accent" placeholder="Piloto" />
+                    </div>
+
+                    <div className="pt-2">
+                      <label className="block text-xs uppercase font-bold text-purple-400 tracking-wider mb-3">Top 5 Domingo (10 pts c/u)</label>
+                      <div className="space-y-2">
+                        {[
+                          { l: '1° (Ganador)', v: p1, s: setP1, c: 'border-yellow-500/50 focus:border-yellow-500 bg-yellow-500/5' },
+                          { l: '2° Puesto', v: p2, s: setP2, c: 'border-gray-400/50 focus:border-gray-400 bg-gray-400/5' },
+                          { l: '3° Puesto', v: p3, s: setP3, c: 'border-orange-500/50 focus:border-orange-500 bg-orange-500/5' },
+                          { l: '4° Puesto', v: p4, s: setP4, c: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
+                          { l: '5° Puesto', v: p5, s: setP5, c: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
+                        ].map((item, i) => (
+                          <div key={i} className="flex items-center gap-3">
+                            <span className="text-sm font-bold text-white/50 w-24">{item.l}</span>
+                            <input type="text" value={item.v} onChange={e => item.s(e.target.value)} required className={`flex-1 rounded-lg px-3 py-1.5 text-white outline-none border ${item.c}`} placeholder="Piloto" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="pt-4">
+                      {success && <p className="text-sm text-green-400 mb-3 text-center">{success}</p>}
+                      <button type="submit" disabled={isSubmitting} className="w-full bg-codeflow-accent hover:bg-codeflow-accent/80 text-white font-bold py-3 rounded-lg transition-colors">
+                        {isSubmitting ? 'Enviando telemetría...' : 'Enviar Pronóstico'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
+            </div>
+          )}
+
+          {f1Tab === 'leaderboard' && (
+            <F1LeaderboardTab />
+          )}
+
+          {f1Tab === 'calendar' && (
+            <div className="glass-card p-10 flex flex-col items-center justify-center min-h-[400px]">
+              <span className="text-6xl mb-4 grayscale opacity-50">🏁</span>
+              <h3 className="text-2xl font-bold text-white mb-2">Calendario en boxes...</h3>
+              <p className="text-codeflow-muted max-w-md text-center">Estamos sincronizando la telemetría con la FIA para descargar el calendario oficial con los horarios de Argentina.</p>
+            </div>
+          )}
+
+        </motion.div>
+      </AnimatePresence>
+    </div >
   );
+}
+
+// --- Leaderboard Internal Component ---
+function F1LeaderboardTab() {
+  const [leaderboard, setLeaderboard] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    fetchWithAuth('/api/leaderboard')
+      .then(res => res.json())
+      .then(data => {
+        setLeaderboard(data);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("No se pudo cargar el leaderboard", err);
+        setLoading(false);
+      });
+  }, []);
+
+  return (
+    <div className="glass-card p-8 min-h-[500px] border-t-4 border-t-yellow-500 rounded-t-none">
+      <h3 className="text-2xl font-bold text-white mb-2">Posiciones Oficiales del Prode 2026</h3>
+      <p className="text-codeflow-muted italic text-sm mb-8">Las posiciones se actualizarán al bajar la bandera a cuadros de cada GP.</p>
+
+      {loading ? (
+        <div className="space-y-4">
+          {[1, 2, 3, 4, 5].map(i => (
+            <div key={i} className="h-16 w-full bg-white/5 rounded-xl border border-white/5 flex items-center px-6 animate-pulse">
+              <div className="w-8 h-8 rounded-full bg-white/10 mr-4" />
+              <div className="h-5 w-48 bg-white/10 rounded mr-auto" />
+              <div className="h-5 w-16 bg-codeflow-accent/20 rounded" />
+            </div>
+          ))}
+        </div>
+      ) : leaderboard.length === 0 ? (
+        <p className="text-codeflow-muted text-center py-10 text-lg">Aún nadie corrió. ¡Sé el primero en hacer la pole!</p>
+      ) : (
+        <div className="space-y-3">
+          {leaderboard.map((user, i) => (
+            <div key={user.name} className="flex items-center justify-between p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-colors border border-transparent hover:border-white/10 group">
+              <div className="flex items-center gap-4">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg shadow-sm ${i === 0 ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/50 shadow-yellow-500/20' : i === 1 ? 'bg-gray-400/20 text-gray-300 border border-gray-400/50' : i === 2 ? 'bg-orange-600/20 text-orange-400 border border-orange-600/50' : 'bg-white/5 text-white/50'}`}>
+                  {i + 1}
+                </div>
+                <span className="font-bold text-white text-lg group-hover:text-codeflow-accent transition-colors">{user.name}</span>
+              </div>
+              <span className="font-display font-extrabold text-2xl text-white">{user.pts} <span className="text-sm font-normal text-codeflow-muted">PTS</span></span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default App;
