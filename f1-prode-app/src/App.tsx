@@ -1670,7 +1670,7 @@ function AdminView() {
                   { key: 'p3', label: '3°', v: p3, s: setP3, c: 'border-orange-500/30 focus:border-orange-500 bg-orange-500/5' },
                   { key: 'p4', label: '4°', v: p4, s: setP4, c: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
                   { key: 'p5', label: '5°', v: p5, s: setP5, c: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
-                ].filter(f => sessionCfg.fields.includes(f.key)).map((item) => (
+                ].filter(f => (sessionCfg.fields as readonly string[]).includes(f.key)).map((item) => (
                   <div key={item.key} className="flex items-center gap-3">
                     <span className="text-sm font-bold text-white/50 w-8 shrink-0">{item.label}</span>
                     <select value={item.v} onChange={e => item.s(e.target.value)} required className={`flex-1 rounded-lg px-3 py-2 text-white outline-none border ${item.c} appearance-none cursor-pointer`}>
