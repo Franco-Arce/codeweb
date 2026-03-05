@@ -6,9 +6,22 @@ import logoCodeflow from './assets/LogoOnly.png';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 // --- API Helpers ---
-// const fetchWithAuth = async (endpoint: string, options: RequestInit = {}) => {
-//   ...
-// };
+const fetchWithAuth = async (endpoint: string, options: RequestInit = {}) => {
+  const token = localStorage.getItem('prode_auth_token');
+  const res = await fetch(`${API_URL}${endpoint}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': token ? `Bearer ${token}` : '',
+      ...(options.headers || {})
+    },
+  });
+  if (res.status === 401) {
+    localStorage.removeItem('prode_auth_token');
+    window.location.reload();
+  }
+  return res;
+};
 
 // --- Main App Component ---
 function App() {
@@ -55,19 +68,19 @@ function App() {
         </div>
 
         <nav className="flex-1 p-4 space-y-2">
-          <NavItem icon={<LayoutDashboard size={20} />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
-          <div className="pt-4 pb-2 px-3 text-xs font-semibold text-codeflow-muted tracking-wider uppercase">Prode</div>
-          <NavItem icon={<Trophy size={20} />} label="F1 Oracle & Prode" active={activeTab === 'f1'} onClick={() => setActiveTab('f1')} />
-          <div className="pt-4 pb-2 px-3 text-xs font-semibold text-codeflow-muted tracking-wider uppercase">Media Vault</div>
+          <NavItem icon={<LayoutDashboard size={20} />} label="Panel Principal" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
+          <div className="pt-4 pb-2 px-3 text-xs font-semibold text-codeflow-muted tracking-wider uppercase">Prode Formula 1</div>
+          <NavItem icon={<Trophy size={20} />} label="F1 Oráculo y Prode" active={activeTab === 'f1'} onClick={() => setActiveTab('f1')} />
+          <div className="pt-4 pb-2 px-3 text-xs font-semibold text-codeflow-muted tracking-wider uppercase">Bóveda Multimedia</div>
           <NavItem icon={<Tv size={20} />} label="Series" active={activeTab === 'series'} onClick={() => setActiveTab('series')} />
-          <NavItem icon={<Film size={20} />} label="Movies" active={activeTab === 'movies'} onClick={() => setActiveTab('movies')} />
-          <NavItem icon={<Gamepad2 size={20} />} label="Board Games" active={activeTab === 'games'} onClick={() => setActiveTab('games')} />
+          <NavItem icon={<Film size={20} />} label="Películas" active={activeTab === 'movies'} onClick={() => setActiveTab('movies')} />
+          <NavItem icon={<Gamepad2 size={20} />} label="Juegos de Mesa" active={activeTab === 'games'} onClick={() => setActiveTab('games')} />
         </nav>
 
         <div className="p-4 border-t border-white/5 space-y-2">
           <button className="flex items-center gap-3 px-3 py-2 w-full rounded-lg text-codeflow-muted hover:text-white hover:bg-white/5 transition-colors">
             <Settings size={20} />
-            <span className="font-medium">Settings</span>
+            <span className="font-medium">Configuración</span>
           </button>
           <button
             onClick={() => {
@@ -75,7 +88,7 @@ function App() {
               setIsAuthenticated(false);
             }}
             className="flex items-center gap-3 px-3 py-2 w-full rounded-lg text-red-500/70 hover:text-red-400 hover:bg-red-500/10 transition-colors">
-            <span className="font-medium text-sm">Logout</span>
+            <span className="font-medium text-sm">Cerrar Sesión</span>
           </button>
         </div>
       </aside>
@@ -96,8 +109,8 @@ function App() {
             {['series', 'movies', 'games'].includes(activeTab) && (
               <div className="flex items-center justify-center h-full">
                 <div className="text-center">
-                  <h2 className="text-3xl font-display font-bold text-white mb-2 capitalize">{activeTab} Vault</h2>
-                  <p className="text-codeflow-muted">Content module under construction...</p>
+                  <h2 className="text-3xl font-display font-bold text-white mb-2 capitalize">Bóveda de {activeTab === 'games' ? 'Juegos' : activeTab}</h2>
+                  <p className="text-codeflow-muted">Módulo de contenido en construcción...</p>
                 </div>
               </div>
             )}
@@ -140,17 +153,31 @@ function LoginView({ onLogin }: { onLogin: () => void }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // Hardcoded check via Backend idealmente, pero para evitar problemas de CORS temporalmente mockeamos la auth básica del plan
-    if (user.toLowerCase() === 'pepe' && pass === 'pepon') {
-      localStorage.setItem('prode_auth_token', 'pepe_is_logged_in');
-      setTimeout(() => {
+
+    try {
+      const res = await fetch(`${API_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ username: user, password: pass })
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        localStorage.setItem('prode_auth_token', data.token); // Guardamos JWT o Token real
         onLogin();
-      }, 500);
-    } else {
-      setError('Credenciales inválidas');
+      } else {
+        setError(data.message || 'Bandera negra: Credenciales inválidas');
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Error al comunicar con la base central.');
+    } finally {
       setLoading(false);
     }
   };
@@ -173,14 +200,14 @@ function LoginView({ onLogin }: { onLogin: () => void }) {
           <img src={logoCodeflow} alt="Logo" className="w-full h-full object-contain filter drop-shadow-md" />
         </div>
 
-        <h1 className="text-3xl font-display font-bold text-white mb-2">Paddock Access</h1>
-        <p className="text-codeflow-muted mb-8 text-center">F1 Prode Internal System</p>
+        <h1 className="text-3xl font-display font-bold text-white mb-2">Acceso al Paddock</h1>
+        <p className="text-codeflow-muted mb-8 text-center">Sistema Interno F1 Prode</p>
 
         <form onSubmit={handleSubmit} className="w-full space-y-4">
           <div>
             <input
               type="text"
-              placeholder="Username"
+              placeholder="Usuario Maestro"
               className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-codeflow-accent transition-colors"
               value={user}
               onChange={(e) => { setUser(e.target.value); setError(''); }}
@@ -190,7 +217,8 @@ function LoginView({ onLogin }: { onLogin: () => void }) {
           <div>
             <input
               type="password"
-              placeholder="Password"
+              autoComplete="current-password"
+              placeholder="Contraseña"
               className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-codeflow-accent transition-colors"
               value={pass}
               onChange={(e) => { setPass(e.target.value); setError(''); }}
@@ -218,7 +246,7 @@ function LoginView({ onLogin }: { onLogin: () => void }) {
           >
             {loading ? (
               <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-            ) : "Enter Paddock"}
+            ) : "Ingresar"}
           </button>
         </form>
       </motion.div>
@@ -231,18 +259,14 @@ function DashboardView() {
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    // Simulamos la request de auth, como ya estamos logueados pedimos data
-    fetch(`${API_URL}/api/leaderboard`)
-      .then(res => {
-        if (!res.ok) throw new Error("Auth block");
-        return res.json()
-      })
+    fetchWithAuth('/api/leaderboard')
+      .then(res => res.json())
       .then(data => {
         setLeaderboard(data);
         setLoading(false);
       })
       .catch(err => {
-        console.error("Failed to load leaderboard", err);
+        console.error("No se pudo cargar el leaderboard", err);
         setLoading(false);
       });
   }, []);
@@ -250,8 +274,8 @@ function DashboardView() {
   return (
     <div className="space-y-8 animate-fade-in pb-12">
       <header>
-        <h1 className="text-4xl font-display font-bold text-white mb-2">Welcome Back! <span className="text-codeflow-accent">🏎️</span></h1>
-        <p className="text-codeflow-muted text-lg">Your combined hub for F1 predictions and shared recommendations.</p>
+        <h1 className="text-4xl font-display font-bold text-white mb-2">¡Eje Central de la Tribuna! <span className="text-codeflow-accent">🏎️</span></h1>
+        <p className="text-codeflow-muted text-lg">Tu centro de métricas unificado para pronósticos F1 y recomendaciones grupales.</p>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -260,19 +284,19 @@ function DashboardView() {
           <div className="absolute top-0 right-0 w-64 h-full bg-gradient-to-l from-codeflow-accent/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
           <div className="flex justify-between items-start mb-8 relative z-10">
             <div>
-              <span className="px-3 py-1 rounded-full bg-codeflow-accent/20 text-codeflow-accent text-sm font-semibold border border-codeflow-accent/30 mb-4 inline-block">Next Race</span>
-              <h2 className="text-2xl font-display font-bold text-white">Australian Grand Prix</h2>
-              <p className="text-codeflow-muted mt-1">Albert Park Circuit, Melbourne</p>
+              <span className="px-3 py-1 rounded-full bg-codeflow-accent/20 text-codeflow-accent text-sm font-semibold border border-codeflow-accent/30 mb-4 inline-block">Siguiente Carrera</span>
+              <h2 className="text-2xl font-display font-bold text-white">Gran Premio de Australia</h2>
+              <p className="text-codeflow-muted mt-1">Circuito de Albert Park, Melbourne</p>
             </div>
             <div className="text-right">
               <div className="text-3xl font-bold font-display text-white">04 : 12 : 35</div>
-              <p className="text-codeflow-muted text-sm">Days : Hrs : Mins</p>
+              <p className="text-codeflow-muted text-sm">Días : Hrs : Min</p>
             </div>
           </div>
 
           <div className="relative z-10">
             <button className="btn-primary w-full md:w-auto">
-              Submit Predictions
+              Cargar Pronósticos
             </button>
           </div>
         </div>
@@ -280,16 +304,16 @@ function DashboardView() {
         {/* Prode Leaderboard Snapshot */}
         <div className="glass-card p-6 relative flex flex-col">
           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-            <Trophy size={18} className="text-yellow-500" /> Top Analysts
+            <Trophy size={18} className="text-yellow-500" /> Top Analistas
           </h3>
           <div className="space-y-4 flex-1 flex flex-col justify-center">
             {loading ? (
               <div className="text-center text-codeflow-muted text-sm animate-pulse flex flex-col items-center gap-2 py-4">
                 <div className="w-6 h-6 border-2 border-codeflow-accent border-t-transparent rounded-full animate-spin"></div>
-                Loading Live Scores...
+                Cargando métricas en vivo...
               </div>
             ) : leaderboard.length === 0 ? (
-              <p className="text-sm text-codeflow-muted text-center my-auto">No scores available yet.</p>
+              <p className="text-sm text-codeflow-muted text-center my-auto">Sin registros oficiales todavía.</p>
             ) : (
               leaderboard.slice(0, 3).map((user: any, i: number) => (
                 <div key={user.name} className="flex items-center justify-between p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors cursor-pointer border border-transparent hover:border-white/10">
@@ -304,7 +328,7 @@ function DashboardView() {
               ))
             )}
           </div>
-          <button className="text-sm text-codeflow-muted hover:text-white mt-auto transition-colors pt-4">View full standings →</button>
+          <button className="text-sm text-codeflow-muted hover:text-white mt-auto transition-colors pt-4">Ver posiciones completas →</button>
         </div>
       </div>
     </div>
@@ -329,15 +353,15 @@ function F1ProdeView() {
 
   React.useEffect(() => {
     setLoadingOracle(true);
-    fetch(`${API_URL}/api/oracle/roast`)
+    fetchWithAuth('/api/oracle/roast')
       .then(res => res.json())
       .then(data => {
         setOracleInsight(data.analysis);
         setLoadingOracle(false);
       })
       .catch(err => {
-        console.error("Failed to load Oracle roast", err);
-        setOracleInsight("El oráculo tuvo una falla en el motor. Probablemente sea culpa de Sargeant.");
+        console.error("Oráculo caído", err);
+        setOracleInsight("El oráculo tuvo una falla en el motor (Servidor Caído). Probablemente sea culpa de Sargeant.");
         setLoadingOracle(false);
       });
   }, []);
@@ -348,22 +372,21 @@ function F1ProdeView() {
     setSuccess('');
 
     try {
-      const res = await fetch(`${API_URL}/api/predictions`, {
+      const res = await fetchWithAuth('/api/predictions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           player: pName,
           pole_position: pPole,
           p1, p2, p3, p4, p5
         })
       });
-      if (!res.ok) throw new Error("Failed to save");
+      if (!res.ok) throw new Error("Falla al guardar métricas");
 
-      setSuccess('¡Predicción guardada en boxes! 🏎️💨');
+      setSuccess('¡Pronóstico guardado en boxes! 🏎️💨');
       setPName(''); setPPole(''); setP1(''); setP2(''); setP3(''); setP4(''); setP5('');
     } catch (err) {
       console.error(err);
-      alert("Error de motor. Revisa consola.");
+      alert("Error de motor guardando el pronóstico. Intenta verificar la conexión.");
     } finally {
       setIsSubmitting(false);
     }
@@ -373,11 +396,11 @@ function F1ProdeView() {
     <div className="space-y-8">
       <header className="flex justify-between items-end mb-8">
         <div>
-          <h1 className="text-4xl font-display font-bold text-white mb-2">F1 Oracle & Prode</h1>
-          <p className="text-codeflow-muted text-lg">AI-powered insights, predictions, and real-time standings.</p>
+          <h1 className="text-4xl font-display font-bold text-white mb-2">F1 Oráculo y Prode</h1>
+          <p className="text-codeflow-muted text-lg">Métricas impulsadas por IA, predicciones del finde y tabla oficial.</p>
         </div>
         <button className="btn-secondary">
-          Rules & Scoring
+          Reglas del Campeonato
         </button>
       </header>
 
@@ -394,14 +417,14 @@ function F1ProdeView() {
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
-                <h3 className="font-bold text-lg text-white">The Oracle (Groq)</h3>
-                <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 text-xs font-semibold mr-auto">AI Analysis</span>
+                <h3 className="font-bold text-lg text-white">El Oráculo (Groq)</h3>
+                <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 text-xs font-semibold mr-auto">Análisis Sensorial</span>
               </div>
 
               {loadingOracle ? (
                 <div className="text-codeflow-muted text-sm animate-pulse flex items-center gap-3 py-2">
                   <div className="w-4 h-4 border-2 border-codeflow-accent border-t-transparent rounded-full animate-spin"></div>
-                  Generating roasting parameters...
+                  Procesando telemetría de trolls...
                 </div>
               ) : (
                 <p className="text-codeflow-text/90 leading-relaxed italic border-l-2 border-codeflow-accent/40 pl-4 py-1 whitespace-pre-wrap">
@@ -419,7 +442,7 @@ function F1ProdeView() {
         <div className="glass-card p-6 flex flex-col">
           <div className="flex items-center gap-3 mb-6 border-b border-white/5 pb-4">
             <Trophy size={24} className="text-codeflow-accent" />
-            <h3 className="text-xl font-bold text-white">Submit Appraisals</h3>
+            <h3 className="text-xl font-bold text-white">Enviar Valoraciones</h3>
           </div>
 
           <form onSubmit={handlePredictSubmit} className="space-y-4 flex-1">
@@ -462,8 +485,8 @@ function F1ProdeView() {
           </form>
         </div>
         <div className="glass-card p-6 min-h-[400px]">
-          <h3 className="text-xl font-bold text-white mb-4">Live Prode Standings</h3>
-          <p className="text-codeflow-muted italic text-sm mb-6">Positions will update automatically after the checkered flag.</p>
+          <h3 className="text-xl font-bold text-white mb-4">Posiciones Oficiales</h3>
+          <p className="text-codeflow-muted italic text-sm mb-6">Las posiciones se actualizarán al bajar la bandera a cuadros.</p>
           {/* Mockup empty state */}
           <div className="space-y-3">
             {[1, 2, 3, 4, 5].map(i => (
