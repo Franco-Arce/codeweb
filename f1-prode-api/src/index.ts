@@ -104,6 +104,10 @@ const initDb = async () => {
                 avatar_seed VARCHAR(100),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
+
+            -- Ensure media_boardgames has rating and recommender
+            ALTER TABLE media_boardgames ADD COLUMN IF NOT EXISTS rating VARCHAR(50);
+            ALTER TABLE media_boardgames ADD COLUMN IF NOT EXISTS recommender VARCHAR(100);
         `);
 
         // --- Non-destructive migrations ---
@@ -1036,6 +1040,43 @@ app.get('/api/leaderboard/history', requireAuth, async (req: Request, res: Respo
     } catch (error) {
         console.error('Error fetching score history:', error);
         res.status(500).json({ error: 'Database error' });
+    }
+});
+
+// --- The Oracle (Groq AI) ---
+app.get('/api/oracle/roast', async (req: Request, res: Response) => {
+    try {
+        const predsRes = await pool.query('SELECT * FROM predictions WHERE race_id = \'current\'');
+        const lbRes = await pool.query('SELECT * FROM leaderboard ORDER BY pts DESC');
+
+        // Contexto opcional (podría hidratarse desde el front o de una tabla de clima)
+        const raceCtx = { circuitName: 'Próximo GP' };
+
+        const roast = await generateOracleRoast(predsRes.rows, raceCtx, lbRes.rows);
+        res.json({ roast });
+    } catch (err) {
+        console.error('Oracle error:', err);
+        res.status(500).json({ error: 'El oráculo se quedó sin nafta.' });
+    }
+});
+
+app.post('/api/auth/update-password', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const { password } = req.body;
+        const userId = (req as any).user.userId;
+
+        if (!password || password.length < 4) {
+            return res.status(400).json({ success: false, message: 'Contraseña muy corta' });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const hash = await bcrypt.hash(password, salt);
+
+        await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, userId]);
+        res.json({ success: true, message: 'Contraseña actualizada' });
+    } catch (err) {
+        console.error('Update password error:', err);
+        res.status(500).json({ success: false, message: 'Error de servidor' });
     }
 });
 

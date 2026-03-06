@@ -472,7 +472,14 @@ function SettingsView({ username }: { username: string }) {
         <section className="glass-card p-8 border border-white/5">
           <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><Lock size={20} className="text-codeflow-accent" /> Seguridad</h3>
           <form onSubmit={handleUpdatePassword} className="space-y-4">
-            <input type="password" placeholder="Nueva Contraseña" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" value={newPass} onChange={e => setNewPass(e.target.value)} />
+            <input
+              type="password"
+              autoComplete="new-password"
+              placeholder="Nueva Contraseña"
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-codeflow-accent outline-none"
+              value={newPass}
+              onChange={e => setNewPass(e.target.value)}
+            />
             <button type="submit" disabled={loading || !newPass} className="w-full bg-codeflow-accent text-white font-bold py-3 rounded-xl hover:opacity-90 transition-all disabled:opacity-50">
               {loading ? 'Actualizando...' : 'Actualizar Contraseña'}
             </button>
@@ -2145,6 +2152,17 @@ function MediaVaultView({ tab }: { tab: string }) {
                 )}
                 {isGame && (
                   <>
+                    <div className="flex flex-col gap-2">
+                      <select
+                        required
+                        className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent outline-none appearance-none"
+                        value={formData.recommender}
+                        onChange={e => setFormData({ ...formData, recommender: e.target.value })}
+                      >
+                        <option value="" disabled>Recomendado por...</option>
+                        {userList.map(u => <option key={u} value={u} className="bg-codeflow-dark">{u}</option>)}
+                      </select>
+                    </div>
                     <input type="text" placeholder="Nombre del Juego" required className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
 
                     {/* Game Type Dropdown/Input */}
@@ -2181,6 +2199,7 @@ function MediaVaultView({ tab }: { tab: string }) {
                       )}
                     </div>
 
+                    <input type="text" placeholder="Rating (Ej: Muy Divertido, Complejo)" className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.rating} onChange={e => setFormData({ ...formData, rating: e.target.value })} />
                     <input type="text" placeholder="Jugadores (Ej: 2-5)" className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.players} onChange={e => setFormData({ ...formData, players: e.target.value })} />
                     <input type="text" placeholder="Duración (Ej: 60 min)" className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.duration} onChange={e => setFormData({ ...formData, duration: e.target.value })} />
                     <input type="text" placeholder="Dificultad (Ej: Media, Familiar)" className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.difficulty} onChange={e => setFormData({ ...formData, difficulty: e.target.value })} />
