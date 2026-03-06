@@ -13,12 +13,16 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "axios": "^1.13.6",
+    "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "groq-sdk": "^0.37.0",
+    "jsonwebtoken": "^9.0.3",
     "node-cron": "^4.2.1",
     "pg": "^8.20.0",
     "xlsx": "^0.18.5"
