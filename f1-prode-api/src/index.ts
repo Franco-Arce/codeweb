@@ -590,8 +590,16 @@ app.get('/api/races/next', requireAuth, (req: Request, res: Response) => {
 app.get('/api/predictions', requireAuth, async (req: Request, res: Response) => {
     try {
         const nextRace = getNextRace();
+        if (!nextRace) {
+            console.error('[API_PREDICTIONS] nextRace is undefined!');
+            return res.status(500).json({ error: 'Calendar error' });
+        }
+
         const raceId = (req.query.race_id as string) || `round_${nextRace.round}`;
         const sessionType = (req.query.session_type as string) || null;
+
+        console.log(`[API_PREDICTIONS] Fetching for ${raceId}, session: ${sessionType}`);
+
         let query: string;
         let params: any[];
         if (sessionType) {
@@ -601,11 +609,13 @@ app.get('/api/predictions', requireAuth, async (req: Request, res: Response) => 
             query = "SELECT * FROM predictions WHERE race_id = $1 ORDER BY created_at DESC";
             params = [raceId];
         }
+
         const result = await pool.query(query, params);
+        // Ensure player names are handled consistently if needed (backend already stores lowercase)
         res.json(result.rows);
     } catch (error) {
-        console.error('Error fetching predictions', error);
-        res.status(500).json({ error: 'Database error' });
+        console.error('[API_PREDICTIONS] Error criticality:', error);
+        res.status(500).json({ error: 'Database error', details: error instanceof Error ? error.message : String(error) });
     }
 });
 
@@ -616,13 +626,15 @@ app.post('/api/predictions', requireAuth, async (req: Request, res: Response) =>
         const nextRace = getNextRace();
         const race_id = `round_${nextRace.round}`;
 
+        const lowerPlayer = String(player || '').toLowerCase().trim();
+
         const result = await pool.query(
             `INSERT INTO predictions (player, race_id, session_type, p1, p2, p3, p4, p5, pole_position)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
              ON CONFLICT (player, race_id, session_type)
              DO UPDATE SET p1 = $4, p2 = $5, p3 = $6, p4 = $7, p5 = $8, pole_position = $9, created_at = CURRENT_TIMESTAMP
              RETURNING *`,
-            [player, race_id, session_type, p1, p2, p3, p4, p5, pole_position]
+            [lowerPlayer, race_id, session_type, p1, p2, p3, p4, p5, pole_position]
         );
         res.status(201).json({ message: 'Prediction saved', prediction: result.rows[0] });
     } catch (error) {
@@ -1046,11 +1058,14 @@ app.get('/api/leaderboard/history', requireAuth, async (req: Request, res: Respo
 // --- The Oracle (Groq AI) ---
 app.get('/api/oracle/roast', async (req: Request, res: Response) => {
     try {
-        const predsRes = await pool.query('SELECT * FROM predictions WHERE race_id = \'current\'');
+        const nextRace = getNextRace();
+        const raceId = `round_${nextRace.round}`;
+
+        const predsRes = await pool.query('SELECT * FROM predictions WHERE race_id = $1 OR race_id = \'current\'', [raceId]);
         const lbRes = await pool.query('SELECT * FROM leaderboard ORDER BY pts DESC');
 
         // Contexto opcional (podría hidratarse desde el front o de una tabla de clima)
-        const raceCtx = { circuitName: 'Próximo GP' };
+        const raceCtx = { circuitName: nextRace.name || 'Próximo GP' };
 
         const roast = await generateOracleRoast(predsRes.rows, raceCtx, lbRes.rows);
         res.json({ roast });
@@ -1122,6 +1137,8 @@ app.get('/api/media/:type', requireAuth, async (req: Request, res: Response) => 
         else if (type === 'movies') { baseTable = 'media_movies'; }
         else if (type === 'boardgames') { baseTable = 'media_boardgames'; }
         else return res.status(400).json({ error: 'Invalid media type' });
+
+        const userId = (req as any).user.userId;
 
         // Query joining with average ratings and personal vote
         const mediaWithRatings = await pool.query(`
@@ -1281,6 +1298,15 @@ app.delete('/api/media/:type/:id', requireAuth, async (req: Request, res: Respon
 // Start WhatsApp Cron Job
 import { startWhatsAppCron } from './whatsappAlerts';
 startWhatsAppCron(pool, getNextRace, races2026);
+
+// Global Error Handler
+app.use((err: any, req: Request, res: Response, next: any) => {
+    console.error('💥 UNHANDLED ERROR:', err);
+    res.status(500).json({
+        error: 'Critical server error',
+        message: err.message || 'Unknown error'
+    });
+});
 
 // Start Server
 app.listen(port, () => {

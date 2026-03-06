@@ -1133,7 +1133,7 @@ function F1ProdeView() {
   const selectedSessionData = schedule?.sessions?.find((s: any) => s.type === selectedSession);
 
   // --- Constantes y Estados Dinámicos ---
-  const USERS = ["MrKazter", "Eliana", "NestorMcNestor", "GuilleGb", "Rubiola", "Colorado", "MrFori"];
+  const [USERS, setUSERS] = React.useState<string[]>([]);
   const [DRIVERS, setDRIVERS] = React.useState<string[]>([
     "Max Verstappen", "Lando Norris", "Charles Leclerc", "Carlos Sainz", "Oscar Piastri",
     "Lewis Hamilton", "George Russell", "Fernando Alonso", "Lance Stroll", "Yuki Tsunoda",
@@ -1163,6 +1163,11 @@ function F1ProdeView() {
         setDRIVERS(d.sort());
       })
       .catch(err => console.error("Error trayendo lista oficial de la FIA:", err));
+
+    fetchWithAuth('/api/users/list')
+      .then(res => res.json())
+      .then(data => setUSERS(data || []))
+      .catch(err => console.error("Error fetching users:", err));
 
     setLoadingOracle(true);
     fetchWithAuth('/api/oracle/roast')

@@ -1,33 +1,29 @@
-const fetch = require('node-fetch');
+const { Pool } = require('pg');
+require('dotenv').config();
 
-async function testApi() {
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
+});
+
+async function testQuery() {
     try {
-        // We'll try to hit the backend directly. Since it's local, we'll try localhost:3001
-        // Actually, I'll just check if I can run the SQL query that I think is failing.
-        const { Pool } = require('pg');
-        require('dotenv').config({ path: 'c:/Users/franc/OneDrive/Escritorio/Formula1Prode/codeweb/f1-prode-api/.env' });
-        const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+        const raceId = 'round_1';
+        const sessionType = 'race';
+        const query = "SELECT * FROM predictions WHERE race_id = $1 AND session_type = $2 ORDER BY created_at DESC";
+        const params = [raceId, sessionType];
 
-        console.log('Testing SQL query for media_series...');
-        try {
-            const res = await pool.query(`
-        SELECT m.*, 
-               COALESCE(AVG(r.rating), m.rating::float) as avg_rating,
-               COUNT(r.id) as total_votes
-        FROM media_series m
-        LEFT JOIN media_ratings r ON r.media_id = m.id AND r.media_type = 'series'
-        WHERE type = 'serie'
-        GROUP BY m.id
-        ORDER BY m.created_at DESC
-      `);
-            console.log('Query success! (Wait, did it really work?) Rows:', res.rows.length);
-        } catch (e) {
-            console.error('Query FAILED as expected:', e.message);
-        }
+        console.log('Running query:', query);
+        console.log('Params:', params);
+
+        const result = await pool.query(query, params);
+        console.log('Result rows length:', result.rows.length);
+
         process.exit(0);
-    } catch (err) {
-        console.error(err);
+    } catch (e) {
+        console.error('Query Failed:', e);
         process.exit(1);
     }
 }
-testApi();
+
+testQuery();
