@@ -446,17 +446,21 @@ app.get('/api/tmdb/search', requireAuth, async (req: Request, res: Response) => 
 
         let results = await performSearch(query);
 
-        // Fallback: If no results, try cleaning the query or searching just the first few words
+        // Fallback: If no results, try cleaning the query
         if (results.length === 0) {
-            // 1. Try cleaning special characters and trailing/leading noise
-            const cleanQuery = query.replace(/[^\w\s]/gi, '').trim();
+            // 1. Separate camelCase or PascalCase words (e.g. "TheWalkingDead" -> "The Walking Dead")
+            let cleanQuery = query.replace(/([a-z])([A-Z])/g, '$1 $2');
+
+            // 2. Clear special characters
+            cleanQuery = cleanQuery.replace(/[^\w\s]/gi, ' ').replace(/\s+/g, ' ').trim();
+
             if (cleanQuery && cleanQuery !== query) {
                 results = await performSearch(cleanQuery);
             }
 
-            // 2. If still no results, try only the first 2 words if it's long
+            // 3. If still no results, search only the first 2 words if it's long
             if (results.length === 0) {
-                const words = query.split(/\s+/);
+                const words = cleanQuery.split(' ');
                 if (words.length > 2) {
                     const shortQuery = words.slice(0, 2).join(' ');
                     results = await performSearch(shortQuery);
