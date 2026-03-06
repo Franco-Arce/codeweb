@@ -419,10 +419,10 @@ function SettingsView({ username }: { username: string }) {
   const [newPass, setNewPass] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const currentSeed = profiles[username] || username;
-  const avatarUrl = currentSeed.includes(':')
+  const currentSeed = profiles[username] || username || '';
+  const avatarUrl = (currentSeed && typeof currentSeed === 'string' && currentSeed.includes(':'))
     ? `https://api.dicebear.com/7.x/${currentSeed.split(':')[0]}/svg?seed=${currentSeed.split(':')[1]}`
-    : `https://api.dicebear.com/7.x/notionists/svg?seed=${currentSeed}&backgroundColor=transparent`;
+    : `https://api.dicebear.com/7.x/notionists/svg?seed=${currentSeed || 'default'}&backgroundColor=transparent`;
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -498,10 +498,10 @@ function AvatarTrigger({ username }: { username: string }) {
 
 function MyProfileCard({ username, onClick, active }: { username: string, onClick?: () => void, active?: boolean }) {
   const { profiles } = useProfiles();
-  const seed = profiles[username] || username;
-  const url = seed.includes(':')
+  const seed = profiles[username] || username || '';
+  const url = (seed && typeof seed === 'string' && seed.includes(':'))
     ? `https://api.dicebear.com/7.x/${seed.split(':')[0]}/svg?seed=${seed.split(':')[1]}`
-    : `https://api.dicebear.com/7.x/notionists/svg?seed=${seed}&backgroundColor=transparent`;
+    : `https://api.dicebear.com/7.x/notionists/svg?seed=${seed || 'default'}&backgroundColor=transparent`;
   return (
     <div onClick={onClick} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${active ? 'bg-codeflow-accent/10 border-codeflow-accent' : 'bg-white/5 border-white/5 hover:border-codeflow-accent/40 cursor-pointer group'}`}>
       <img src={url} alt="Profile" className="w-10 h-10 rounded-full border border-white/10" />
@@ -820,10 +820,10 @@ function DashboardView() {
                     <div className="relative">
                       <div className={`w-12 h-12 rounded-full flex items-center justify-center border-2 overflow-hidden bg-codeflow-base ${medalStyle}`}>
                         {(() => {
-                          const seed = profiles[user.name] || user.name;
-                          const url = seed.includes(':')
+                          const seed = profiles[user.name] || user.name || '';
+                          const url = (seed && typeof seed === 'string' && seed.includes(':'))
                             ? `https://api.dicebear.com/7.x/${seed.split(':')[0]}/svg?seed=${seed.split(':')[1]}`
-                            : `https://api.dicebear.com/7.x/notionists/svg?seed=${seed}&backgroundColor=transparent`;
+                            : `https://api.dicebear.com/7.x/notionists/svg?seed=${seed || 'default'}&backgroundColor=transparent`;
                           return <img src={url} alt={user.name} className="w-10 h-10 object-cover" />;
                         })()}
                       </div>
