@@ -15,7 +15,7 @@ import logoCodeflow from './assets/LogoOnly.png';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_URL = import.meta.env.VITE_API_URL || 'https://codeweb-dhru.onrender.com';
 
 // --- Toast System ---
 type Toast = { id: number; type: 'success' | 'error' | 'warning'; message: string };
@@ -1907,7 +1907,11 @@ function MediaVaultView({ tab }: { tab: string }) {
     setLoading(true);
     fetchWithAuth(`/api/media/${endpointTab}`)
       .then(res => res.json())
-      .then(data => { setItems(data); setLoading(false); })
+      .then(data => {
+        // API may return { error: ... } on failure; avoid crashing UI
+        setItems(Array.isArray(data) ? data : []);
+        setLoading(false);
+      })
       .catch(err => { console.error('Error fetching media:', err); setLoading(false); });
   };
 
