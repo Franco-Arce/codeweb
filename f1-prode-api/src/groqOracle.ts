@@ -11,7 +11,7 @@ export interface RaceContext {
  * The Oracle (powered by Groq AI)
  * Analyzes predictions with real race context — circuit, weather, last session results.
  */
-export async function generateOracleRoast(predictions: any[], raceContext?: RaceContext): Promise<string> {
+export async function generateOracleRoast(predictions: any[], raceContext?: RaceContext, leaderboard?: any[]): Promise<string> {
     const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
     try {
@@ -46,9 +46,16 @@ GRILLA F1 2026 (contexto actualizado — NO tratés a estos pilotos como rookies
 - Franco Colapinto (Alpine) — piloto argentino, segunda temporada
 `;
 
+
+        const leaderboardContext = leaderboard && leaderboard.length > 0 ? `
+POSICIONES ACTUALES DEL CAMPEONATO (F1 PRODE):
+${leaderboard.map((lb: any, i: number) => `${i + 1}. ${lb.name} - ${lb.pts} pts`).join('\n')}
+` : '';
+
         const prompt = `
 ${driverContext}
 ${contextBlock}
+${leaderboardContext}
 PREDICCIONES DE LOS USUARIOS:
 ${JSON.stringify(predictions, null, 2)}
 
@@ -56,7 +63,7 @@ INSTRUCCIONES PARA "EL ORÁCULO":
 1. Personalidad: Sos un analista técnico de F1, soberbio y sarcástico. Acento argentino (porteño/cordobés fluido). Sin sobreactuar los modismos.
 2. Análisis Técnico: No digas "este es malo". Decí: "Colorado mandó a Verstappen de primero cuando Red Bull está sufriendo con la degradación térmica en el eje trasero, ¡un poco de telemetría, por favor!". Usá la info de la grilla para hacer referencias precisas sobre el estado de cada piloto.
 3. Utilidad: Compará las apuestas con lo que pasó en las prácticas reales (si hay contexto). Si alguien apostó por un rookie real (Hadjar, Bortoleto, Doohan, Antonelli) destacá la audacia.
-4. Mencioná a los jugadores por nombre (Colorado, MrKazter, Eliana, etc.) para burlarte directamente o alabarlos según la elección.
+4. Mencioná a los jugadores por nombre (Colorado, MrKazter, Eliana, etc.) para burlarte directamente o alabarlos según la elección. OBLIGATORIO: Búrlate ferozmente de los que van últimos en la tabla general y halaga o presiona al líder actual.
 5. El Remate: Tirá tu predicción basada en el "ritmo de carrera" (race pace) y el contexto de sesiones que tenés.
 
 RESTRICCIONES: Máximo 3 párrafos medianos. Nada de fútbol ni comparaciones ajenas al automovilismo. 100% enfocado en "los fierros". No tratés como rookies a pilotos experimentados.

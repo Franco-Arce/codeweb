@@ -79,6 +79,13 @@ const initDb = async () => {
                 pole_position VARCHAR(100),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE IF NOT EXISTS user_profiles (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(100) UNIQUE NOT NULL,
+                avatar_seed VARCHAR(100),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
         `);
 
         // --- Non-destructive migrations ---
@@ -539,7 +546,11 @@ app.get('/api/oracle/roast', requireAuth, async (req: Request, res: Response) =>
             }
         } catch { /* no context available, oracle proceeds without it */ }
 
-        const roast = await generateOracleRoast(predictions, raceContext);
+        // Fetch current leaderboard
+        const lbResult = await pool.query('SELECT name, pts FROM leaderboard ORDER BY pts DESC');
+        const leaderboard = lbResult.rows;
+
+        const roast = await generateOracleRoast(predictions, raceContext, leaderboard);
         res.json({ analysis: roast, race: nextRace.name });
     } catch (error) {
         console.error('Error en Oracle:', error);
