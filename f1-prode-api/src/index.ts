@@ -174,7 +174,7 @@ app.get('/api/auth/session', (req: Request, res: Response) => {
 
 // --- Official 2026 F1 Calendar ---
 const races2026 = [
-    { round: 1, country: "Australia", city: "Melbourne", name: "GP de Australia", date: "2026-03-08T03:00:00Z", circuit: "Albert Park", sprint: false },
+    { round: 1, country: "Australia", city: "Melbourne", name: "GP de Australia", date: "2026-03-08T04:00:00Z", circuit: "Albert Park", sprint: false },
     { round: 2, country: "China", city: "Shanghai", name: "GP de China", date: "2026-03-15T04:00:00Z", circuit: "Shanghai International Circuit", sprint: true },
     { round: 3, country: "Japón", city: "Suzuka", name: "GP de Japón", date: "2026-03-29T05:00:00Z", circuit: "Suzuka Circuit", sprint: false },
     { round: 4, country: "Bahréin", city: "Sakhir", name: "GP de Bahréin", date: "2026-04-12T15:00:00Z", circuit: "Bahrain International Circuit", sprint: false },
