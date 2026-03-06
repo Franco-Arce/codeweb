@@ -1693,11 +1693,11 @@ function F1CalendarTab() {
                       <div className="flex flex-col">
                         <span className="text-[9px] font-bold tracking-wider text-orange-400 uppercase">🏃 Sprint</span>
                         <span className="text-xs font-semibold text-white">
-                          {new Date(dateObj.getTime() - 86400000).toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                          {new Date(race.sprint_date || dateObj.getTime() - 86400000).toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })}
                         </span>
                       </div>
                       <span className="text-xs text-white">
-                        {new Date(dateObj.getTime() - 86400000).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' })}
+                        {new Date(race.sprint_date || dateObj.getTime() - 86400000).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' })}
                       </span>
                     </div>
                   )}
@@ -1706,11 +1706,11 @@ function F1CalendarTab() {
                     <div className="flex flex-col">
                       <span className="text-[9px] font-bold tracking-wider text-white/50 uppercase">⏱️ Clasificación</span>
                       <span className="text-xs font-semibold text-white">
-                        {new Date(dateObj.getTime() - 86400000).toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                        {new Date(race.qualy_date || dateObj.getTime() - (race.sprint ? 172800000 : 86400000)).toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })}
                       </span>
                     </div>
                     <span className="text-xs text-white">
-                      {new Date(dateObj.getTime() - 86400000).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' })}
+                      {new Date(race.qualy_date || dateObj.getTime() - (race.sprint ? 172800000 : 86400000)).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' })}
                     </span>
                   </div>
                 </div>
