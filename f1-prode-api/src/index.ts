@@ -547,7 +547,10 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
 
     try {
+        console.log(`[AUTH] Intentando registro para: ${username}`);
         const hashedPassword = await bcrypt.hash(password, 10);
+        console.log(`[AUTH] Password hasheada para ${username}`);
+
         const result = await pool.query(
             'INSERT INTO users (username, password_hash) VALUES ($1, $2) RETURNING id, username',
             [username, hashedPassword]
@@ -556,11 +559,33 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
         // Also create an initial profile
         await pool.query('INSERT INTO user_profiles (username, avatar_seed) VALUES ($1, $2) ON CONFLICT DO NOTHING', [username, username]);
 
+        console.log(`[AUTH] Registro exitoso: ${username}`);
         res.status(201).json({ success: true, user: result.rows[0] });
     } catch (err: any) {
-        if (err.code === '23505') return res.status(400).json({ error: 'Username already exists' });
+        if (err.code === '23505') {
+            console.log(`[AUTH] Error: El usuario ya existe (${username})`);
+            return res.status(400).json({ error: 'Username already exists' });
+        }
         console.error('Register error:', err);
         res.status(500).json({ error: 'Error registering user' });
+    }
+});
+
+// TEMPORARY DEBUG ROUTE - DELETE BEFORE PRODUCTION
+app.delete('/api/auth/debug/user/:username', async (req: Request, res: Response) => {
+    const { username } = req.params;
+    const { secret } = req.query;
+
+    // Simple secret for debugging on Render without full auth
+    if (secret !== 'f1_debug_2026') return res.status(403).json({ error: 'Forbidden' });
+
+    try {
+        await pool.query('DELETE FROM users WHERE username = $1', [username]);
+        await pool.query('DELETE FROM user_profiles WHERE username = $1', [username]);
+        console.log(`[DEBUG] Usuario eliminado: ${username}`);
+        res.json({ success: true, message: `User ${username} deleted` });
+    } catch (err) {
+        res.status(500).json({ error: 'Error deleting user' });
     }
 });
 
