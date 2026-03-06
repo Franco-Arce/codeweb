@@ -842,6 +842,34 @@ app.get('/api/leaderboard/history', requireAuth, async (req: Request, res: Respo
     }
 });
 
+// --- User Profiles ---
+app.get('/api/profiles', async (req: Request, res: Response) => {
+    try {
+        const result = await pool.query('SELECT username, avatar_seed FROM user_profiles');
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching profiles:', err);
+        res.status(500).json({ error: 'Error fetching profiles' });
+    }
+});
+
+app.post('/api/profiles', async (req: Request, res: Response) => {
+    const { username, avatar_seed } = req.body;
+    if (!username || !avatar_seed) return res.status(400).json({ error: 'Missing fields' });
+
+    try {
+        await pool.query(`
+            INSERT INTO user_profiles (username, avatar_seed)
+            VALUES ($1, $2)
+            ON CONFLICT (username) DO UPDATE SET avatar_seed = $2
+        `, [username, avatar_seed]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error saving profile:', err);
+        res.status(500).json({ error: 'Error saving profile' });
+    }
+});
+
 // --- Media Vault API Routes ---
 
 // GET Media by type (series, movies, boardgames)
