@@ -1,0 +1,20 @@
+{
+    "version": 2,
+    "rewrites": [
+        {
+            "source": "/api/(.*)",
+            "destination": "/f1-prode-api/src/index.ts"
+        },
+        {
+            "source": "/(.*)",
+            "destination": "/f1-prode-app/$1"
+        }
+    ],
+    "redirects": [
+        {
+            "source": "/",
+            "destination": "/f1-prode-app/",
+            "permanent": false
+        }
+    ]
+}

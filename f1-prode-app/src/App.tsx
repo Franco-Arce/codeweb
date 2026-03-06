@@ -2,7 +2,7 @@ import React, { useState, useCallback, useContext, createContext } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Trophy, Film, Gamepad2, Tv, LayoutDashboard, Settings,
-  RefreshCw, AlertCircle, CheckCircle, XCircle, Menu
+  RefreshCw, AlertCircle, CheckCircle, XCircle, Menu, Edit2, Trash2, Plus
 } from 'lucide-react';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement,
@@ -1221,8 +1221,9 @@ function PredictionsGridTab({ nextRace }: { nextRace: any }) {
 // --- Media Vault Component ---
 
 // MediaCard: auto-fetches TMDB poster for series/movies/animes
-function MediaCard({ item, i, isGame, getGenreColor, tab }: {
+function MediaCard({ item, i, isGame, getGenreColor, tab, onEdit, onDelete }: {
   item: any; i: number; isGame: boolean; getGenreColor: (g: string) => string; tab: string;
+  onEdit: (item: any) => void; onDelete: (id: string) => void;
 }) {
   const [poster, setPoster] = React.useState<string | null>(null);
   const [overview, setOverview] = React.useState<string | null>(null);
@@ -1297,9 +1298,27 @@ function MediaCard({ item, i, isGame, getGenreColor, tab }: {
         </AnimatePresence>
       )}
 
-      <div className="w-full pt-3 mt-auto border-t border-white/5 text-[10px] text-codeflow-muted flex justify-between items-center">
+      <div className="w-full pt-3 mt-auto border-t border-white/5 text-[10px] text-codeflow-muted flex justify-between items-center group/footer">
         <span>Recomendó: <strong className="text-white">{item.recommender || '—'}</strong></span>
-        <span>{new Date(item.created_at).toLocaleDateString('es-AR')}</span>
+        <div className="flex items-center gap-2">
+          <span>{new Date(item.created_at).toLocaleDateString('es-AR')}</span>
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={() => onEdit(item)}
+              className="p-1 hover:text-codeflow-accent transition-colors"
+              title="Editar"
+            >
+              <Edit2 size={12} />
+            </button>
+            <button
+              onClick={() => { if (window.confirm('¿Eliminar este item?')) onDelete(item.id); }}
+              className="p-1 hover:text-red-400 transition-colors"
+              title="Eliminar"
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
+        </div>
       </div>
     </motion.div>
   );
@@ -1313,7 +1332,11 @@ function MediaVaultView({ tab }: { tab: string }) {
 
   // Form states
   const [formData, setFormData] = React.useState({ recommender: '', name: '', genre: '', description: '', rating: '', game_type: '', players: '', duration: '', difficulty: '', notes: '' });
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [editingId, setEditingId] = React.useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [showCustomGenre, setShowCustomGenre] = React.useState(false);
+  const [tempGenre, setTempGenre] = React.useState('');
 
   const endpointTab = tab === 'games' ? 'boardgames' : tab;
 
@@ -1325,11 +1348,43 @@ function MediaVaultView({ tab }: { tab: string }) {
       .catch(err => { console.error('Error fetching media:', err); setLoading(false); });
   };
 
+  const handleDelete = async (id: string) => {
+    try {
+      const res = await fetchWithAuth(`/api/media/${endpointTab}/${id}`, { method: 'DELETE' });
+      if (res.ok) fetchMedia();
+    } catch (err) {
+      console.error('Error deleting:', err);
+    }
+  };
+
+  const handleEdit = (item: any) => {
+    setFormData({
+      recommender: item.recommender || '',
+      name: item.name || '',
+      genre: item.genre || '',
+      description: item.description || '',
+      rating: item.rating || '',
+      game_type: item.game_type || '',
+      players: item.players || '',
+      duration: item.duration || '',
+      difficulty: item.difficulty || '',
+      notes: item.notes || ''
+    });
+    setEditingId(item.id);
+    setIsEditing(true);
+    setShowForm(true);
+    // If it's a genre that doesn't exist in standard dropdown (though they are dynamic), 
+    // we might need to show custom input, but for edit we can just set formData and the dropdown will find it or we show custom.
+    setShowCustomGenre(false);
+  };
+
   const isGame = tab === 'games';
 
   React.useEffect(() => {
     fetchMedia();
     setShowForm(false);
+    setIsEditing(false);
+    setEditingId(null);
     setSelectedGenre('All');
   }, [tab]);
 
@@ -1362,14 +1417,24 @@ function MediaVaultView({ tab }: { tab: string }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    const finalGenre = showCustomGenre ? tempGenre : (isGame ? formData.game_type : formData.genre);
+    const submissionData = isGame ? { ...formData, game_type: finalGenre } : { ...formData, genre: finalGenre };
+
     try {
-      const res = await fetchWithAuth(`/api/media/${endpointTab}`, {
-        method: 'POST',
-        body: JSON.stringify(formData)
+      const url = isEditing ? `/api/media/${endpointTab}/${editingId}` : `/api/media/${endpointTab}`;
+      const method = isEditing ? 'PUT' : 'POST';
+
+      const res = await fetchWithAuth(url, {
+        method,
+        body: JSON.stringify(submissionData)
       });
       if (res.ok) {
         setShowForm(false);
+        setIsEditing(false);
+        setEditingId(null);
         setFormData({ recommender: '', name: '', genre: '', description: '', rating: '', game_type: '', players: '', duration: '', difficulty: '', notes: '' });
+        setTempGenre('');
+        setShowCustomGenre(false);
         fetchMedia();
       }
     } catch (err) {
@@ -1406,7 +1471,14 @@ function MediaVaultView({ tab }: { tab: string }) {
               ))}
             </select>
           )}
-          <button className="btn-primary w-full sm:w-auto whitespace-nowrap" onClick={() => setShowForm(!showForm)}>
+          <button className="btn-primary w-full sm:w-auto whitespace-nowrap" onClick={() => {
+            if (showForm && isEditing) {
+              setIsEditing(false);
+              setEditingId(null);
+              setFormData({ recommender: '', name: '', genre: '', description: '', rating: '', game_type: '', players: '', duration: '', difficulty: '', notes: '' });
+            }
+            setShowForm(!showForm);
+          }}>
             {showForm ? 'Cancelar' : 'Añadir Nuevo'}
           </button>
         </div>
@@ -1416,13 +1488,49 @@ function MediaVaultView({ tab }: { tab: string }) {
         {showForm && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
             <div className="glass-card p-6 mb-8 border border-codeflow-accent/40 bg-codeflow-card/95">
-              <h3 className="text-xl font-bold text-white mb-4">Añadir a la Bóveda de {translations[tab]}</h3>
+              <h3 className="text-xl font-bold text-white mb-4">
+                {isEditing ? `Editar en la Bóveda de ${translations[tab]}` : `Añadir a la Bóveda de ${translations[tab]}`}
+              </h3>
               <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {!isGame && (
                   <>
                     <input type="text" placeholder="Recomendado por..." required className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.recommender} onChange={e => setFormData({ ...formData, recommender: e.target.value })} />
                     <input type="text" placeholder="Nombre completo" required className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
-                    <input type="text" placeholder="Género (Ej: Comedia, Acción)" className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.genre} onChange={e => setFormData({ ...formData, genre: e.target.value })} />
+
+                    {/* Genre Dropdown/Input */}
+                    <div className="flex flex-col gap-2">
+                      {!showCustomGenre ? (
+                        <select
+                          className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent outline-none appearance-none"
+                          value={formData.genre}
+                          onChange={e => {
+                            if (e.target.value === 'ADD_NEW') {
+                              setShowCustomGenre(true);
+                              setFormData({ ...formData, genre: '' });
+                            } else {
+                              setFormData({ ...formData, genre: e.target.value });
+                            }
+                          }}
+                        >
+                          <option value="" disabled>Seleccionar Género...</option>
+                          {genres.filter(g => g !== 'All').map(g => <option key={g} value={g} className="bg-codeflow-dark">{g}</option>)}
+                          <option value="ADD_NEW" className="bg-codeflow-dark text-codeflow-accent">➕ Agregar nuevo...</option>
+                        </select>
+                      ) : (
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="Nuevo Género..."
+                            autoFocus
+                            className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent"
+                            value={tempGenre}
+                            onChange={e => setTempGenre(e.target.value)}
+                          />
+                          <button type="button" onClick={() => setShowCustomGenre(false)} className="px-3 bg-white/5 rounded-lg text-white/50 hover:text-white"><XCircle size={16} /></button>
+                        </div>
+                      )}
+                    </div>
+
                     <input type="text" placeholder="Rating (Ej: Obra Maestra, Mediocre)" className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.rating} onChange={e => setFormData({ ...formData, rating: e.target.value })} />
                     <textarea placeholder="¿De qué trata? / Sinopsis breve" required className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent md:col-span-2 min-h-[100px]" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} />
                   </>
@@ -1430,7 +1538,41 @@ function MediaVaultView({ tab }: { tab: string }) {
                 {isGame && (
                   <>
                     <input type="text" placeholder="Nombre del Juego" required className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
-                    <input type="text" placeholder="Tipo (Estrategia, Cartas, etc)" className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.game_type} onChange={e => setFormData({ ...formData, game_type: e.target.value })} />
+
+                    {/* Game Type Dropdown/Input */}
+                    <div className="flex flex-col gap-2">
+                      {!showCustomGenre ? (
+                        <select
+                          className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent outline-none appearance-none"
+                          value={formData.game_type}
+                          onChange={e => {
+                            if (e.target.value === 'ADD_NEW') {
+                              setShowCustomGenre(true);
+                              setFormData({ ...formData, game_type: '' });
+                            } else {
+                              setFormData({ ...formData, game_type: e.target.value });
+                            }
+                          }}
+                        >
+                          <option value="" disabled>Seleccionar Tipo...</option>
+                          {genres.filter(g => g !== 'All').map(g => <option key={g} value={g} className="bg-codeflow-dark">{g}</option>)}
+                          <option value="ADD_NEW" className="bg-codeflow-dark text-codeflow-accent">➕ Agregar nuevo...</option>
+                        </select>
+                      ) : (
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="Nuevo Tipo..."
+                            autoFocus
+                            className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent"
+                            value={tempGenre}
+                            onChange={e => setTempGenre(e.target.value)}
+                          />
+                          <button type="button" onClick={() => setShowCustomGenre(false)} className="px-3 bg-white/5 rounded-lg text-white/50 hover:text-white"><XCircle size={16} /></button>
+                        </div>
+                      )}
+                    </div>
+
                     <input type="text" placeholder="Jugadores (Ej: 2-5)" className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.players} onChange={e => setFormData({ ...formData, players: e.target.value })} />
                     <input type="text" placeholder="Duración (Ej: 60 min)" className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.duration} onChange={e => setFormData({ ...formData, duration: e.target.value })} />
                     <input type="text" placeholder="Dificultad (Ej: Media, Familiar)" className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.difficulty} onChange={e => setFormData({ ...formData, difficulty: e.target.value })} />
@@ -1439,7 +1581,7 @@ function MediaVaultView({ tab }: { tab: string }) {
                 )}
                 <div className="md:col-span-2 flex justify-end mt-2">
                   <button type="submit" disabled={isSubmitting} className="btn-primary w-full md:w-auto">
-                    {isSubmitting ? 'Guardando en la bóveda...' : 'Añadir Item'}
+                    {isSubmitting ? 'Guardando en la bóveda...' : isEditing ? 'Guardar Cambios' : 'Añadir Item'}
                   </button>
                 </div>
               </form>
@@ -1468,7 +1610,7 @@ function MediaVaultView({ tab }: { tab: string }) {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredItems.map((item, i) => (
-            <MediaCard key={item.id} item={item} i={i} isGame={isGame} getGenreColor={getGenreColor} tab={tab} />
+            <MediaCard key={item.id} item={item} i={i} isGame={isGame} getGenreColor={getGenreColor} tab={tab} onEdit={handleEdit} onDelete={handleDelete} />
           ))}
         </div>
       )}
@@ -1576,6 +1718,11 @@ function F1RulesTab() {
       title: "🔍 Visualización y Transparencia",
       icon: <LayoutDashboard className="text-blue-500" />,
       content: "Una vez que la sesión se bloquea, podés ver los pronósticos de todos en tiempo real en la pestaña 'Grilla de Pronósticos' para comparar estrategias. El Leaderboard se actualiza cuando los comisarios (Admin) cargan los resultados oficiales."
+    },
+    {
+      title: "⚠️ Ausencia de Pronóstico",
+      icon: <AlertCircle className="text-red-400" />,
+      content: "Si no cargás una predicción antes de que comience la sesión, obtendrás 0 puntos para esa ronda. ¡No te olvides de guardar tus cambios a tiempo!"
     }
   ];
 

@@ -4,7 +4,7 @@ import { Pool } from 'pg';
 import 'dotenv/config';
 import { generateOracleRoast } from './groqOracle';
 
-const app = express();
+export const app = express();
 const port = process.env.PORT || 3001;
 
 // Middleware
@@ -66,14 +66,6 @@ const initDb = async () => {
                 name VARCHAR(100) UNIQUE NOT NULL,
                 pts INTEGER DEFAULT 0
             );
-
-            INSERT INTO leaderboard (name, pts) SELECT 'Colorado', 19 WHERE NOT EXISTS (SELECT 1 FROM leaderboard WHERE name = 'Colorado');
-            INSERT INTO leaderboard (name, pts) SELECT 'MrKazter', 16 WHERE NOT EXISTS (SELECT 1 FROM leaderboard WHERE name = 'MrKazter');
-            INSERT INTO leaderboard (name, pts) SELECT 'Eliana', 11  WHERE NOT EXISTS (SELECT 1 FROM leaderboard WHERE name = 'Eliana');
-            INSERT INTO leaderboard (name, pts) SELECT 'NestorMcNestor', 0 WHERE NOT EXISTS (SELECT 1 FROM leaderboard WHERE name = 'NestorMcNestor');
-            INSERT INTO leaderboard (name, pts) SELECT 'GuilleGb', 0 WHERE NOT EXISTS (SELECT 1 FROM leaderboard WHERE name = 'GuilleGb');
-            INSERT INTO leaderboard (name, pts) SELECT 'Rubiola', 0  WHERE NOT EXISTS (SELECT 1 FROM leaderboard WHERE name = 'Rubiola');
-            INSERT INTO leaderboard (name, pts) SELECT 'MrFori', 0   WHERE NOT EXISTS (SELECT 1 FROM leaderboard WHERE name = 'MrFori');
 
             CREATE TABLE IF NOT EXISTS race_results (
                 id SERIAL PRIMARY KEY,
@@ -662,7 +654,62 @@ app.post('/api/media/:type', requireAuth, async (req: Request, res: Response) =>
     }
 });
 
-// Start Server
-app.listen(port, () => {
-    console.log(`🏎️ F1 Prode Backend running on http://localhost:${port}`);
+// PUT update Media Item
+app.put('/api/media/:type/:id', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const { type, id } = req.params;
+        const body = req.body;
+        let result;
+
+        if (type === 'series' || type === 'animes') {
+            result = await pool.query(
+                `UPDATE media_series SET recommender = $1, name = $2, genre = $3, description = $4, rating = $5 WHERE id = $6 RETURNING *`,
+                [body.recommender, body.name, body.genre, body.description, body.rating, id]
+            );
+        } else if (type === 'movies') {
+            result = await pool.query(
+                `UPDATE media_movies SET recommender = $1, name = $2, genre = $3, description = $4, rating = $5 WHERE id = $6 RETURNING *`,
+                [body.recommender, body.name, body.genre, body.description, body.rating, id]
+            );
+        } else if (type === 'boardgames') {
+            result = await pool.query(
+                `UPDATE media_boardgames SET name = $1, game_type = $2, players = $3, duration = $4, difficulty = $5, notes = $6 WHERE id = $7 RETURNING *`,
+                [body.name, body.game_type, body.players, body.duration, body.difficulty, body.notes, id]
+            );
+        } else {
+            return res.status(400).json({ error: 'Invalid media type' });
+        }
+
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Item not found' });
+        res.json({ message: 'Updated successfully', item: result.rows[0] });
+    } catch (e) {
+        console.error('Error updating media:', e);
+        res.status(500).json({ error: 'Database error updating media item' });
+    }
 });
+
+// DELETE Media Item
+app.delete('/api/media/:type/:id', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const { type, id } = req.params;
+        let query = '';
+        if (type === 'series' || type === 'animes') query = 'DELETE FROM media_series WHERE id = $1';
+        else if (type === 'movies') query = 'DELETE FROM media_movies WHERE id = $1';
+        else if (type === 'boardgames') query = 'DELETE FROM media_boardgames WHERE id = $1';
+        else return res.status(400).json({ error: 'Invalid media type' });
+
+        const result = await pool.query(query, [id]);
+        if (result.rowCount === 0) return res.status(404).json({ error: 'Item not found' });
+        res.json({ success: true, message: 'Deleted successfully' });
+    } catch (e) {
+        console.error('Error deleting media:', e);
+        res.status(500).json({ error: 'Database error deleting media item' });
+    }
+});
+
+// Start Server
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(port, () => {
+        console.log(`🏎️ F1 Prode Backend running on http://localhost:${port}`);
+    });
+}
