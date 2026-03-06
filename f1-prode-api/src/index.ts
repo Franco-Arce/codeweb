@@ -4,7 +4,7 @@ import { Pool } from 'pg';
 import 'dotenv/config';
 import { generateOracleRoast } from './groqOracle';
 
-export const app = express();
+const app = express();
 const port = process.env.PORT || 3001;
 
 // Middleware
@@ -708,8 +708,6 @@ app.delete('/api/media/:type/:id', requireAuth, async (req: Request, res: Respon
 });
 
 // Start Server
-if (process.env.NODE_ENV !== 'production') {
-    app.listen(port, () => {
-        console.log(`🏎️ F1 Prode Backend running on http://localhost:${port}`);
-    });
-}
+app.listen(port, () => {
+    console.log(`🏎️ F1 Prode Backend running on http://localhost:${port}`);
+});
