@@ -223,18 +223,64 @@ const initDb = async () => {
 initDb();
 
 // --- Auth Routes ---
-app.post('/api/auth/login', (req: Request, res: Response) => {
-    const { username, password } = req.body;
-    if (username === 'pepe' && password === 'pepon') {
-        // En lugar de Cookie, devolvemos un Token estático para el MVP
+app.post('/api/auth/login', async (req: Request, res: Response) => {
+    try {
+        const { username, password } = req.body;
+        const normalizedUser = username.toLowerCase().trim();
+
+        const result = await pool.query('SELECT * FROM users WHERE username = $1', [normalizedUser]);
+        if (result.rows.length === 0) {
+            return res.status(401).json({ success: false, message: 'Bandera negra: Usuario no encontrado' });
+        }
+
+        const user = result.rows[0];
+        const isMatch = await bcrypt.compare(password, user.password_hash);
+
+        if (!isMatch) {
+            return res.status(401).json({ success: false, message: 'Bandera negra: Contraseña incorrecta' });
+        }
+
+        const token = jwt.sign(
+            { userId: user.id, username: user.username },
+            JWT_SECRET,
+            { expiresIn: '24h' }
+        );
+
         res.json({
             success: true,
             message: 'Welcome to the Paddock',
-            token: 'f1_pepe_logged_in_token',
-            user: { username: 'pepe', role: 'admin' }
+            token,
+            username: user.username
         });
-    } else {
-        res.status(401).json({ success: false, message: 'Bandera negra: Credenciales inválidas' });
+    } catch (e) {
+        console.error('Login error:', e);
+        res.status(500).json({ success: false, message: 'Falla en telemetría (Error de servidor)' });
+    }
+});
+
+app.post('/api/auth/register', async (req: Request, res: Response) => {
+    try {
+        const { username, password } = req.body;
+        const normalizedUser = username.toLowerCase().trim();
+
+        // Check if exists
+        const exists = await pool.query('SELECT id FROM users WHERE username = $1', [normalizedUser]);
+        if (exists.rows.length > 0) {
+            return res.status(400).json({ success: false, message: 'Piloto ya registrado' });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const hash = await bcrypt.hash(password, salt);
+
+        await pool.query(
+            'INSERT INTO users (username, password_hash) VALUES ($1, $2)',
+            [normalizedUser, hash]
+        );
+
+        res.status(201).json({ success: true, message: 'Fichaje completado con éxito' });
+    } catch (e) {
+        console.error('Register error:', e);
+        res.status(500).json({ success: false, message: 'Error en el proceso de registro' });
     }
 });
 
@@ -242,13 +288,9 @@ app.post('/api/auth/logout', (req: Request, res: Response) => {
     res.json({ success: true, message: 'Logged out' });
 });
 
-app.get('/api/auth/session', (req: Request, res: Response) => {
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader === 'Bearer f1_pepe_logged_in_token') {
-        res.json({ authenticated: true, user: 'pepe' });
-    } else {
-        res.json({ authenticated: false });
-    }
+app.get('/api/auth/session', requireAuth, (req: Request, res: Response) => {
+    const user = (req as any).user;
+    res.json({ authenticated: true, user: user.username });
 });
 
 // --- User List Endpoint for Dropdowns ---
