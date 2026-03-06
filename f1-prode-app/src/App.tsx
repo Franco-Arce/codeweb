@@ -450,76 +450,150 @@ function DashboardView() {
         </div>
       </div>
 
-      {/* ===== FULL LEADERBOARD ===== */}
-      <div className="glass-card p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl font-bold text-white flex items-center gap-2">
-            <Trophy size={20} className="text-yellow-500" /> Tabla de Analistas
-          </h3>
-          <span className="text-xs text-codeflow-muted italic">
-            {nextRace ? `Pronósticos para ${nextRace.name}` : ''}
-          </span>
+      {/* ===== TWO-COLUMN LAYOUT: LEADERBOARD & TRENDS ===== */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        {/* FULL LEADERBOARD */}
+        <div className="glass-card p-6 xl:col-span-2 flex flex-col">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+              <Trophy size={20} className="text-yellow-500" /> Tabla de Analistas
+            </h3>
+            <span className="text-xs text-codeflow-muted italic">
+              {nextRace ? `Pronósticos para ${nextRace.name}` : ''}
+            </span>
+          </div>
+
+          {loading ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5].map(i => (
+                <div key={i} className="h-16 w-full bg-white/5 rounded-xl border border-white/5 flex items-center px-5 gap-4 animate-pulse">
+                  <div className="w-9 h-9 rounded-full bg-white/10" />
+                  <div className="h-4 w-36 bg-white/10 rounded" />
+                  <div className="ml-auto flex gap-3">
+                    <div className="h-6 w-16 bg-white/10 rounded-full" />
+                    <div className="h-6 w-20 bg-codeflow-accent/10 rounded" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : leaderboard.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-center text-codeflow-muted py-10">
+              <p>Nadie tiene puntos todavía. ¡El campeonato está abierto!</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {leaderboard.map((user: any, i: number) => {
+                const gapToLeader = leader && i > 0 ? leader.pts - user.pts : 0;
+                const hasSubmitted = playersWithPrediction.has(user.name);
+                const medalStyle = i === 0
+                  ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50 shadow-yellow-500/10'
+                  : i === 1 ? 'bg-gray-400/20 text-gray-300 border-gray-400/50'
+                    : i === 2 ? 'bg-orange-600/20 text-orange-400 border-orange-600/50'
+                      : 'bg-white/5 text-white/40 border-white/10';
+
+                return (
+                  <motion.div
+                    key={user.name}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.04 }}
+                    className={`flex items-center gap-4 p-4 rounded-xl border transition-all hover:bg-white/5 ${i === 0 ? 'bg-yellow-500/5 border-yellow-500/20' : 'bg-white/[0.02] border-white/5'}`}
+                  >
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm border shadow-sm ${medalStyle}`}>
+                      {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <span className="font-bold text-white block truncate">{user.name}</span>
+                      {i > 0 && (
+                        <span className="text-xs text-red-400/70">-{gapToLeader} pts del líder</span>
+                      )}
+                      {i === 0 && <span className="text-xs text-yellow-400/70">Líder del campeonato</span>}
+                    </div>
+
+                    {/* Prediction submitted badge */}
+                    <div className={`flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full border ${hasSubmitted ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-orange-500/10 text-orange-400 border-orange-500/30'}`}>
+                      {hasSubmitted ? <><CheckCircle size={10} /> SÍ</> : <><AlertCircle size={10} /> PENDIENTE</>}
+                    </div>
+
+                    <span className="font-display font-extrabold text-xl text-white tabular-nums">
+                      {user.pts} <span className="text-xs font-normal text-codeflow-muted">PTS</span>
+                    </span>
+                  </motion.div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {loading ? (
-          <div className="space-y-3">
-            {[1, 2, 3, 4, 5].map(i => (
-              <div key={i} className="h-16 w-full bg-white/5 rounded-xl border border-white/5 flex items-center px-5 gap-4 animate-pulse">
-                <div className="w-9 h-9 rounded-full bg-white/10" />
-                <div className="h-4 w-36 bg-white/10 rounded" />
-                <div className="ml-auto flex gap-3">
-                  <div className="h-6 w-16 bg-white/10 rounded-full" />
-                  <div className="h-6 w-20 bg-codeflow-accent/10 rounded" />
-                </div>
+        {/* TRENDS WIDGET */}
+        <div className="glass-card p-6 flex flex-col">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              Tendencias <span className="text-codeflow-accent">👀</span>
+            </h3>
+          </div>
+
+          {loading ? (
+            <div className="space-y-4">
+              {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-[44px] bg-white/5 rounded-lg animate-pulse" />)}
+            </div>
+          ) : predictions.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-center text-codeflow-muted py-8">
+              <span className="text-3xl mb-2 opacity-50">😴</span>
+              <p className="text-sm">Aún no hay pronósticos cargados para esta ronda.</p>
+            </div>
+          ) : (
+            <div className="space-y-3 flex-1">
+              {(() => {
+                const tallies: Record<string, number> = {};
+                let totalVotes = 0;
+                predictions.forEach((p: any) => {
+                  const selection = p.prediction;
+                  if (!selection) return;
+                  const drivers = [selection.pole, selection.p1, selection.p2, selection.p3, selection.p4, selection.p5].filter(Boolean);
+                  drivers.forEach(d => {
+                    tallies[d] = (tallies[d] || 0) + 1;
+                    totalVotes++;
+                  });
+                });
+
+                const sorted = Object.entries(tallies).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+                return sorted.map(([driver, count], i) => {
+                  const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+                  return (
+                    <motion.div
+                      key={driver}
+                      initial={{ opacity: 0, x: 10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.1 }}
+                      className="relative bg-white/5 border border-white/5 rounded-lg overflow-hidden flex items-center p-3 h-[44px]"
+                    >
+                      <div
+                        className="absolute top-0 left-0 bottom-0 bg-codeflow-accent/20 z-0 transition-all duration-1000 ease-out"
+                        style={{ width: `${pct}%` }}
+                      />
+                      <div className="relative z-10 flex justify-between items-center w-full">
+                        <span className="font-bold text-sm text-white flex items-center gap-2 drop-shadow-md">
+                          <span className="text-codeflow-muted text-xs">#{i + 1}</span> {driver}
+                        </span>
+                        <div className="flex flex-col items-end">
+                          <span className="text-[10px] font-bold text-fuchsia-300 drop-shadow-md">{count} votos</span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                });
+              })()}
+              <div className="pt-4 border-t border-white/5 mt-4">
+                <p className="text-[10px] text-codeflow-muted text-center tracking-wide uppercase">
+                  Pilotos más elegidos en total (Pole y Top 5)
+                </p>
               </div>
-            ))}
-          </div>
-        ) : leaderboard.length === 0 ? (
-          <p className="text-codeflow-muted text-center py-10">Nadie tiene puntos todavía. ¡El campeonato está abierto!</p>
-        ) : (
-          <div className="space-y-2">
-            {leaderboard.map((user: any, i: number) => {
-              const gapToLeader = leader && i > 0 ? leader.pts - user.pts : 0;
-              const hasSubmitted = playersWithPrediction.has(user.name);
-              const medalStyle = i === 0
-                ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50 shadow-yellow-500/10'
-                : i === 1 ? 'bg-gray-400/20 text-gray-300 border-gray-400/50'
-                  : i === 2 ? 'bg-orange-600/20 text-orange-400 border-orange-600/50'
-                    : 'bg-white/5 text-white/40 border-white/10';
-
-              return (
-                <motion.div
-                  key={user.name}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.04 }}
-                  className={`flex items-center gap-4 p-4 rounded-xl border transition-all hover:bg-white/5 ${i === 0 ? 'bg-yellow-500/5 border-yellow-500/20' : 'bg-white/[0.02] border-white/5'}`}
-                >
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm border shadow-sm ${medalStyle}`}>
-                    {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <span className="font-bold text-white block truncate">{user.name}</span>
-                    {i > 0 && (
-                      <span className="text-xs text-red-400/70">-{gapToLeader} pts del líder</span>
-                    )}
-                    {i === 0 && <span className="text-xs text-yellow-400/70">Líder del campeonato</span>}
-                  </div>
-
-                  {/* Prediction submitted badge */}
-                  <div className={`flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full border ${hasSubmitted ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-orange-500/10 text-orange-400 border-orange-500/30'}`}>
-                    {hasSubmitted ? <><CheckCircle size={10} /> SÍ</> : <><AlertCircle size={10} /> PENDIENTE</>}
-                  </div>
-
-                  <span className="font-display font-extrabold text-xl text-white tabular-nums">
-                    {user.pts} <span className="text-xs font-normal text-codeflow-muted">PTS</span>
-                  </span>
-                </motion.div>
-              );
-            })}
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ===== SCORE HISTORY CHART ===== */}

@@ -711,6 +711,10 @@ app.delete('/api/media/:type/:id', requireAuth, async (req: Request, res: Respon
     }
 });
 
+// Start WhatsApp Cron Job
+import { startWhatsAppCron } from './whatsappAlerts';
+startWhatsAppCron(pool, getNextRace, races2026);
+
 // Start Server
 app.listen(port, () => {
     console.log(`🏎️ F1 Prode Backend running on http://localhost:${port}`);
