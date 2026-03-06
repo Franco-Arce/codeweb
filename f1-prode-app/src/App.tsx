@@ -2,7 +2,7 @@ import React, { useState, useCallback, useContext, createContext } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Trophy, Film, Gamepad2, Tv, LayoutDashboard, Settings,
-  RefreshCw, AlertCircle, CheckCircle, XCircle, Menu, Edit2, Trash2, Plus
+  RefreshCw, AlertCircle, CheckCircle, XCircle, Menu, Edit2, Trash2
 } from 'lucide-react';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement,
