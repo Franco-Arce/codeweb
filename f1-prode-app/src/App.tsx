@@ -1675,17 +1675,42 @@ function F1CalendarTab() {
 
                 <p className="text-xs text-codeflow-muted mb-4">{race.circuit}, {race.city}</p>
 
-                <div className="mt-auto border-t border-white/10 pt-4 flex items-center justify-between">
-                  <div className="flex flex-col">
-                    <span className="text-xs font-semibold text-white/50">Día de Carrera</span>
-                    <span className="text-sm font-bold text-white">
-                      {dateObj.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                <div className="mt-auto border-t border-white/10 pt-3 flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-bold tracking-wider text-codeflow-accent uppercase">🏁 Carrera</span>
+                      <span className="text-sm font-bold text-white">
+                        {dateObj.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                      </span>
+                    </div>
+                    <span className="text-sm font-bold text-white bg-codeflow-accent/10 px-2 py-1 rounded">
+                      {dateObj.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' })}
                     </span>
                   </div>
-                  <div className="flex flex-col items-end">
-                    <span className="text-xs font-semibold text-white/50">Hora ARG</span>
-                    <span className="text-sm font-bold text-white">
-                      {dateObj.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' })}
+
+                  {race.sprint && (
+                    <div className="flex items-center justify-between pt-2 border-t border-white/5 opacity-80">
+                      <div className="flex flex-col">
+                        <span className="text-[9px] font-bold tracking-wider text-orange-400 uppercase">🏃 Sprint</span>
+                        <span className="text-xs font-semibold text-white">
+                          {new Date(dateObj.getTime() - 86400000).toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                        </span>
+                      </div>
+                      <span className="text-xs text-white">
+                        {new Date(dateObj.getTime() - 86400000).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' })}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between pt-2 border-t border-white/5 opacity-80">
+                    <div className="flex flex-col">
+                      <span className="text-[9px] font-bold tracking-wider text-white/50 uppercase">⏱️ Clasificación</span>
+                      <span className="text-xs font-semibold text-white">
+                        {new Date(dateObj.getTime() - 86400000).toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                      </span>
+                    </div>
+                    <span className="text-xs text-white">
+                      {new Date(dateObj.getTime() - 86400000).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' })}
                     </span>
                   </div>
                 </div>
