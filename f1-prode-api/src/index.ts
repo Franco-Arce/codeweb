@@ -13,7 +13,10 @@ const port = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors({
-    origin: '*', // Permitir Vercel y local
+    origin: ['https://codeweb-f1.vercel.app', 'http://localhost:5173', 'http://localhost:3000'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
 }));
 app.use(express.json());
 
@@ -1047,10 +1050,10 @@ app.get('/api/media/:type', requireAuth, async (req: Request, res: Response) => 
         else if (type === 'boardgames') { baseTable = 'media_boardgames'; }
         else return res.status(400).json({ error: 'Invalid media type' });
 
-        // Query joining with average ratings
+        // Query joining with average ratings - safely handle potential non-numeric legacy data
         const mediaWithRatings = await pool.query(`
             SELECT m.*, 
-                   COALESCE(AVG(r.rating), m.rating::float) as avg_rating,
+                   COALESCE(AVG(r.rating), CASE WHEN m.rating ~ '^[0-9]+$' THEN m.rating::float ELSE NULL END) as avg_rating,
                    COUNT(r.id) as total_votes
             FROM ${baseTable} m
             LEFT JOIN media_ratings r ON r.media_id = m.id AND r.media_type = $1
