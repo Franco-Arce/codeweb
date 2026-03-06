@@ -1306,7 +1306,7 @@ function MediaCard({ item, i, isGame, getGenreColor, tab, onEdit, onDelete }: {
         </AnimatePresence>
       )}
 
-      <div className="w-full pt-3 mt-auto border-t border-white/5 text-[10px] text-codeflow-muted flex justify-between items-center group/footer">
+      <div className="w-full pt-3 mt-auto border-t border-white/5 text-[10px] text-codeflow-muted flex justify-between items-center group/footer relative z-20">
         <span>Recomendó: <strong className="text-white">{item.recommender || '—'}</strong></span>
         <div className="flex items-center gap-2">
           <span>{new Date(item.created_at).toLocaleDateString('es-AR')}</span>
