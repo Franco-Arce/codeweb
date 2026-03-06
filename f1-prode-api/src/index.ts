@@ -172,7 +172,13 @@ const initDb = async () => {
         // 7. Add explicit constraints to link players and profiles to users
         await pool.query(`
             DO $$ BEGIN
-                -- Clean orphans that prevent FK creation (records with usernames that don't exist in 'users' table)
+                -- Normalize casing: make all usernames lowercase to avoid "NestorMcNestor" vs "nestormcnestor" issues
+                UPDATE users SET username = LOWER(TRIM(username));
+                UPDATE user_profiles SET username = LOWER(TRIM(username));
+                UPDATE leaderboard SET name = LOWER(TRIM(name));
+                UPDATE predictions SET player = LOWER(TRIM(player));
+
+                -- Clean orphans that prevent FK creation
                 DELETE FROM user_profiles WHERE username NOT IN (SELECT username FROM users);
                 DELETE FROM leaderboard WHERE name NOT IN (SELECT username FROM users);
                 DELETE FROM predictions WHERE player NOT IN (SELECT username FROM users);
@@ -578,14 +584,15 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
 
     try {
+        const lowerUsername = username.toLowerCase().trim();
         const hashedPassword = await bcrypt.hash(password, 10);
         const result = await pool.query(
             'INSERT INTO users (username, password_hash) VALUES ($1, $2) RETURNING id, username',
-            [username, hashedPassword]
+            [lowerUsername, hashedPassword]
         );
 
         // Also create an initial profile
-        await pool.query('INSERT INTO user_profiles (username, avatar_seed) VALUES ($1, $2) ON CONFLICT DO NOTHING', [username, username]);
+        await pool.query('INSERT INTO user_profiles (username, avatar_seed) VALUES ($1, $2) ON CONFLICT DO NOTHING', [lowerUsername, lowerUsername]);
 
         res.status(201).json({ success: true, user: result.rows[0] });
     } catch (err: any) {
@@ -600,17 +607,13 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
 
     try {
-        console.log(`[DEBUG_AUTH] Intento login: "${username}" (len: ${username.length})`);
-        const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+        const lowerUsername = username.toLowerCase().trim();
+        console.log(`[DEBUG_AUTH] Intento login: "${lowerUsername}"`);
+        const result = await pool.query('SELECT * FROM users WHERE username = $1', [lowerUsername]);
         const user = result.rows[0];
 
         if (!user) {
-            console.log(`[DEBUG_AUTH] Usuario NO encontrado: "${username}"`);
-            // Check if it exists with different casing
-            const caseResult = await pool.query('SELECT username FROM users WHERE LOWER(username) = LOWER($1)', [username]);
-            if (caseResult.rows.length > 0) {
-                console.log(`[DEBUG_AUTH] ¡ATENCIÓN! El usuario existe con otro casing: "${caseResult.rows[0].username}"`);
-            }
+            console.log(`[DEBUG_AUTH] Usuario NO encontrado: "${lowerUsername}"`);
             return res.status(401).json({ success: false, message: 'Credenciales inválidas' });
         }
 
