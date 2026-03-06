@@ -569,10 +569,19 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
 
     try {
+        console.log(`[AUTH] Intentando login para: ${username}`);
         const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
         const user = result.rows[0];
 
-        if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+        if (!user) {
+            console.log(`[AUTH] Usuario no encontrado: ${username}`);
+            return res.status(401).json({ success: false, message: 'Credenciales inválidas' });
+        }
+
+        const isMatch = await bcrypt.compare(password, user.password_hash);
+        console.log(`[AUTH] Comparación de password para ${username}: ${isMatch ? 'ÉXITO' : 'FALLO'}`);
+
+        if (!isMatch) {
             return res.status(401).json({ success: false, message: 'Credenciales inválidas' });
         }
 
