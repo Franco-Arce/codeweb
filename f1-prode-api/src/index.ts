@@ -13,10 +13,7 @@ const port = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors({
-    origin: ['https://codeweb-f1.vercel.app', 'http://localhost:5173', 'http://localhost:3000'],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
+    origin: '*', // Permitir Vercel y local
 }));
 app.use(express.json());
 
@@ -225,7 +222,45 @@ const initDb = async () => {
 
 initDb();
 
-// --- Auth Routes (DB-backed, see below) ---
+// --- Auth Routes ---
+app.post('/api/auth/login', (req: Request, res: Response) => {
+    const { username, password } = req.body;
+    if (username === 'pepe' && password === 'pepon') {
+        // En lugar de Cookie, devolvemos un Token estático para el MVP
+        res.json({
+            success: true,
+            message: 'Welcome to the Paddock',
+            token: 'f1_pepe_logged_in_token',
+            user: { username: 'pepe', role: 'admin' }
+        });
+    } else {
+        res.status(401).json({ success: false, message: 'Bandera negra: Credenciales inválidas' });
+    }
+});
+
+app.post('/api/auth/logout', (req: Request, res: Response) => {
+    res.json({ success: true, message: 'Logged out' });
+});
+
+app.get('/api/auth/session', (req: Request, res: Response) => {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader === 'Bearer f1_pepe_logged_in_token') {
+        res.json({ authenticated: true, user: 'pepe' });
+    } else {
+        res.json({ authenticated: false });
+    }
+});
+
+// --- User List Endpoint for Dropdowns ---
+app.get('/api/users/list', async (req: Request, res: Response) => {
+    try {
+        const result = await pool.query('SELECT username FROM users ORDER BY username ASC');
+        res.json(result.rows.map(r => r.username));
+    } catch (e) {
+        console.error('Error fetching users:', e);
+        res.status(500).json({ error: 'Failed to fetch users' });
+    }
+});
 
 // --- Official 2026 F1 Calendar ---
 const races2026 = [
@@ -678,51 +713,6 @@ app.get('/api/oracle/context', requireAuth, async (req: Request, res: Response) 
     }
 });
 
-// Backwards-compatible alias: older frontends call /api/oracle/roast
-app.get('/api/oracle/roast', requireAuth, async (req: Request, res: Response) => {
-    try {
-        const nextRace = getNextRace();
-        const raceId = `round_${nextRace.round}`;
-
-        // Fetch all predictions (all sessions) for this race
-        const result = await pool.query(
-            'SELECT * FROM predictions WHERE race_id = $1 ORDER BY session_type, created_at DESC', [raceId]
-        );
-        const predictions = result.rows;
-
-        // Build race context — try to get qualifying results from Jolpica
-        const raceContext = {
-            circuitName: `${nextRace.circuit} (${nextRace.city})`,
-            weather: undefined as string | undefined,
-            lastResults: undefined as string | undefined,
-        };
-
-        try {
-            const jolpicaRes = await fetch(`https://api.jolpi.ca/ergast/f1/2026/${nextRace.round}/qualifying.json`);
-            if (jolpicaRes.ok) {
-                const jData = await jolpicaRes.json();
-                const qual = jData?.MRData?.RaceTable?.Races?.[0]?.QualifyingResults;
-                if (qual && qual.length > 0) {
-                    const top3 = qual.slice(0, 3).map((r: any, i: number) =>
-                        `Q${i + 1}: ${r.Driver.givenName} ${r.Driver.familyName}`
-                    ).join(', ');
-                    raceContext.lastResults = `Qualifying: ${top3}`;
-                }
-            }
-        } catch { /* no context available, oracle proceeds without it */ }
-
-        // Fetch current leaderboard
-        const lbResult = await pool.query('SELECT name, pts FROM leaderboard ORDER BY pts DESC');
-        const leaderboard = lbResult.rows;
-
-        const roast = await generateOracleRoast(predictions, raceContext, leaderboard);
-        res.json({ analysis: roast, race: nextRace.name });
-    } catch (error) {
-        console.error('Error en Oracle (roast alias):', error);
-        res.status(500).json({ error: 'Failed to generate Oracle Analysis' });
-    }
-});
-
 // --- Session schedule — fetches times from Jolpica (UTC→ARG)
 app.get('/api/races/:round/schedule', requireAuth, async (req: Request, res: Response) => {
     try {
@@ -1056,7 +1046,7 @@ app.get('/api/media/:type', requireAuth, async (req: Request, res: Response) => 
                    COALESCE(AVG(r.rating), CASE WHEN m.rating ~ '^[0-9]+$' THEN m.rating::float ELSE NULL END) as avg_rating,
                    COUNT(r.id) as total_votes
             FROM ${baseTable} m
-            LEFT JOIN media_ratings r ON r.media_id = m.id AND r.media_type = $1
+            LEFT JOIN media_ratings r ON r.user_id IS NOT NULL AND r.media_id::text = m.id::text AND r.media_type = $1
             ${extraFilter}
             GROUP BY m.id
             ORDER BY m.created_at DESC

@@ -15,7 +15,7 @@ import logoCodeflow from './assets/LogoOnly.png';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://codeweb-dhru.onrender.com';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 // --- Toast System ---
 type Toast = { id: number; type: 'success' | 'error' | 'warning'; message: string };
@@ -1908,11 +1908,15 @@ function MediaVaultView({ tab }: { tab: string }) {
     fetchWithAuth(`/api/media/${endpointTab}`)
       .then(res => res.json())
       .then(data => {
-        // API may return { error: ... } on failure; avoid crashing UI
+        // Defensive check: ensure data is an array
         setItems(Array.isArray(data) ? data : []);
         setLoading(false);
       })
-      .catch(err => { console.error('Error fetching media:', err); setLoading(false); });
+      .catch(err => {
+        console.error('Error fetching media:', err);
+        setItems([]);
+        setLoading(false);
+      });
   };
 
   const handleDelete = async (id: string) => {
@@ -1942,6 +1946,15 @@ function MediaVaultView({ tab }: { tab: string }) {
     }
   };
 
+  const [userList, setUserList] = React.useState<string[]>([]);
+
+  const fetchUsers = () => {
+    fetchWithAuth('/api/users/list')
+      .then(res => res.json())
+      .then(data => setUserList(Array.isArray(data) ? data : []))
+      .catch(err => console.error('Error fetching users:', err));
+  };
+
   const handleEdit = (item: any) => {
     setFormData({
       recommender: item.recommender || '',
@@ -1958,8 +1971,6 @@ function MediaVaultView({ tab }: { tab: string }) {
     setEditingId(item.id);
     setIsEditing(true);
     setShowForm(true);
-    // If it's a genre that doesn't exist in standard dropdown (though they are dynamic), 
-    // we might need to show custom input, but for edit we can just set formData and the dropdown will find it or we show custom.
     setShowCustomGenre(false);
   };
 
@@ -1967,6 +1978,7 @@ function MediaVaultView({ tab }: { tab: string }) {
 
   React.useEffect(() => {
     fetchMedia();
+    fetchUsers();
     setShowForm(false);
     setIsEditing(false);
     setEditingId(null);
@@ -2079,7 +2091,17 @@ function MediaVaultView({ tab }: { tab: string }) {
               <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {!isGame && (
                   <>
-                    <input type="text" placeholder="Recomendado por..." required className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.recommender} onChange={e => setFormData({ ...formData, recommender: e.target.value })} />
+                    <div className="flex flex-col gap-2">
+                      <select
+                        required
+                        className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent outline-none appearance-none"
+                        value={formData.recommender}
+                        onChange={e => setFormData({ ...formData, recommender: e.target.value })}
+                      >
+                        <option value="" disabled>Recomendado por...</option>
+                        {userList.map(u => <option key={u} value={u} className="bg-codeflow-dark">{u}</option>)}
+                      </select>
+                    </div>
                     <input type="text" placeholder="Nombre completo" required className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
 
                     {/* Genre Dropdown/Input */}
