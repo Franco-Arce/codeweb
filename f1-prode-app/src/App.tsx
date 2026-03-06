@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Trophy, Film, Gamepad2, Tv, LayoutDashboard, Settings,
   RefreshCw, AlertCircle, CheckCircle, XCircle, Menu, Edit2, Trash2,
-  Star, Info
+  Star, Info, Dices, Sparkles, Lock, ShieldAlert, Ghost
 } from 'lucide-react';
+const Diced = Gamepad2; // Fallback or Alias if needed
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement,
   LineElement, Title, Tooltip, Legend, Filler
@@ -29,6 +30,10 @@ const ProfilesContext = createContext<{
   refreshProfiles: () => void;
 }>({ profiles: {}, updateAvatar: async () => { }, refreshProfiles: () => { } });
 const useProfiles = () => useContext(ProfilesContext);
+
+// --- Navigation Context ---
+const ActiveTabContext = createContext<(tab: string) => void>(() => { });
+const useSetActiveTab = () => useContext(ActiveTabContext);
 
 function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -108,9 +113,32 @@ function ProfilesProvider({ children }: { children: React.ReactNode }) {
 function AvatarPicker({ isOpen, onClose, username, currentSeed }: { isOpen: boolean, onClose: () => void, username: string, currentSeed?: string }) {
   const { updateAvatar } = useProfiles();
   const [selected, setSelected] = useState(currentSeed || username);
+  const [randomSeeds, setRandomSeeds] = useState<Record<string, string>>({});
 
-  const STYLES = ['adventurer', 'avataaars', 'big-smile', 'bottts', 'pixel-art', 'lorelei'];
-  const SEEDS = STYLES.map(s => `${s}:${username}`);
+  const STYLES = [
+    { id: 'adventurer', label: 'Aventurero' },
+    { id: 'avataaars', label: 'Persona' },
+    { id: 'fun-emoji', label: 'Emoji' },
+    { id: 'pixel-art', label: 'Pixel' },
+    { id: 'lorelei', label: 'Anime' },
+    { id: 'notionists', label: 'Notion' },
+    { id: 'open-peeps', label: 'Doodley' },
+    { id: 'bottts', label: 'Robot' },
+    { id: 'croodles', label: 'Garabato' }
+  ];
+
+  const handleShuffle = () => {
+    const newSeeds: Record<string, string> = {};
+    STYLES.forEach(s => {
+      newSeeds[s.id] = Math.random().toString(36).substring(7);
+    });
+    setRandomSeeds(newSeeds);
+  };
+
+  const currentSeeds = STYLES.map(s => {
+    const seedValue = randomSeeds[s.id] || username;
+    return { seed: `${s.id}:${seedValue}`, label: s.label };
+  });
 
   const handleSave = () => {
     updateAvatar(username, selected);
@@ -122,28 +150,37 @@ function AvatarPicker({ isOpen, onClose, username, currentSeed }: { isOpen: bool
       {isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-codeflow-dark/80 backdrop-blur-md" onClick={onClose} />
-          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-codeflow-card border border-white/10 p-6 rounded-2xl w-full max-w-md shadow-2xl">
-            <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">Choose your Avatar</h3>
+          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-codeflow-card border border-white/10 p-6 rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <Sparkles size={20} className="text-codeflow-accent" /> Elige tu Identidad
+              </h3>
+              <button onClick={handleShuffle} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-bold text-codeflow-accent border border-codeflow-accent/20 transition-all">
+                <Dices size={16} /> Mezclar Variaciones
+              </button>
+            </div>
 
-            <div className="grid grid-cols-3 gap-4 mb-8">
-              {SEEDS.map(seed => {
-                const [style, name] = seed.split(':');
+            <div className="grid grid-cols-3 sm:grid-cols-3 gap-4 mb-8 overflow-y-auto pr-2 no-scrollbar">
+              {currentSeeds.map(item => {
+                const [style, name] = item.seed.split(':');
                 const url = `https://api.dicebear.com/7.x/${style}/svg?seed=${name}`;
+                const isActive = selected === item.seed;
                 return (
                   <button
-                    key={seed}
-                    onClick={() => setSelected(seed)}
-                    className={`p-2 rounded-xl transition-all border-2 ${selected === seed ? 'border-codeflow-accent bg-codeflow-accent/10' : 'border-transparent bg-white/5 hover:bg-white/10'}`}
+                    key={item.seed}
+                    onClick={() => setSelected(item.seed)}
+                    className={`p-3 rounded-2xl transition-all border-2 flex flex-col items-center gap-2 group relative ${isActive ? 'border-codeflow-accent bg-codeflow-accent/10' : 'border-transparent bg-white/5 hover:bg-white/10'}`}
                   >
-                    <img src={url} alt="Avatar" className="w-full aspect-square" />
+                    <img src={url} alt={item.label} className="w-16 h-16 sm:w-20 sm:h-20" />
+                    <span className={`text-[10px] font-bold uppercase tracking-wider ${isActive ? 'text-codeflow-accent' : 'text-codeflow-muted'}`}>{item.label}</span>
                   </button>
                 );
               })}
             </div>
 
-            <div className="flex gap-3">
-              <button onClick={onClose} className="flex-1 py-3 text-sm font-bold text-white/50 hover:text-white transition-colors">Cancelar</button>
-              <button onClick={handleSave} className="flex-1 btn-primary py-3">Guardar</button>
+            <div className="flex gap-3 mt-auto pt-4 border-t border-white/5">
+              <button onClick={onClose} className="flex-1 px-4 py-3 rounded-xl bg-white/5 text-white font-bold hover:bg-white/10 transition-colors">Cancelar</button>
+              <button onClick={handleSave} className="flex-2 px-8 py-3 rounded-xl bg-gradient-to-r from-codeflow-accent to-fuchsia-600 text-white font-bold shadow-lg hover:opacity-90 transition-all">Guardar Cambios</button>
             </div>
           </motion.div>
         </div>
@@ -172,42 +209,79 @@ const fetchWithAuth = async (endpoint: string, options: RequestInit = {}) => {
 
 // --- Main App Component ---
 function App() {
-  const [activeTab, setActiveTab] = React.useState('dashboard');
-  const [isAuthenticated, setIsAuthenticated] = React.useState<boolean>(false);
+  const [activeTab, setActiveTabInternal] = useState<string>(() => localStorage.getItem('prode_active_tab') || 'dashboard');
+  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('prode_auth_token'));
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<string>(localStorage.getItem('prode_username') || '');
   const [isLoading, setIsLoading] = React.useState(true);
 
+  const setActiveTab = (tab: string) => {
+    setActiveTabInternal(tab);
+    localStorage.setItem('prode_active_tab', tab);
+  };
+
   React.useEffect(() => {
-    const token = localStorage.getItem('prode_auth_token');
-    if (token === 'f1_pepe_logged_in_token') {
-      setIsAuthenticated(true);
-    } else {
-      localStorage.removeItem('prode_auth_token');
-    }
+    // This useEffect is now primarily for initial loading state,
+    // isAuthenticated is derived directly from localStorage on mount.
     setIsLoading(false);
   }, []);
+
+  const handleLogin = (username: string) => {
+    setIsAuthenticated(true);
+    setCurrentUser(username);
+    localStorage.setItem('prode_username', username);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('prode_auth_token');
+    localStorage.removeItem('prode_username');
+    localStorage.removeItem('prode_active_tab');
+    setIsAuthenticated(false);
+    setCurrentUser('');
+    setActiveTabInternal('dashboard'); // Reset active tab on logout
+  };
 
   if (isLoading) return <div className="min-h-screen bg-codeflow-dark flex items-center justify-center"><div className="w-8 h-8 border-2 border-codeflow-accent border-t-transparent rounded-full animate-spin" /></div>;
 
   if (!isAuthenticated) {
-    return <ToastProvider><LoginView onLogin={() => setIsAuthenticated(true)} /></ToastProvider>;
+    return <ToastProvider><LoginView onLogin={handleLogin} /></ToastProvider>;
   }
 
   return (
     <ToastProvider>
       <ProfilesProvider>
-        <AppShell activeTab={activeTab} setActiveTab={setActiveTab} setIsAuthenticated={setIsAuthenticated} />
+        <AppShell
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          setIsAuthenticated={setIsAuthenticated}
+          currentUser={currentUser}
+          handleLogout={handleLogout}
+          isMobileMenuOpen={isMobileMenuOpen}
+          setIsMobileMenuOpen={setIsMobileMenuOpen}
+        />
       </ProfilesProvider>
     </ToastProvider>
   );
 }
 
-function AppShell({ activeTab, setActiveTab, setIsAuthenticated }: { activeTab: string; setActiveTab: (t: string) => void; setIsAuthenticated: (v: boolean) => void }) {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
-
+function AppShell({ activeTab, setActiveTab, setIsAuthenticated, currentUser, handleLogout, isMobileMenuOpen, setIsMobileMenuOpen }: {
+  activeTab: string;
+  setActiveTab: (t: string) => void;
+  setIsAuthenticated: (v: boolean) => void;
+  currentUser: string;
+  handleLogout: () => void;
+  isMobileMenuOpen: boolean;
+  setIsMobileMenuOpen: (v: boolean) => void;
+}) {
   // Close menu on navigation for mobile
   const handleNavClick = (tab: string) => {
     setActiveTab(tab);
     setIsMobileMenuOpen(false);
+  };
+
+  const logout = () => {
+    setIsAuthenticated(false);
+    handleLogout();
   };
 
   return (
@@ -233,7 +307,7 @@ function AppShell({ activeTab, setActiveTab, setIsAuthenticated }: { activeTab: 
       {/* Sidebar - Desktop fixed, Mobile hidden/absolute */}
       <aside className={`
         fixed md:sticky top-0 left-0 bottom-0 z-40
-        w-64 border-r border-white/5 bg-codeflow-base/80 backdrop-blur-3xl 
+        w-64 border-r border-white/5 bg-codeflow-base/80 backdrop-blur-3xl
         flex flex-col h-screen transition-transform duration-300 ease-in-out
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
@@ -247,30 +321,29 @@ function AppShell({ activeTab, setActiveTab, setIsAuthenticated }: { activeTab: 
         {/* Mobile menu padding top */}
         <div className="md:hidden h-20" />
 
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-          <NavItem icon={<LayoutDashboard size={20} />} label="Panel Principal" active={activeTab === 'dashboard'} onClick={() => handleNavClick('dashboard')} />
-          <div className="pt-4 pb-2 px-3 text-xs font-semibold text-codeflow-muted tracking-wider uppercase">Deportes</div>
-          <NavItem icon={<Trophy size={20} />} label="F1" active={activeTab === 'f1'} onClick={() => handleNavClick('f1')} />
-          <div className="pt-4 pb-2 px-3 text-xs font-semibold text-codeflow-muted tracking-wider uppercase">Bóveda Multimedia</div>
+        <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto no-scrollbar">
+          <NavItem icon={<LayoutDashboard size={20} />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleNavClick('dashboard')} />
+          <NavItem icon={<Trophy size={20} />} label="F1 Prode" active={activeTab === 'f1'} onClick={() => handleNavClick('f1')} />
           <NavItem icon={<Tv size={20} />} label="Series" active={activeTab === 'series'} onClick={() => handleNavClick('series')} />
-          <NavItem icon={<Tv size={20} />} label="Animes" active={activeTab === 'animes'} onClick={() => handleNavClick('animes')} />
+          <NavItem icon={<Ghost size={20} />} label="Animes" active={activeTab === 'animes'} onClick={() => handleNavClick('animes')} />
           <NavItem icon={<Film size={20} />} label="Películas" active={activeTab === 'movies'} onClick={() => handleNavClick('movies')} />
-          <NavItem icon={<Gamepad2 size={20} />} label="Juegos de Mesa" active={activeTab === 'games'} onClick={() => handleNavClick('games')} />
+          <NavItem icon={<Diced size={20} />} label="Juegos de Mesa" active={activeTab === 'games'} onClick={() => handleNavClick('games')} />
+          <NavItem icon={<Settings size={20} />} label="Configuración" active={activeTab === 'settings'} onClick={() => handleNavClick('settings')} />
 
-          <div className="pt-4 pb-2 px-3 text-xs font-semibold text-codeflow-muted tracking-wider uppercase">Admin</div>
-          <button onClick={() => handleNavClick('admin')} className={`flex items-center gap-3 px-3 py-2 w-full rounded-lg transition-colors ${activeTab === 'admin' ? 'text-white bg-white/10' : 'text-codeflow-muted hover:text-white hover:bg-white/5'}`}>
-            <Settings size={20} />
-            <span className="font-medium">Admin Panel</span>
+          {/* Admin link — hide if not needed or restrict */}
+          <button
+            onClick={() => handleNavClick('admin')}
+            className={`flex items-center gap-3 px-3 py-3 w-full rounded-xl transition-all duration-300 ${activeTab === 'admin' ? 'text-white bg-white/5 shadow-inner' : 'text-codeflow-muted hover:text-white'}`}
+          >
+            <ShieldAlert size={20} />
+            <span className="font-medium">Admin</span>
           </button>
         </nav>
 
         <div className="p-4 border-t border-white/5 space-y-3">
-          <MyProfileCard />
+          <MyProfileCard username={currentUser} onClick={() => handleNavClick('settings')} active={activeTab === 'settings'} />
           <button
-            onClick={() => {
-              localStorage.removeItem('prode_auth_token');
-              setIsAuthenticated(false);
-            }}
+            onClick={logout}
             className="flex items-center gap-3 px-3 py-2 w-full rounded-lg text-red-500/70 hover:text-red-400 hover:bg-red-500/10 transition-colors">
             <span className="font-medium text-sm">Cerrar Sesión</span>
           </button>
@@ -278,7 +351,7 @@ function AppShell({ activeTab, setActiveTab, setIsAuthenticated }: { activeTab: 
       </aside>
 
       {/* Avatar Picker Modal */}
-      <AvatarTrigger />
+      <AvatarTrigger username={currentUser} />
 
       {/* Mobile Overlay */}
       {isMobileMenuOpen && (
@@ -302,6 +375,7 @@ function AppShell({ activeTab, setActiveTab, setIsAuthenticated }: { activeTab: 
               {activeTab === 'dashboard' && <DashboardView />}
               {activeTab === 'f1' && <F1ProdeView />}
               {activeTab === 'admin' && <AdminView />}
+              {activeTab === 'settings' && <SettingsView username={currentUser} />}
               {['series', 'animes', 'movies', 'games'].includes(activeTab) && (
                 <MediaVaultView tab={activeTab} />
               )}
@@ -338,33 +412,144 @@ function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, labe
   );
 }
 
+// --- Settings View Component ---
+function SettingsView({ username }: { username: string }) {
+  const { profiles } = useProfiles();
+  const { addToast } = useToast();
+  const [showPicker, setShowPicker] = useState(false);
+  const [newPass, setNewPass] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const currentSeed = profiles[username] || username;
+  const avatarUrl = currentSeed.includes(':')
+    ? `https://api.dicebear.com/7.x/${currentSeed.split(':')[0]}/svg?seed=${currentSeed.split(':')[1]}`
+    : `https://api.dicebear.com/7.x/notionists/svg?seed=${currentSeed}&backgroundColor=transparent`;
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPass) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/auth/update-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('prode_auth_token')}`
+        },
+        body: JSON.stringify({ password: newPass })
+      });
+      if (res.ok) {
+        addToast('success', 'Contraseña actualizada correctamente');
+        setNewPass('');
+      } else {
+        addToast('error', 'Falla al actualizar contraseña');
+      }
+    } catch (err) {
+      addToast('error', 'Error de red');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-8 animate-fade-in max-w-4xl mx-auto py-6">
+      <header>
+        <h1 className="text-4xl font-display font-bold text-white mb-2">Configuración <span className="text-codeflow-accent">⚙️</span></h1>
+        <p className="text-codeflow-muted text-sm px-1">Gestiona tu identidad y seguridad.</p>
+      </header>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <section className="glass-card p-8 flex flex-col items-center border border-white/5">
+          <div className="relative mb-6">
+            <div className="w-32 h-32 rounded-full overflow-hidden bg-codeflow-base border-4 border-codeflow-accent/20 relative">
+              <img src={avatarUrl} alt="Your Avatar" className="w-full h-full object-cover" />
+            </div>
+            <button onClick={() => setShowPicker(true)} className="absolute bottom-0 right-0 p-3 bg-codeflow-accent rounded-full text-white shadow-lg"><Edit2 size={18} /></button>
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-1">{username}</h2>
+          <button onClick={() => setShowPicker(true)} className="mt-4 px-6 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white text-sm font-bold border border-white/10 transition-all flex items-center gap-2">
+            <Sparkles size={16} className="text-codeflow-accent" /> Cambiar Avatar
+          </button>
+        </section>
+        <section className="glass-card p-8 border border-white/5">
+          <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><Lock size={20} className="text-codeflow-accent" /> Seguridad</h3>
+          <form onSubmit={handleUpdatePassword} className="space-y-4">
+            <input type="password" placeholder="Nueva Contraseña" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" value={newPass} onChange={e => setNewPass(e.target.value)} />
+            <button type="submit" disabled={loading || !newPass} className="w-full bg-codeflow-accent text-white font-bold py-3 rounded-xl hover:opacity-90 transition-all disabled:opacity-50">
+              {loading ? 'Actualizando...' : 'Actualizar Contraseña'}
+            </button>
+          </form>
+        </section>
+      </div>
+      <AvatarPicker isOpen={showPicker} onClose={() => setShowPicker(false)} username={username} currentSeed={currentSeed} />
+    </div>
+  );
+}
+
+function AvatarTrigger({ username }: { username: string }) {
+  const [showPicker, setShowPicker] = useState(false);
+  const { profiles } = useProfiles();
+  const currentSeed = profiles[username];
+  React.useEffect(() => {
+    const handleOpen = () => setShowPicker(true);
+    window.addEventListener('openAvatarPicker', handleOpen);
+    return () => window.removeEventListener('openAvatarPicker', handleOpen);
+  }, []);
+  return <AvatarPicker isOpen={showPicker} onClose={() => setShowPicker(false)} username={username} currentSeed={currentSeed} />;
+}
+
+function MyProfileCard({ username, onClick, active }: { username: string, onClick?: () => void, active?: boolean }) {
+  const { profiles } = useProfiles();
+  const seed = profiles[username] || username;
+  const url = seed.includes(':')
+    ? `https://api.dicebear.com/7.x/${seed.split(':')[0]}/svg?seed=${seed.split(':')[1]}`
+    : `https://api.dicebear.com/7.x/notionists/svg?seed=${seed}&backgroundColor=transparent`;
+  return (
+    <div onClick={onClick} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${active ? 'bg-codeflow-accent/10 border-codeflow-accent' : 'bg-white/5 border-white/5 hover:border-codeflow-accent/40 cursor-pointer group'}`}>
+      <img src={url} alt="Profile" className="w-10 h-10 rounded-full border border-white/10" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-bold text-white truncate">{username}</p>
+        <p className="text-[10px] text-codeflow-muted font-bold uppercase tracking-wider">Configuración</p>
+      </div>
+      <Settings size={14} className={active ? 'text-codeflow-accent' : 'text-codeflow-muted group-hover:text-codeflow-accent'} />
+    </div>
+  );
+}
+
 // --- Login View Component ---
-function LoginView({ onLogin }: { onLogin: () => void }) {
+function LoginView({ onLogin }: { onLogin: (username: string) => void }) {
   const [user, setUser] = useState('');
   const [pass, setPass] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isRegister, setIsRegister] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError('');
+
+    const endpoint = isRegister ? '/api/auth/register' : '/api/auth/login';
 
     try {
-      const res = await fetch(`${API_URL}/api/auth/login`, {
+      const res = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: user, password: pass })
       });
 
       const data = await res.json();
 
       if (res.ok && data.success) {
-        localStorage.setItem('prode_auth_token', data.token); // Guardamos JWT o Token real
-        onLogin();
+        if (isRegister) {
+          setIsRegister(false);
+          setError('Registro exitoso! Por favor inicia sesión.');
+        } else {
+          localStorage.setItem('prode_auth_token', data.token);
+          localStorage.setItem('prode_username', data.username);
+          onLogin(data.username);
+        }
       } else {
-        setError(data.message || 'Error: Credenciales inválidas');
+        setError(data.error || data.message || 'Error: Credenciales inválidas');
       }
     } catch (err) {
       console.error(err);
@@ -390,14 +575,14 @@ function LoginView({ onLogin }: { onLogin: () => void }) {
       >
         <img src={logoCodeflow} alt="CodeWeb" className="w-20 h-20 mb-6 object-contain drop-shadow-[0_0_15px_rgba(168,85,247,0.6)]" />
 
-        <h1 className="text-3xl font-display font-bold text-white mb-2">Acceso a CodeWeb</h1>
-        <p className="text-codeflow-muted mb-8 text-center">Plataforma Central</p>
+        <h1 className="text-3xl font-display font-bold text-white mb-2">{isRegister ? 'Crear Cuenta' : 'Acceso a CodeWeb'}</h1>
+        <p className="text-codeflow-muted mb-8 text-center">{isRegister ? 'Súmate a la comunidad' : 'Plataforma Central'}</p>
 
         <form onSubmit={handleSubmit} className="w-full space-y-4">
           <div>
             <input
               type="text"
-              placeholder="Usuario Maestro"
+              placeholder="Usuario"
               className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-codeflow-accent transition-colors"
               value={user}
               onChange={(e) => { setUser(e.target.value); setError(''); }}
@@ -422,7 +607,7 @@ function LoginView({ onLogin }: { onLogin: () => void }) {
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                className="text-red-400 text-sm font-medium text-center"
+                className={`${error.includes('exitoso') ? 'text-green-400' : 'text-red-400'} text-sm font-medium text-center`}
               >
                 {error}
               </motion.p>
@@ -436,7 +621,15 @@ function LoginView({ onLogin }: { onLogin: () => void }) {
           >
             {loading ? (
               <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-            ) : "Ingresar"}
+            ) : isRegister ? "Registrarme" : "Ingresar"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsRegister(!isRegister)}
+            className="w-full text-codeflow-muted hover:text-white text-sm mt-4 transition-colors"
+          >
+            {isRegister ? "¿Ya tienes cuenta? Ingresa" : "¿No tienes cuenta? Regístrate aquí"}
           </button>
         </form>
       </motion.div>
@@ -444,44 +637,7 @@ function LoginView({ onLogin }: { onLogin: () => void }) {
   );
 }
 
-function AvatarTrigger() {
-  const [showPicker, setShowPicker] = useState(false);
-  const { profiles } = useProfiles();
-  const currentSeed = profiles['pepe']; // MVP always pepe
 
-  // Listen for custom event to open picker
-  React.useEffect(() => {
-    const handleOpen = () => setShowPicker(true);
-    window.addEventListener('openAvatarPicker', handleOpen);
-    return () => window.removeEventListener('openAvatarPicker', handleOpen);
-  }, []);
-
-  return <AvatarPicker isOpen={showPicker} onClose={() => setShowPicker(false)} username="pepe" currentSeed={currentSeed} />;
-}
-
-function MyProfileCard() {
-  const { profiles } = useProfiles();
-  const seed = profiles['pepe'] || 'pepe';
-  const url = seed.includes(':')
-    ? `https://api.dicebear.com/7.x/${seed.split(':')[0]}/svg?seed=${seed.split(':')[1]}`
-    : `https://api.dicebear.com/7.x/notionists/svg?seed=${seed}&backgroundColor=transparent`;
-
-  return (
-    <div
-      onClick={() => window.dispatchEvent(new CustomEvent('openAvatarPicker'))}
-      className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/5 hover:border-codeflow-accent/40 cursor-pointer transition-all group"
-    >
-      <div className="w-10 h-10 rounded-full overflow-hidden bg-codeflow-base border border-white/10 group-hover:border-codeflow-accent/40">
-        <img src={url} alt="Profile" className="w-full h-full object-cover" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-bold text-white truncate">pepe</p>
-        <p className="text-[10px] text-codeflow-muted font-bold uppercase tracking-wider">Mi Perfil</p>
-      </div>
-      <Edit2 size={14} className="text-codeflow-muted group-hover:text-codeflow-accent" />
-    </div>
-  );
-}
 
 function DashboardView() {
   const { profiles } = useProfiles();
@@ -943,8 +1099,7 @@ function DriverSelect({ value, onChange, drivers, label, color, hasError }: { va
   )
 }
 
-// Context for navigating from Dashboard CTA
-const ActiveTabContext = React.createContext<(tab: string) => void>(() => { });
+
 
 function F1ProdeView() {
   const [f1Tab, setF1Tab] = React.useState('prode'); // 'prode', 'leaderboard', 'calendar'

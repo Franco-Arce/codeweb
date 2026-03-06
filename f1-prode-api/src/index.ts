@@ -2,7 +2,11 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import { Pool } from 'pg';
 import 'dotenv/config';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import { generateOracleRoast } from './groqOracle';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'f1prode_secret_key_2026';
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -16,10 +20,17 @@ app.use(express.json());
 // --- Simple Auth Middleware ---
 const requireAuth = (req: Request, res: Response, next: any) => {
     const authHeader = req.headers.authorization;
-    if (authHeader && authHeader === 'Bearer f1_pepe_logged_in_token') {
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Unauthorized. Please login.' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET) as { userId: number, username: string };
+        (req as any).user = decoded;
         next();
-    } else {
-        res.status(401).json({ error: 'Unauthorized. Please login.' });
+    } catch (err) {
+        return res.status(401).json({ error: 'Invalid or expired token.' });
     }
 };
 
@@ -80,6 +91,13 @@ const initDb = async () => {
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(100) UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
             CREATE TABLE IF NOT EXISTS user_profiles (
                 id SERIAL PRIMARY KEY,
                 username VARCHAR(100) UNIQUE NOT NULL,
@@ -131,15 +149,24 @@ const initDb = async () => {
                 END IF;
             END $$;
         `);
+        // 5. Add created_by_user_id to media tables
         await pool.query(`
-            DO $$ BEGIN
-                IF NOT EXISTS (
-                    SELECT 1 FROM pg_constraint WHERE conname = 'race_results_race_session_unique'
-                ) THEN
-                    ALTER TABLE race_results ADD CONSTRAINT race_results_race_session_unique
-                    UNIQUE (race_id, session_type);
-                END IF;
-            END $$;
+            ALTER TABLE media_series ADD COLUMN IF NOT EXISTS created_by_user_id INTEGER REFERENCES users(id);
+            ALTER TABLE media_movies ADD COLUMN IF NOT EXISTS created_by_user_id INTEGER REFERENCES users(id);
+            ALTER TABLE media_boardgames ADD COLUMN IF NOT EXISTS created_by_user_id INTEGER REFERENCES users(id);
+        `);
+
+        // 6. Create media_ratings table for multi-user voting
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS media_ratings (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                media_type VARCHAR(20) NOT NULL, -- 'series', 'movies', 'boardgames'
+                media_id INTEGER NOT NULL,
+                rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, media_type, media_id)
+            );
         `);
 
         console.log('✅ Base de datos inicializada y migrada');
@@ -513,8 +540,68 @@ app.get('/api/leaderboard', requireAuth, async (req: Request, res: Response) => 
     }
 });
 
-// Get 'The Oracle' analysis (Groq AI) — with real race context from Jolpica
-app.get('/api/oracle/roast', requireAuth, async (req: Request, res: Response) => {
+// --- AUTH ROUTES ---
+
+app.post('/api/auth/register', async (req: Request, res: Response) => {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
+
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const result = await pool.query(
+            'INSERT INTO users (username, password_hash) VALUES ($1, $2) RETURNING id, username',
+            [username, hashedPassword]
+        );
+
+        // Also create an initial profile
+        await pool.query('INSERT INTO user_profiles (username, avatar_seed) VALUES ($1, $2) ON CONFLICT DO NOTHING', [username, username]);
+
+        res.status(201).json({ success: true, user: result.rows[0] });
+    } catch (err: any) {
+        if (err.code === '23505') return res.status(400).json({ error: 'Username already exists' });
+        console.error('Register error:', err);
+        res.status(500).json({ error: 'Error registering user' });
+    }
+});
+
+app.post('/api/auth/login', async (req: Request, res: Response) => {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
+
+    try {
+        const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+        const user = result.rows[0];
+
+        if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+            return res.status(401).json({ success: false, message: 'Credenciales inválidas' });
+        }
+
+        const token = jwt.sign({ userId: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
+        res.json({ success: true, token, username: user.username });
+    } catch (err) {
+        console.error('Login error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.post('/api/auth/update-password', requireAuth, async (req: Request, res: Response) => {
+    const { password } = req.body;
+    const userId = (req as any).user.userId;
+
+    if (!password) return res.status(400).json({ error: 'Password required' });
+
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hashedPassword, userId]);
+        res.json({ success: true, message: 'Password updated' });
+    } catch (err) {
+        console.error('Update password error:', err);
+        res.status(500).json({ error: 'Error updating password' });
+    }
+});
+
+// Get context for AI Oracle
+app.get('/api/oracle/context', requireAuth, async (req: Request, res: Response) => {
     try {
         const nextRace = getNextRace();
         const raceId = `round_${nextRace.round}`;
@@ -876,15 +963,28 @@ app.post('/api/profiles', async (req: Request, res: Response) => {
 app.get('/api/media/:type', requireAuth, async (req: Request, res: Response) => {
     try {
         const type = req.params.type;
-        let query = '';
-        if (type === 'series') query = "SELECT * FROM media_series WHERE type = 'serie' ORDER BY created_at DESC";
-        else if (type === 'animes') query = "SELECT * FROM media_series WHERE type = 'anime' ORDER BY created_at DESC";
-        else if (type === 'movies') query = "SELECT * FROM media_movies ORDER BY created_at DESC";
-        else if (type === 'boardgames') query = "SELECT * FROM media_boardgames ORDER BY created_at DESC";
+        let baseTable = '';
+        let extraFilter = '';
+
+        if (type === 'series') { baseTable = 'media_series'; extraFilter = "WHERE type = 'serie'"; }
+        else if (type === 'animes') { baseTable = 'media_series'; extraFilter = "WHERE type = 'anime'"; }
+        else if (type === 'movies') { baseTable = 'media_movies'; }
+        else if (type === 'boardgames') { baseTable = 'media_boardgames'; }
         else return res.status(400).json({ error: 'Invalid media type' });
 
-        const result = await pool.query(query);
-        res.json(result.rows);
+        // Query joining with average ratings
+        const mediaWithRatings = await pool.query(`
+            SELECT m.*, 
+                   COALESCE(AVG(r.rating), m.rating::float) as avg_rating,
+                   COUNT(r.id) as total_votes
+            FROM ${baseTable} m
+            LEFT JOIN media_ratings r ON r.media_id = m.id AND r.media_type = $1
+            ${extraFilter}
+            GROUP BY m.id
+            ORDER BY m.created_at DESC
+        `, [type]);
+
+        res.json(mediaWithRatings.rows);
     } catch (e) {
         console.error('Error fetching media:', e);
         res.status(500).json({ error: 'Database error fetching media collection' });
@@ -896,23 +996,24 @@ app.post('/api/media/:type', requireAuth, async (req: Request, res: Response) =>
     try {
         const type = req.params.type;
         const body = req.body;
+        const userId = (req as any).user.userId;
         let result;
 
         if (type === 'series' || type === 'animes') {
             const mType = type === 'animes' ? 'anime' : 'serie';
             result = await pool.query(
-                `INSERT INTO media_series (recommender, name, genre, description, rating, type) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-                [body.recommender, body.name, body.genre, body.description, body.rating, mType]
+                `INSERT INTO media_series (recommender, name, genre, description, rating, type, created_by_user_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+                [body.recommender, body.name, body.genre, body.description, body.rating, mType, userId]
             );
         } else if (type === 'movies') {
             result = await pool.query(
-                `INSERT INTO media_movies (recommender, name, genre, description, rating) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-                [body.recommender, body.name, body.genre, body.description, body.rating]
+                `INSERT INTO media_movies (recommender, name, genre, description, rating, created_by_user_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+                [body.recommender, body.name, body.genre, body.description, body.rating, userId]
             );
         } else if (type === 'boardgames') {
             result = await pool.query(
-                `INSERT INTO media_boardgames (name, game_type, players, duration, difficulty, notes) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-                [body.name, body.game_type, body.players, body.duration, body.difficulty, body.notes]
+                `INSERT INTO media_boardgames (name, game_type, players, duration, difficulty, notes, created_by_user_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+                [body.name, body.game_type, body.players, body.duration, body.difficulty, body.notes, userId]
             );
         } else {
             return res.status(400).json({ error: 'Invalid media type' });
@@ -925,34 +1026,68 @@ app.post('/api/media/:type', requireAuth, async (req: Request, res: Response) =>
     }
 });
 
+// POST Vote/Rate an Item
+app.post('/api/media/:type/:id/rate', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const { type, id } = req.params;
+        const { rating } = req.body;
+        const userId = (req as any).user.userId;
+
+        if (!rating || rating < 1 || rating > 5) return res.status(400).json({ error: 'Invalid rating' });
+
+        await pool.query(`
+            INSERT INTO media_ratings (user_id, media_type, media_id, rating)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (user_id, media_type, media_id) DO UPDATE SET rating = $4
+        `, [userId, type, id, rating]);
+
+        res.json({ success: true, message: 'Rating saved' });
+    } catch (err) {
+        console.error('Error rating media:', err);
+        res.status(500).json({ error: 'Error saving rating' });
+    }
+});
+
 // PUT update Media Item
 app.put('/api/media/:type/:id', requireAuth, async (req: Request, res: Response) => {
     try {
         const { type, id } = req.params;
         const body = req.body;
-        let result;
+        const userId = (req as any).user.userId;
+        let table = '';
+        if (type === 'series' || type === 'animes') table = 'media_series';
+        else if (type === 'movies') table = 'media_movies';
+        else if (type === 'boardgames') table = 'media_boardgames';
+        else return res.status(400).json({ error: 'Invalid media type' });
 
+        // Check ownership
+        const current = await pool.query(`SELECT created_by_user_id FROM ${table} WHERE id = $1`, [id]);
+        if (current.rows.length === 0) return res.status(404).json({ error: 'Item not found' });
+
+        // MVP: Only owner can edit (if owner is NULL, anyone can take it over for now or it's legacy)
+        if (current.rows[0].created_by_user_id && current.rows[0].created_by_user_id !== userId) {
+            return res.status(403).json({ error: 'No tienes permiso para editar esta recomendación.' });
+        }
+
+        let result;
         if (type === 'series' || type === 'animes') {
             result = await pool.query(
-                `UPDATE media_series SET recommender = $1, name = $2, genre = $3, description = $4, rating = $5 WHERE id = $6 RETURNING *`,
-                [body.recommender, body.name, body.genre, body.description, body.rating, id]
+                `UPDATE media_series SET recommender = $1, name = $2, genre = $3, description = $4, rating = $5, created_by_user_id = $7 WHERE id = $6 RETURNING *`,
+                [body.recommender, body.name, body.genre, body.description, body.rating, id, userId]
             );
         } else if (type === 'movies') {
             result = await pool.query(
-                `UPDATE media_movies SET recommender = $1, name = $2, genre = $3, description = $4, rating = $5 WHERE id = $6 RETURNING *`,
-                [body.recommender, body.name, body.genre, body.description, body.rating, id]
+                `UPDATE media_movies SET recommender = $1, name = $2, genre = $3, description = $4, rating = $5, created_by_user_id = $7 WHERE id = $6 RETURNING *`,
+                [body.recommender, body.name, body.genre, body.description, body.rating, id, userId]
             );
         } else if (type === 'boardgames') {
             result = await pool.query(
-                `UPDATE media_boardgames SET name = $1, game_type = $2, players = $3, duration = $4, difficulty = $5, notes = $6 WHERE id = $7 RETURNING *`,
-                [body.name, body.game_type, body.players, body.duration, body.difficulty, body.notes, id]
+                `UPDATE media_boardgames SET name = $1, game_type = $2, players = $3, duration = $4, difficulty = $5, notes = $6, created_by_user_id = $8 WHERE id = $7 RETURNING *`,
+                [body.name, body.game_type, body.players, body.duration, body.difficulty, body.notes, id, userId]
             );
-        } else {
-            return res.status(400).json({ error: 'Invalid media type' });
         }
 
-        if (result.rows.length === 0) return res.status(404).json({ error: 'Item not found' });
-        res.json({ message: 'Updated successfully', item: result.rows[0] });
+        res.json({ message: 'Updated successfully', item: result?.rows[0] });
     } catch (e) {
         console.error('Error updating media:', e);
         res.status(500).json({ error: 'Database error updating media item' });
@@ -963,14 +1098,23 @@ app.put('/api/media/:type/:id', requireAuth, async (req: Request, res: Response)
 app.delete('/api/media/:type/:id', requireAuth, async (req: Request, res: Response) => {
     try {
         const { type, id } = req.params;
-        let query = '';
-        if (type === 'series' || type === 'animes') query = 'DELETE FROM media_series WHERE id = $1';
-        else if (type === 'movies') query = 'DELETE FROM media_movies WHERE id = $1';
-        else if (type === 'boardgames') query = 'DELETE FROM media_boardgames WHERE id = $1';
+        const userId = (req as any).user.userId;
+        let table = '';
+        if (type === 'series' || type === 'animes') table = 'media_series';
+        else if (type === 'movies') table = 'media_movies';
+        else if (type === 'boardgames') table = 'media_boardgames';
         else return res.status(400).json({ error: 'Invalid media type' });
 
+        // Check ownership
+        const current = await pool.query(`SELECT created_by_user_id FROM ${table} WHERE id = $1`, [id]);
+        if (current.rows.length === 0) return res.status(404).json({ error: 'Item not found' });
+
+        if (current.rows[0].created_by_user_id && current.rows[0].created_by_user_id !== userId) {
+            return res.status(403).json({ error: 'No tienes permiso para eliminar esta recomendación.' });
+        }
+
+        let query = `DELETE FROM ${table} WHERE id = $1`;
         const result = await pool.query(query, [id]);
-        if (result.rowCount === 0) return res.status(404).json({ error: 'Item not found' });
         res.json({ success: true, message: 'Deleted successfully' });
     } catch (e) {
         console.error('Error deleting media:', e);
