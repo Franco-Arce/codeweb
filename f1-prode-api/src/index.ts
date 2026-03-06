@@ -174,30 +174,30 @@ app.get('/api/auth/session', (req: Request, res: Response) => {
 
 // --- Official 2026 F1 Calendar ---
 const races2026 = [
-    { round: 1, country: "Australia", city: "Melbourne", name: "GP de Australia", date: "2026-03-08T04:00:00Z", qualy_date: "2026-03-07T05:00:00Z", circuit: "Albert Park", sprint: false },
-    { round: 2, country: "China", city: "Shanghai", name: "GP de China", date: "2026-03-15T04:00:00Z", circuit: "Shanghai International Circuit", sprint: true },
-    { round: 3, country: "Japón", city: "Suzuka", name: "GP de Japón", date: "2026-03-29T05:00:00Z", circuit: "Suzuka Circuit", sprint: false },
-    { round: 4, country: "Bahréin", city: "Sakhir", name: "GP de Bahréin", date: "2026-04-12T15:00:00Z", circuit: "Bahrain International Circuit", sprint: false },
-    { round: 5, country: "Arabia Saudita", city: "Jeddah", name: "GP de Arabia Saudita", date: "2026-04-19T17:00:00Z", circuit: "Jeddah Corniche Circuit", sprint: false },
-    { round: 6, country: "Estados Unidos", city: "Miami", name: "GP de Miami", date: "2026-05-03T20:00:00Z", circuit: "Miami International Autodrome", sprint: true },
-    { round: 7, country: "Canadá", city: "Montreal", name: "GP de Canadá", date: "2026-05-24T18:00:00Z", circuit: "Circuit Gilles Villeneuve", sprint: true },
-    { round: 8, country: "Mónaco", city: "Mónaco", name: "GP de Mónaco", date: "2026-06-07T13:00:00Z", circuit: "Circuit de Monaco", sprint: false },
-    { round: 9, country: "España", city: "Barcelona", name: "GP de España", date: "2026-06-14T13:00:00Z", circuit: "Circuit de Barcelona-Catalunya", sprint: false },
-    { round: 10, country: "Austria", city: "Spielberg", name: "GP de Austria", date: "2026-06-28T13:00:00Z", circuit: "Red Bull Ring", sprint: false },
-    { round: 11, country: "Reino Unido", city: "Silverstone", name: "GP de Reino Unido", date: "2026-07-05T14:00:00Z", circuit: "Silverstone Circuit", sprint: true },
-    { round: 12, country: "Bélgica", city: "Spa-Francorchamps", name: "GP de Bélgica", date: "2026-07-19T13:00:00Z", circuit: "Circuit de Spa-Francorchamps", sprint: false },
-    { round: 13, country: "Hungría", city: "Budapest", name: "GP de Hungría", date: "2026-07-26T13:00:00Z", circuit: "Hungaroring", sprint: false },
-    { round: 14, country: "Países Bajos", city: "Zandvoort", name: "GP de Países Bajos", date: "2026-08-23T13:00:00Z", circuit: "Circuit Zandvoort", sprint: true },
-    { round: 15, country: "Italia", city: "Monza", name: "GP de Italia", date: "2026-09-06T13:00:00Z", circuit: "Autodromo Nazionale Monza", sprint: false },
-    { round: 16, country: "España", city: "Madrid", name: "GP de Madrid", date: "2026-09-13T13:00:00Z", circuit: "Madrid Street Circuit", sprint: false },
-    { round: 17, country: "Azerbaiyán", city: "Bakú", name: "GP de Azerbaiyán", date: "2026-09-27T11:00:00Z", circuit: "Baku City Circuit", sprint: false },
-    { round: 18, country: "Singapur", city: "Singapur", name: "GP de Singapur", date: "2026-10-11T12:00:00Z", circuit: "Marina Bay Street Circuit", sprint: true },
-    { round: 19, country: "Estados Unidos", city: "Austin", name: "GP de Estados Unidos", date: "2026-10-25T19:00:00Z", circuit: "Circuit of the Americas", sprint: false },
-    { round: 20, country: "México", city: "CDMX", name: "GP de Ciudad de México", date: "2026-11-01T20:00:00Z", circuit: "Autódromo Hermanos Rodríguez", sprint: false },
-    { round: 21, country: "Brasil", city: "São Paulo", name: "GP de Brasil", date: "2026-11-08T17:00:00Z", circuit: "Autódromo José Carlos Pace", sprint: false },
-    { round: 22, country: "Estados Unidos", city: "Las Vegas", name: "GP de Las Vegas", date: "2026-11-21T06:00:00Z", circuit: "Las Vegas Strip Circuit", sprint: false },
-    { round: 23, country: "Qatar", city: "Lusail", name: "GP de Qatar", date: "2026-11-29T17:00:00Z", circuit: "Lusail International Circuit", sprint: false },
-    { round: 24, country: "Abu Dhabi", city: "Yas Marina", name: "GP de Abu Dabi", date: "2026-12-06T13:00:00Z", circuit: "Yas Marina Circuit", sprint: false },
+    { round: 1, country: "Australia", city: "Melbourne", name: "GP de Australia", qualy_date: "2026-03-07T05:00:00Z", date: "2026-03-08T04:00:00Z", circuit: "Albert Park", sprint: false },
+    { round: 2, country: "China", city: "Shanghai", name: "GP de China", sprint_qualy_date: "2026-03-13T03:30:00Z", sprint_date: "2026-03-14T03:00:00Z", qualy_date: "2026-03-14T07:00:00Z", date: "2026-03-15T07:00:00Z", circuit: "Shanghai International Circuit", sprint: true }, // Asumiendo Qualy el mismo dia q sprint
+    { round: 3, country: "Japón", city: "Suzuka", name: "GP de Japón", qualy_date: "2026-03-28T05:00:00Z", date: "2026-03-29T05:00:00Z", circuit: "Suzuka Circuit", sprint: false },
+    { round: 4, country: "Bahréin", city: "Sakhir", name: "GP de Bahréin", qualy_date: "2026-04-11T15:00:00Z", date: "2026-04-12T15:00:00Z", circuit: "Bahrain International Circuit", sprint: false },
+    { round: 5, country: "Arabia Saudita", city: "Jeddah", name: "GP de Arabia Saudita", qualy_date: "2026-04-18T17:00:00Z", date: "2026-04-19T17:00:00Z", circuit: "Jeddah Corniche Circuit", sprint: false },
+    { round: 6, country: "Estados Unidos", city: "Miami", name: "GP de Miami", sprint_qualy_date: "2026-05-01T16:30:00Z", sprint_date: "2026-05-02T16:00:00Z", qualy_date: "2026-05-02T20:00:00Z", date: "2026-05-03T20:00:00Z", circuit: "Miami International Autodrome", sprint: true },
+    { round: 7, country: "Canadá", city: "Montreal", name: "GP de Canadá", qualy_date: "2026-05-23T20:00:00Z", date: "2026-05-24T20:00:00Z", circuit: "Circuit Gilles Villeneuve", sprint: false },
+    { round: 8, country: "Mónaco", city: "Mónaco", name: "GP de Mónaco", qualy_date: "2026-06-06T13:00:00Z", date: "2026-06-07T13:00:00Z", circuit: "Circuit de Monaco", sprint: false },
+    { round: 9, country: "España", city: "Barcelona", name: "GP de España", qualy_date: "2026-06-13T13:00:00Z", date: "2026-06-14T13:00:00Z", circuit: "Circuit de Barcelona-Catalunya", sprint: false },
+    { round: 10, country: "Austria", city: "Spielberg", name: "GP de Austria", qualy_date: "2026-06-27T13:00:00Z", date: "2026-06-28T13:00:00Z", circuit: "Red Bull Ring", sprint: false },
+    { round: 11, country: "Reino Unido", city: "Silverstone", name: "GP de Reino Unido", sprint_qualy_date: "2026-07-03T16:30:00Z", sprint_date: "2026-07-04T11:00:00Z", qualy_date: "2026-07-04T15:00:00Z", date: "2026-07-05T14:00:00Z", circuit: "Silverstone Circuit", sprint: true },
+    { round: 12, country: "Bélgica", city: "Spa-Francorchamps", name: "GP de Bélgica", qualy_date: "2026-07-18T13:00:00Z", date: "2026-07-19T13:00:00Z", circuit: "Circuit de Spa-Francorchamps", sprint: false },
+    { round: 13, country: "Hungría", city: "Budapest", name: "GP de Hungría", qualy_date: "2026-07-25T13:00:00Z", date: "2026-07-26T13:00:00Z", circuit: "Hungaroring", sprint: false },
+    { round: 14, country: "Países Bajos", city: "Zandvoort", name: "GP de Países Bajos", sprint_qualy_date: "2026-08-21T14:30:00Z", sprint_date: "2026-08-22T10:00:00Z", qualy_date: "2026-08-22T14:00:00Z", date: "2026-08-23T13:00:00Z", circuit: "Circuit Zandvoort", sprint: true },
+    { round: 15, country: "Italia", city: "Monza", name: "GP de Italia", qualy_date: "2026-09-05T13:00:00Z", date: "2026-09-06T13:00:00Z", circuit: "Autodromo Nazionale Monza", sprint: false },
+    { round: 16, country: "España", city: "Madrid", name: "GP de Madrid", qualy_date: "2026-09-12T13:00:00Z", date: "2026-09-13T13:00:00Z", circuit: "Madrid Street Circuit", sprint: false },
+    { round: 17, country: "Azerbaiyán", city: "Bakú", name: "GP de Azerbaiyán", qualy_date: "2026-09-25T16:00:00Z", date: "2026-09-26T11:00:00Z", circuit: "Baku City Circuit", sprint: false }, // Corrección al formato ARG
+    { round: 18, country: "Singapur", city: "Singapur", name: "GP de Singapur", sprint_qualy_date: "2026-10-09T13:30:00Z", sprint_date: "2026-10-10T09:00:00Z", qualy_date: "2026-10-10T13:00:00Z", date: "2026-10-11T12:00:00Z", circuit: "Marina Bay Street Circuit", sprint: true },
+    { round: 19, country: "Estados Unidos", city: "Austin", name: "GP de Estados Unidos", qualy_date: "2026-10-24T21:00:00Z", date: "2026-10-25T20:00:00Z", circuit: "Circuit of the Americas", sprint: false },
+    { round: 20, country: "México", city: "CDMX", name: "GP de Ciudad de México", qualy_date: "2026-10-31T21:00:00Z", date: "2026-11-01T20:00:00Z", circuit: "Autódromo Hermanos Rodríguez", sprint: false },
+    { round: 21, country: "Brasil", city: "São Paulo", name: "GP de Brasil", sprint_qualy_date: "2026-11-06T18:30:00Z", sprint_date: "2026-11-07T14:00:00Z", qualy_date: "2026-11-07T18:00:00Z", date: "2026-11-08T17:00:00Z", circuit: "Autódromo José Carlos Pace", sprint: true },
+    { round: 22, country: "Estados Unidos", city: "Las Vegas", name: "GP de Las Vegas", qualy_date: "2026-11-21T08:00:00Z", date: "2026-11-22T04:00:00Z", circuit: "Las Vegas Strip Circuit", sprint: false },
+    { round: 23, country: "Qatar", city: "Lusail", name: "GP de Qatar", qualy_date: "2026-11-28T16:00:00Z", date: "2026-11-29T16:00:00Z", circuit: "Lusail International Circuit", sprint: false },
+    { round: 24, country: "Abu Dhabi", city: "Yas Marina", name: "GP de Abu Dabi", qualy_date: "2026-12-05T13:00:00Z", date: "2026-12-06T13:00:00Z", circuit: "Yas Marina Circuit", sprint: false },
 ];
 
 function getNextRace() {
@@ -370,7 +370,7 @@ app.get('/api/races/:round/schedule', requireAuth, async (req: Request, res: Res
         if (local.sprint) {
             const sqDate = raceInfo?.SprintQualifying
                 ? `${raceInfo.SprintQualifying.date}T${raceInfo.SprintQualifying.time || '00:00:00Z'}`
-                : null;
+                : local.sprint_qualy_date || null;
             sessions.push({
                 type: 'sprint_qualifying',
                 label: '⚡ Sprint Qualifying',
@@ -383,7 +383,7 @@ app.get('/api/races/:round/schedule', requireAuth, async (req: Request, res: Res
 
             const sprintDate = raceInfo?.Sprint
                 ? `${raceInfo.Sprint.date}T${raceInfo.Sprint.time || '00:00:00Z'}`
-                : null;
+                : local.sprint_date || null;
             sessions.push({
                 type: 'sprint',
                 label: '🏃 Sprint Race',
