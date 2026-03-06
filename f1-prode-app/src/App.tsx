@@ -2,7 +2,8 @@ import React, { useState, useCallback, useContext, createContext } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Trophy, Film, Gamepad2, Tv, LayoutDashboard, Settings,
-  RefreshCw, AlertCircle, CheckCircle, XCircle, Menu, Edit2, Trash2
+  RefreshCw, AlertCircle, CheckCircle, XCircle, Menu, Edit2, Trash2,
+  Star, Info
 } from 'lucide-react';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement,
@@ -19,6 +20,15 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 type Toast = { id: number; type: 'success' | 'error' | 'warning'; message: string };
 const ToastContext = createContext<{ addToast: (type: Toast['type'], message: string) => void }>({ addToast: () => { } });
 const useToast = () => useContext(ToastContext);
+
+// --- Profiles Context ---
+type UserProfile = { username: string; avatar_seed: string };
+const ProfilesContext = createContext<{
+  profiles: Record<string, string>;
+  updateAvatar: (username: string, seed: string) => Promise<void>;
+  refreshProfiles: () => void;
+}>({ profiles: {}, updateAvatar: async () => { }, refreshProfiles: () => { } });
+const useProfiles = () => useContext(ProfilesContext);
 
 function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -50,6 +60,95 @@ function ToastProvider({ children }: { children: React.ReactNode }) {
         </AnimatePresence>
       </div>
     </ToastContext.Provider>
+  );
+}
+
+function ProfilesProvider({ children }: { children: React.ReactNode }) {
+  const [profiles, setProfiles] = useState<Record<string, string>>({});
+  const { addToast } = useToast();
+
+  const fetchProfiles = useCallback(() => {
+    fetchWithAuth('/api/profiles')
+      .then(r => r.json())
+      .then((data: UserProfile[]) => {
+        const map: Record<string, string> = {};
+        data.forEach(p => { map[p.username] = p.avatar_seed; });
+        setProfiles(map);
+      })
+      .catch(err => console.error("Error fetching profiles:", err));
+  }, []);
+
+  const updateAvatar = async (username: string, seed: string) => {
+    try {
+      const res = await fetchWithAuth('/api/profiles', {
+        method: 'POST',
+        body: JSON.stringify({ username, avatar_seed: seed })
+      });
+      if (res.ok) {
+        setProfiles(prev => ({ ...prev, [username]: seed }));
+        addToast('success', `Avatar actualizado para ${username}`);
+      }
+    } catch (err) {
+      addToast('error', 'Falla al guardar avatar');
+    }
+  };
+
+  React.useEffect(() => {
+    fetchProfiles();
+  }, [fetchProfiles]);
+
+  return (
+    <ProfilesContext.Provider value={{ profiles, updateAvatar, refreshProfiles: fetchProfiles }}>
+      {children}
+    </ProfilesContext.Provider>
+  );
+}
+
+// --- Avatar Picker Component ---
+function AvatarPicker({ isOpen, onClose, username, currentSeed }: { isOpen: boolean, onClose: () => void, username: string, currentSeed?: string }) {
+  const { updateAvatar } = useProfiles();
+  const [selected, setSelected] = useState(currentSeed || username);
+
+  const STYLES = ['adventurer', 'avataaars', 'big-smile', 'bottts', 'pixel-art', 'lorelei'];
+  const SEEDS = STYLES.map(s => `${s}:${username}`);
+
+  const handleSave = () => {
+    updateAvatar(username, selected);
+    onClose();
+  };
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-codeflow-dark/80 backdrop-blur-md" onClick={onClose} />
+          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-codeflow-card border border-white/10 p-6 rounded-2xl w-full max-w-md shadow-2xl">
+            <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">Choose your Avatar</h3>
+
+            <div className="grid grid-cols-3 gap-4 mb-8">
+              {SEEDS.map(seed => {
+                const [style, name] = seed.split(':');
+                const url = `https://api.dicebear.com/7.x/${style}/svg?seed=${name}`;
+                return (
+                  <button
+                    key={seed}
+                    onClick={() => setSelected(seed)}
+                    className={`p-2 rounded-xl transition-all border-2 ${selected === seed ? 'border-codeflow-accent bg-codeflow-accent/10' : 'border-transparent bg-white/5 hover:bg-white/10'}`}
+                  >
+                    <img src={url} alt="Avatar" className="w-full aspect-square" />
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={onClose} className="flex-1 py-3 text-sm font-bold text-white/50 hover:text-white transition-colors">Cancelar</button>
+              <button onClick={handleSave} className="flex-1 btn-primary py-3">Guardar</button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -95,7 +194,9 @@ function App() {
 
   return (
     <ToastProvider>
-      <AppShell activeTab={activeTab} setActiveTab={setActiveTab} setIsAuthenticated={setIsAuthenticated} />
+      <ProfilesProvider>
+        <AppShell activeTab={activeTab} setActiveTab={setActiveTab} setIsAuthenticated={setIsAuthenticated} />
+      </ProfilesProvider>
     </ToastProvider>
   );
 }
@@ -163,7 +264,8 @@ function AppShell({ activeTab, setActiveTab, setIsAuthenticated }: { activeTab: 
           </button>
         </nav>
 
-        <div className="p-4 border-t border-white/5">
+        <div className="p-4 border-t border-white/5 space-y-3">
+          <MyProfileCard />
           <button
             onClick={() => {
               localStorage.removeItem('prode_auth_token');
@@ -174,6 +276,9 @@ function AppShell({ activeTab, setActiveTab, setIsAuthenticated }: { activeTab: 
           </button>
         </div>
       </aside>
+
+      {/* Avatar Picker Modal */}
+      <AvatarTrigger />
 
       {/* Mobile Overlay */}
       {isMobileMenuOpen && (
@@ -339,11 +444,52 @@ function LoginView({ onLogin }: { onLogin: () => void }) {
   );
 }
 
+function AvatarTrigger() {
+  const [showPicker, setShowPicker] = useState(false);
+  const { profiles } = useProfiles();
+  const currentSeed = profiles['pepe']; // MVP always pepe
+
+  // Listen for custom event to open picker
+  React.useEffect(() => {
+    const handleOpen = () => setShowPicker(true);
+    window.addEventListener('openAvatarPicker', handleOpen);
+    return () => window.removeEventListener('openAvatarPicker', handleOpen);
+  }, []);
+
+  return <AvatarPicker isOpen={showPicker} onClose={() => setShowPicker(false)} username="pepe" currentSeed={currentSeed} />;
+}
+
+function MyProfileCard() {
+  const { profiles } = useProfiles();
+  const seed = profiles['pepe'] || 'pepe';
+  const url = seed.includes(':')
+    ? `https://api.dicebear.com/7.x/${seed.split(':')[0]}/svg?seed=${seed.split(':')[1]}`
+    : `https://api.dicebear.com/7.x/notionists/svg?seed=${seed}&backgroundColor=transparent`;
+
+  return (
+    <div
+      onClick={() => window.dispatchEvent(new CustomEvent('openAvatarPicker'))}
+      className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/5 hover:border-codeflow-accent/40 cursor-pointer transition-all group"
+    >
+      <div className="w-10 h-10 rounded-full overflow-hidden bg-codeflow-base border border-white/10 group-hover:border-codeflow-accent/40">
+        <img src={url} alt="Profile" className="w-full h-full object-cover" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-bold text-white truncate">pepe</p>
+        <p className="text-[10px] text-codeflow-muted font-bold uppercase tracking-wider">Mi Perfil</p>
+      </div>
+      <Edit2 size={14} className="text-codeflow-muted group-hover:text-codeflow-accent" />
+    </div>
+  );
+}
+
 function DashboardView() {
+  const { profiles } = useProfiles();
   const [leaderboard, setLeaderboard] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [nextRace, setNextRace] = React.useState<any>(null);
   const [predictions, setPredictions] = React.useState<any[]>([]);
+  const [history, setHistory] = React.useState<any[]>([]);
   const [countdown, setCountdown] = React.useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
   const setActiveTab = React.useContext(ActiveTabContext);
@@ -353,10 +499,12 @@ function DashboardView() {
       fetchWithAuth('/api/leaderboard').then(r => r.json()),
       fetchWithAuth('/api/races/next').then(r => r.json()),
       fetchWithAuth('/api/predictions').then(r => r.json()),
-    ]).then(([lb, race, preds]) => {
+      fetchWithAuth('/api/leaderboard/history').then(r => r.json()),
+    ]).then(([lb, race, preds, hist]) => {
       setLeaderboard(lb);
       setNextRace(race);
       setPredictions(preds);
+      setHistory(hist);
       setLoading(false);
     }).catch(err => { console.error(err); setLoading(false); });
   }, []);
@@ -380,6 +528,20 @@ function DashboardView() {
   const pad = (n: number) => String(n).padStart(2, '0');
   const leader = leaderboard[0];
   const playersWithPrediction = new Set(predictions.map((p: any) => p.player));
+
+  const getStreak = (playerName: string) => {
+    if (!history || history.length === 0) return 0;
+    let streak = 0;
+    for (let i = history.length - 1; i >= 0; i--) {
+      const raceScores = history[i].scores;
+      if (raceScores && raceScores[playerName] > 0) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+    return streak;
+  };
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">
@@ -485,6 +647,7 @@ function DashboardView() {
               {leaderboard.map((user: any, i: number) => {
                 const gapToLeader = leader && i > 0 ? leader.pts - user.pts : 0;
                 const hasSubmitted = playersWithPrediction.has(user.name);
+                const streak = getStreak(user.name);
                 const medalStyle = i === 0
                   ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50 shadow-yellow-500/10'
                   : i === 1 ? 'bg-gray-400/20 text-gray-300 border-gray-400/50'
@@ -499,12 +662,34 @@ function DashboardView() {
                     transition={{ delay: i * 0.04 }}
                     className={`flex items-center gap-4 p-4 rounded-xl border transition-all hover:bg-white/5 ${i === 0 ? 'bg-yellow-500/5 border-yellow-500/20' : 'bg-white/[0.02] border-white/5'}`}
                   >
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm border shadow-sm ${medalStyle}`}>
-                      {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
+                    <div className="relative">
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center border-2 overflow-hidden bg-codeflow-base ${medalStyle}`}>
+                        {(() => {
+                          const seed = profiles[user.name] || user.name;
+                          const url = seed.includes(':')
+                            ? `https://api.dicebear.com/7.x/${seed.split(':')[0]}/svg?seed=${seed.split(':')[1]}`
+                            : `https://api.dicebear.com/7.x/notionists/svg?seed=${seed}&backgroundColor=transparent`;
+                          return <img src={url} alt={user.name} className="w-10 h-10 object-cover" />;
+                        })()}
+                      </div>
+                      <div className={`absolute -bottom-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border-2 border-codeflow-dark z-10 ${medalStyle}`}>
+                        {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
+                      </div>
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <span className="font-bold text-white block truncate">{user.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white block truncate text-lg">{user.name}</span>
+                        {streak >= 2 && (
+                          <motion.span
+                            initial={{ scale: 0 }} animate={{ scale: 1 }}
+                            className="text-xs text-orange-400 font-bold bg-orange-500/20 px-1.5 py-0.5 rounded flex items-center gap-1"
+                            title={`¡Racha de puntos en ${streak} carreras seguidas!`}
+                          >
+                            🔥 {streak}
+                          </motion.span>
+                        )}
+                      </div>
                       {i > 0 && (
                         <span className="text-xs text-red-400/70">-{gapToLeader} pts del líder</span>
                       )}
@@ -605,7 +790,7 @@ function DashboardView() {
       </div>
 
       {/* ===== SCORE HISTORY CHART ===== */}
-      <ScoreHistoryChart />
+      <ScoreHistoryChart history={history} loading={loading} />
     </div>
   );
 }
@@ -616,17 +801,7 @@ const PLAYER_COLORS = [
   '#ec4899', '#06b6d4', '#84cc16',
 ];
 
-function ScoreHistoryChart() {
-  const [history, setHistory] = React.useState<any[]>([]);
-  const [loading, setLoading] = React.useState(true);
-
-  React.useEffect(() => {
-    fetchWithAuth('/api/leaderboard/history')
-      .then(r => r.json())
-      .then(data => { setHistory(data); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, []);
-
+function ScoreHistoryChart({ history, loading }: { history: any[], loading: boolean }) {
   if (loading) {
     return (
       <div className="glass-card p-6">
@@ -713,6 +888,59 @@ function ScoreHistoryChart() {
       </div>
     </div>
   );
+}
+
+// --- Driver Select Modal Component ---
+function DriverSelect({ value, onChange, drivers, label, color, hasError }: { value: string, onChange: (v: string) => void, drivers: string[], label: string, color: string, hasError?: boolean }) {
+  const [isOpen, setIsOpen] = React.useState(false);
+
+  // Split driver into first and last name for better display
+  const renderDriverName = (d: string) => {
+    const parts = d.split(' ');
+    const lastName = parts.pop();
+    return <><span className="text-xs text-white/50 block mb-0.5">{parts.join(' ')}</span> <strong className="text-white text-sm">{lastName}</strong></>;
+  }
+
+  return (
+    <div className="flex-1 w-full">
+      <div
+        onClick={() => setIsOpen(true)}
+        className={`w-full rounded-xl px-4 py-3 text-white border transition-colors cursor-pointer flex justify-between items-center ${hasError ? 'border-red-500/60 bg-red-500/10' : color}`}
+      >
+        <div className="flex flex-col text-left">
+          {value ? renderDriverName(value) : <span className="text-codeflow-muted text-sm font-medium">Elegir piloto...</span>}
+        </div>
+        <span className="text-codeflow-muted text-[10px]">▼</span>
+      </div>
+
+      <AnimatePresence>
+        {isOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-codeflow-dark/80 backdrop-blur-md" onClick={() => setIsOpen(false)} />
+            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="relative bg-codeflow-card border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+              <div className="p-4 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
+                <h3 className="font-bold text-lg text-white">Seleccionar para: <span className="text-codeflow-accent">{label}</span></h3>
+                <button onClick={() => setIsOpen(false)} className="p-2 hover:bg-white/10 rounded-lg text-white/50 hover:text-white transition-colors"><XCircle size={20} /></button>
+              </div>
+
+              <div className="p-4 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {drivers.map(d => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => { onChange(d); setIsOpen(false); }}
+                    className={`p-3 rounded-xl border text-left transition-all flex flex-col ${value === d ? 'border-codeflow-accent bg-codeflow-accent/20 shadow-[0_0_15px_rgba(168,85,247,0.2)]' : 'border-white/5 bg-white/[0.02] hover:bg-white/10 hover:border-white/20'}`}
+                  >
+                    {renderDriverName(d)}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
 }
 
 // Context for navigating from Dashboard CTA
@@ -1058,44 +1286,49 @@ function F1ProdeView() {
 
                   {/* Pole — only for race session */}
                   {currentForm.hasPole && (
-                    <div>
-                      <label className="flex justify-between text-xs uppercase font-bold text-codeflow-muted tracking-wider mb-1">
+                    <div className="mb-4">
+                      <label className="flex justify-between items-center text-xs uppercase font-bold text-codeflow-muted tracking-wider mb-2 mt-4 border-t border-white/5 pt-4">
                         <span>Pole Position (Sábado)</span>
-                        <span className="text-codeflow-accent/60">+5 pts</span>
+                        <span className="text-codeflow-accent/80 bg-codeflow-accent/10 px-2 py-0.5 rounded text-[10px]">+5 pts</span>
                       </label>
-                      <select value={pPole} onChange={e => setPPole(e.target.value)} required className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-codeflow-accent appearance-none cursor-pointer">
-                        <option value="" disabled className="bg-codeflow-dark text-codeflow-muted">Seleccioná al Poleman...</option>
-                        {DRIVERS.map(d => <option key={d} value={d} className="bg-codeflow-dark text-white">{d}</option>)}
-                      </select>
+                      <DriverSelect
+                        value={pPole}
+                        onChange={v => setPPole(v)}
+                        drivers={DRIVERS}
+                        label="Pole (Sábado)"
+                        color="border-codeflow-accent/40 bg-codeflow-accent/10 hover:border-codeflow-accent/60"
+                        hasError={false}
+                      />
                     </div>
                   )}
 
                   {/* Dynamic position fields */}
-                  <div className="pt-1">
-                    <div className="flex items-center justify-between mb-3">
+                  <div className="pt-2">
+                    <div className="flex items-center justify-between mb-4 border-t border-white/5 pt-4">
                       <label className="text-xs uppercase font-bold text-codeflow-accent/70 tracking-wider">
                         Posiciones ({currentForm.fields[0]?.pts} c/u)
                       </label>
                       {hasDuplicates && (
-                        <span className="text-[10px] text-red-400 font-bold flex items-center gap-1">
-                          <AlertCircle size={10} /> Repetidos
+                        <span className="text-[10px] text-red-400 font-bold flex items-center gap-1 bg-red-500/10 px-2 py-1 rounded-md border border-red-500/20 shadow-sm">
+                          <AlertCircle size={12} /> Pilotos repetidos
                         </span>
                       )}
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {currentForm.fields.map((field) => (
-                        <div key={field.key} className="flex items-center gap-3">
-                          <span className="text-xs font-bold text-white/50 w-28 shrink-0">{field.label}</span>
-                          <select
+                        <div key={field.key} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                          <span className="text-xs font-bold text-white/50 w-28 shrink-0 flex items-center gap-2">
+                            <span className="w-1 h-3 rounded-full bg-white/20" />
+                            {field.label}
+                          </span>
+                          <DriverSelect
                             value={fieldValues[field.key] || ''}
-                            onChange={e => setFieldValue(field.key, e.target.value)}
-                            required
-                            className={`flex-1 rounded-lg px-3 py-2 text-white outline-none border appearance-none cursor-pointer transition-colors ${isDuplicateField(fieldValues[field.key]) ? 'border-red-500/60 bg-red-500/10' : field.color
-                              }`}
-                          >
-                            <option value="" disabled className="bg-codeflow-dark text-codeflow-muted">Elegir piloto...</option>
-                            {DRIVERS.map(d => <option key={d} value={d} className="bg-codeflow-dark text-white">{d}</option>)}
-                          </select>
+                            onChange={v => setFieldValue(field.key, v)}
+                            drivers={DRIVERS}
+                            label={field.label}
+                            color={`hover:border-white/20 ${field.color}`}
+                            hasError={!!isDuplicateField(fieldValues[field.key])}
+                          />
                         </div>
                       ))}
                     </div>
@@ -1153,14 +1386,19 @@ function F1ProdeView() {
 
 // --- Leaderboard Internal Component ---
 function F1LeaderboardTab() {
+  const { profiles } = useProfiles();
   const [leaderboard, setLeaderboard] = React.useState<any[]>([]);
+  const [history, setHistory] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    fetchWithAuth('/api/leaderboard')
-      .then(res => res.json())
-      .then(data => {
-        setLeaderboard(data);
+    Promise.all([
+      fetchWithAuth('/api/leaderboard').then(res => res.json()),
+      fetchWithAuth('/api/leaderboard/history').then(res => res.json()),
+    ])
+      .then(([lbData, histData]) => {
+        setLeaderboard(lbData);
+        setHistory(histData);
         setLoading(false);
       })
       .catch(err => {
@@ -1168,6 +1406,20 @@ function F1LeaderboardTab() {
         setLoading(false);
       });
   }, []);
+
+  const getStreak = (playerName: string) => {
+    if (!history || history.length === 0) return 0;
+    let streak = 0;
+    for (let i = history.length - 1; i >= 0; i--) {
+      const raceScores = history[i].scores;
+      if (raceScores && raceScores[playerName] > 0) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+    return streak;
+  };
 
   return (
     <div className="glass-card p-8 min-h-[500px] border-t-4 border-t-yellow-500 rounded-t-none">
@@ -1188,17 +1440,50 @@ function F1LeaderboardTab() {
         <p className="text-codeflow-muted text-center py-10 text-lg">Aún nadie corrió. ¡Sé el primero en hacer la pole!</p>
       ) : (
         <div className="space-y-3">
-          {leaderboard.map((user, i) => (
-            <div key={user.name} className="flex items-center justify-between p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-colors border border-transparent hover:border-white/10 group">
-              <div className="flex items-center gap-4">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg shadow-sm ${i === 0 ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/50 shadow-yellow-500/20' : i === 1 ? 'bg-gray-400/20 text-gray-300 border border-gray-400/50' : i === 2 ? 'bg-orange-600/20 text-orange-400 border border-orange-600/50' : 'bg-white/5 text-white/50'}`}>
-                  {i + 1}
+          {leaderboard.map((user, i) => {
+            const streak = getStreak(user.name);
+            const medalStyle = i === 0
+              ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/50 shadow-yellow-500/20'
+              : i === 1 ? 'bg-gray-400/20 text-gray-300 border border-gray-400/50'
+                : i === 2 ? 'bg-orange-600/20 text-orange-400 border border-orange-600/50'
+                  : 'bg-white/5 text-white/50 border border-white/10';
+
+            return (
+              <div key={user.name} className="flex items-center justify-between p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-colors border border-transparent hover:border-white/10 group">
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center border-2 overflow-hidden bg-codeflow-base ${medalStyle}`}>
+                      {(() => {
+                        const seed = profiles[user.name] || user.name;
+                        const url = seed.includes(':')
+                          ? `https://api.dicebear.com/7.x/${seed.split(':')[0]}/svg?seed=${seed.split(':')[1]}`
+                          : `https://api.dicebear.com/7.x/notionists/svg?seed=${seed}&backgroundColor=transparent`;
+                        return <img src={url} alt={user.name} className="w-10 h-10 object-cover" />;
+                      })()}
+                    </div>
+                    <div className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border-2 border-codeflow-dark z-10 ${medalStyle}`}>
+                      {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-white text-lg group-hover:text-codeflow-accent transition-colors">{user.name}</span>
+                      {streak >= 2 && (
+                        <motion.span
+                          initial={{ scale: 0 }} animate={{ scale: 1 }}
+                          className="text-xs text-orange-400 font-bold bg-orange-500/20 px-1.5 py-0.5 rounded flex items-center gap-1"
+                          title={`¡Racha de puntos en ${streak} carreras seguidas!`}
+                        >
+                          🔥 {streak}
+                        </motion.span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <span className="font-bold text-white text-lg group-hover:text-codeflow-accent transition-colors">{user.name}</span>
+                <span className="font-display font-extrabold text-2xl text-white">{user.pts} <span className="text-sm font-normal text-codeflow-muted">PTS</span></span>
               </div>
-              <span className="font-display font-extrabold text-2xl text-white">{user.pts} <span className="text-sm font-normal text-codeflow-muted">PTS</span></span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -1310,10 +1595,29 @@ function PredictionsGridTab({ nextRace }: { nextRace: any }) {
 
 // --- Media Vault Component ---
 
+// --- Star Rating Component ---
+function StarRating({ rating, onRate, disabled }: { rating: number, onRate?: (n: number) => void, disabled?: boolean }) {
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map(star => (
+        <button
+          key={star}
+          type="button"
+          disabled={disabled || !onRate}
+          onClick={(e) => { e.stopPropagation(); onRate?.(star); }}
+          className={`transition-all ${star <= rating ? 'text-yellow-400 fill-yellow-400' : 'text-white/20 hover:text-white/40'} ${!disabled && onRate ? 'cursor-pointer hover:scale-110' : 'cursor-default'}`}
+        >
+          <Star size={12} className={star <= rating ? 'fill-current' : ''} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // MediaCard: auto-fetches TMDB poster for series/movies/animes
-function MediaCard({ item, i, isGame, getGenreColor, tab, onEdit, onDelete }: {
+function MediaCard({ item, i, isGame, getGenreColor, tab, onEdit, onDelete, onUpdateRating }: {
   item: any; i: number; isGame: boolean; getGenreColor: (g: string) => string; tab: string;
-  onEdit: (item: any) => void; onDelete: (id: string) => void;
+  onEdit: (item: any) => void; onDelete: (id: string) => void; onUpdateRating: (id: string, r: number) => void;
 }) {
   const [poster, setPoster] = React.useState<string | null>(null);
   const [overview, setOverview] = React.useState<string | null>(null);
@@ -1335,16 +1639,19 @@ function MediaCard({ item, i, isGame, getGenreColor, tab, onEdit, onDelete }: {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-      className="glass-card p-5 flex flex-col items-start gap-3 hover:border-codeflow-accent/40 group relative overflow-hidden"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: i * 0.05 }}
+      className="glass-card p-5 flex flex-col items-start gap-3 hover:border-codeflow-accent/40 group relative overflow-hidden cursor-pointer h-full"
+      onClick={() => setHovered(!hovered)}
+      onMouseEnter={() => !('ontouchstart' in window) && setHovered(true)}
+      onMouseLeave={() => !('ontouchstart' in window) && setHovered(false)}
     >
       {/* Poster + body layout */}
       <div className="flex gap-4 w-full">
         {/* Poster */}
         {!isGame && (
-          <div className="shrink-0 w-16 h-24 rounded-lg overflow-hidden bg-white/5 border border-white/10 flex items-center justify-center text-2xl">
+          <div className="shrink-0 w-16 h-24 rounded-lg overflow-hidden bg-white/5 border border-white/10 flex items-center justify-center text-2xl relative">
             {poster
               ? <img src={poster} alt={item.name} className="w-full h-full object-cover" loading="lazy" />
               : <span>{tab === 'movies' ? '🎬' : tab === 'animes' ? '🎌' : '📺'}</span>
@@ -1354,7 +1661,15 @@ function MediaCard({ item, i, isGame, getGenreColor, tab, onEdit, onDelete }: {
         <div className="flex-1 min-w-0">
           <div className="flex justify-between items-start gap-2 mb-1">
             <h3 className="text-base font-bold text-white group-hover:text-codeflow-accent transition-colors leading-tight line-clamp-2">{item.name}</h3>
-            {!isGame && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/10 text-white/70 whitespace-nowrap shrink-0">{item.rating || 'Sin nota'}</span>}
+            {!isGame && (
+              <div className="flex flex-col items-end gap-1">
+                <StarRating
+                  rating={Number(item.rating) || 0}
+                  onRate={(r) => onUpdateRating(item.id, r)}
+                />
+                <span className="text-[9px] text-codeflow-muted font-mono uppercase tracking-tighter">Calificar</span>
+              </div>
+            )}
           </div>
           {!isGame && item.genre && (
             <div className="flex flex-wrap gap-1 mb-2">
@@ -1374,15 +1689,19 @@ function MediaCard({ item, i, isGame, getGenreColor, tab, onEdit, onDelete }: {
         </div>
       </div>
 
-      {/* TMDB overview hover overlay */}
+      {/* TMDB overview overlay */}
       {!isGame && overview && (
         <AnimatePresence>
           {hovered && (
             <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-codeflow-dark/95 backdrop-blur-sm p-4 flex flex-col justify-center z-10"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-codeflow-dark/95 backdrop-blur-sm p-5 flex flex-col items-center justify-center z-10 text-center"
             >
-              <p className="text-xs text-white/80 leading-relaxed line-clamp-6 italic">{overview}</p>
+              <Info size={20} className="text-codeflow-accent mb-3 opacity-50" />
+              <p className="text-[13px] text-white/90 leading-relaxed italic line-clamp-6">{overview}</p>
+              <p className="text-[10px] text-codeflow-muted mt-4 uppercase tracking-widest font-bold">Tocar para cerrar</p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -1392,16 +1711,16 @@ function MediaCard({ item, i, isGame, getGenreColor, tab, onEdit, onDelete }: {
         <span>Recomendó: <strong className="text-white">{item.recommender || '—'}</strong></span>
         <div className="flex items-center gap-2">
           <span>{new Date(item.created_at).toLocaleDateString('es-AR')}</span>
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
             <button
-              onClick={() => onEdit(item)}
+              onClick={(e) => { e.stopPropagation(); onEdit(item); }}
               className="p-1 hover:text-codeflow-accent transition-colors"
               title="Editar"
             >
               <Edit2 size={12} />
             </button>
             <button
-              onClick={() => { if (window.confirm('¿Eliminar este item?')) onDelete(item.id); }}
+              onClick={(e) => { e.stopPropagation(); if (window.confirm('¿Eliminar este item?')) onDelete(item.id); }}
               className="p-1 hover:text-red-400 transition-colors"
               title="Eliminar"
             >
@@ -1444,6 +1763,24 @@ function MediaVaultView({ tab }: { tab: string }) {
       if (res.ok) fetchMedia();
     } catch (err) {
       console.error('Error deleting:', err);
+    }
+  };
+
+  const handleUpdateRating = async (id: string, rating: number) => {
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+
+    // Direct update without visual lag
+    setItems(prev => prev.map(i => i.id === id ? { ...i, rating } : i));
+
+    try {
+      await fetchWithAuth(`/api/media/${endpointTab}/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ ...item, rating })
+      });
+    } catch (err) {
+      console.error('Error updating rating:', err);
+      fetchMedia(); // Rollback
     }
   };
 
@@ -1698,9 +2035,19 @@ function MediaVaultView({ tab }: { tab: string }) {
           No hay elementos que coincidan con la búsqueda.
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 px-4 sm:px-0">
           {filteredItems.map((item, i) => (
-            <MediaCard key={item.id} item={item} i={i} isGame={isGame} getGenreColor={getGenreColor} tab={tab} onEdit={handleEdit} onDelete={handleDelete} />
+            <MediaCard
+              key={item.id}
+              item={item}
+              i={i}
+              isGame={isGame}
+              getGenreColor={getGenreColor}
+              tab={tab}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onUpdateRating={handleUpdateRating}
+            />
           ))}
         </div>
       )}
