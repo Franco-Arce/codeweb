@@ -549,9 +549,8 @@ function DashboardView() {
                 const tallies: Record<string, number> = {};
                 let totalVotes = 0;
                 predictions.forEach((p: any) => {
-                  const selection = p.prediction;
-                  if (!selection) return;
-                  const drivers = [selection.pole, selection.p1, selection.p2, selection.p3, selection.p4, selection.p5].filter(Boolean);
+                  // Direct fallback parsing:
+                  const drivers = [p.pole_position, p.p1, p.p2, p.p3, p.p4, p.p5].filter(Boolean);
                   drivers.forEach(d => {
                     tallies[d] = (tallies[d] || 0) + 1;
                     totalVotes++;
@@ -559,6 +558,15 @@ function DashboardView() {
                 });
 
                 const sorted = Object.entries(tallies).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+                if (sorted.length === 0) {
+                  return (
+                    <div className="flex-1 flex flex-col items-center justify-center text-center text-codeflow-muted py-8">
+                      <span className="text-3xl mb-2 opacity-50">🏎️</span>
+                      <p className="text-sm">Aún no hay votos registrados.</p>
+                    </div>
+                  );
+                }
 
                 return sorted.map(([driver, count], i) => {
                   const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
