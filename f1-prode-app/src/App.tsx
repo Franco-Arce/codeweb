@@ -1758,20 +1758,23 @@ function PredictionsGridTab({ nextRace }: { nextRace: any }) {
 // --- Media Vault Component ---
 
 // --- Star Rating Component ---
-function StarRating({ rating, onRate, disabled }: { rating: number, onRate?: (n: number) => void, disabled?: boolean }) {
+function StarRating({ rating, onRate, disabled, label, size = 12 }: { rating: number, onRate?: (n: number) => void, disabled?: boolean, label?: string, size?: number }) {
   return (
-    <div className="flex items-center gap-0.5">
-      {[1, 2, 3, 4, 5].map(star => (
-        <button
-          key={star}
-          type="button"
-          disabled={disabled || !onRate}
-          onClick={(e) => { e.stopPropagation(); onRate?.(star); }}
-          className={`transition-all ${star <= rating ? 'text-yellow-400 fill-yellow-400' : 'text-white/20 hover:text-white/40'} ${!disabled && onRate ? 'cursor-pointer hover:scale-110' : 'cursor-default'}`}
-        >
-          <Star size={12} className={star <= rating ? 'fill-current' : ''} />
-        </button>
-      ))}
+    <div className="flex flex-col items-end gap-1">
+      {label && <span className="text-[9px] text-codeflow-muted font-bold uppercase tracking-widest">{label}</span>}
+      <div className="flex items-center gap-0.5">
+        {[1, 2, 3, 4, 5].map(star => (
+          <button
+            key={star}
+            type="button"
+            disabled={disabled || !onRate}
+            onClick={(e) => { e.stopPropagation(); onRate?.(star); }}
+            className={`transition-all ${star <= Math.round(rating) ? 'text-yellow-400 fill-yellow-400' : 'text-white/10 hover:text-white/40'} ${!disabled && onRate ? 'cursor-pointer hover:scale-110' : 'cursor-default'}`}
+          >
+            <Star size={size} className={star <= Math.round(rating) ? 'fill-current' : ''} />
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1824,12 +1827,21 @@ function MediaCard({ item, i, isGame, getGenreColor, tab, onEdit, onDelete, onUp
           <div className="flex justify-between items-start gap-2 mb-1">
             <h3 className="text-base font-bold text-white group-hover:text-codeflow-accent transition-colors leading-tight line-clamp-2">{item.name}</h3>
             {!isGame && (
-              <div className="flex flex-col items-end gap-1">
+              <div className="flex flex-col items-end gap-2 shrink-0">
                 <StarRating
-                  rating={Number(item.rating) || 0}
+                  label="Tu Nota"
+                  rating={Number(item.user_rating) || 0}
                   onRate={(r) => onUpdateRating(item.id, r)}
+                  size={14}
                 />
-                <span className="text-[9px] text-codeflow-muted font-mono uppercase tracking-tighter">Calificar</span>
+                {item.total_votes > 0 && (
+                  <StarRating
+                    label={`Promedio (${Number(item.avg_rating).toFixed(1)})`}
+                    rating={Number(item.avg_rating)}
+                    disabled
+                    size={10}
+                  />
+                )}
               </div>
             )}
           </div>
@@ -1869,11 +1881,23 @@ function MediaCard({ item, i, isGame, getGenreColor, tab, onEdit, onDelete, onUp
         </AnimatePresence>
       )}
 
-      <div className="w-full pt-3 mt-auto border-t border-white/5 text-[10px] text-codeflow-muted flex justify-between items-center group/footer relative z-20">
-        <span>Recomendó: <strong className="text-white">{item.recommender || '—'}</strong></span>
-        <div className="flex items-center gap-2">
+      <div className="w-full pt-3 mt-auto border-t border-white/5 text-[10px] text-codeflow-muted flex flex-col gap-2 relative z-20">
+        <div className="flex justify-between items-center">
+          <span>Recomendó: <strong className="text-white">{item.recommender || '—'}</strong></span>
           <span>{new Date(item.created_at).toLocaleDateString('es-AR')}</span>
-          <div className="flex gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+        </div>
+
+        {item.voters && (
+          <p className="text-[9px] text-codeflow-accent/70 italic truncate">
+            Votado por: {item.voters}
+          </p>
+        )}
+
+        <div className="flex justify-between items-center pt-1">
+          <span className="text-[9px] group-hover:text-white transition-colors">
+            {isGame ? 'Juego de Mesa' : tab === 'series' ? 'Serie' : tab === 'animes' ? 'Anime' : 'Película'}
+          </span>
+          <div className="flex gap-2 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               onClick={(e) => { e.stopPropagation(); onEdit(item); }}
               className="p-1 hover:text-codeflow-accent transition-colors"
@@ -1937,20 +1961,14 @@ function MediaVaultView({ tab }: { tab: string }) {
   };
 
   const handleUpdateRating = async (id: string, rating: number) => {
-    const item = items.find(i => i.id === id);
-    if (!item) return;
-
-    // Direct update without visual lag
-    setItems(prev => prev.map(i => i.id === id ? { ...i, rating } : i));
-
     try {
-      await fetchWithAuth(`/api/media/${endpointTab}/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ ...item, rating })
+      const res = await fetchWithAuth(`/api/media/${endpointTab}/${id}/rate`, {
+        method: 'POST',
+        body: JSON.stringify({ rating })
       });
+      if (res.ok) fetchMedia(); // Refresh to get new avg_rating and total_votes
     } catch (err) {
       console.error('Error updating rating:', err);
-      fetchMedia(); // Rollback
     }
   };
 
