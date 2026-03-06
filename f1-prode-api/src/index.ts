@@ -222,34 +222,7 @@ const initDb = async () => {
 
 initDb();
 
-// --- Auth Routes ---
-app.post('/api/auth/login', (req: Request, res: Response) => {
-    const { username, password } = req.body;
-    if (username === 'pepe' && password === 'pepon') {
-        // En lugar de Cookie, devolvemos un Token estático para el MVP
-        res.json({
-            success: true,
-            message: 'Welcome to the Paddock',
-            token: 'f1_pepe_logged_in_token',
-            user: { username: 'pepe', role: 'admin' }
-        });
-    } else {
-        res.status(401).json({ success: false, message: 'Bandera negra: Credenciales inválidas' });
-    }
-});
-
-app.post('/api/auth/logout', (req: Request, res: Response) => {
-    res.json({ success: true, message: 'Logged out' });
-});
-
-app.get('/api/auth/session', (req: Request, res: Response) => {
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader === 'Bearer f1_pepe_logged_in_token') {
-        res.json({ authenticated: true, user: 'pepe' });
-    } else {
-        res.json({ authenticated: false });
-    }
-});
+// --- Auth Routes (DB-backed, see below) ---
 
 // --- Official 2026 F1 Calendar ---
 const races2026 = [
