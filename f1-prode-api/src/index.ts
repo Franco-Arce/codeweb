@@ -675,6 +675,51 @@ app.get('/api/oracle/context', requireAuth, async (req: Request, res: Response) 
     }
 });
 
+// Backwards-compatible alias: older frontends call /api/oracle/roast
+app.get('/api/oracle/roast', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const nextRace = getNextRace();
+        const raceId = `round_${nextRace.round}`;
+
+        // Fetch all predictions (all sessions) for this race
+        const result = await pool.query(
+            'SELECT * FROM predictions WHERE race_id = $1 ORDER BY session_type, created_at DESC', [raceId]
+        );
+        const predictions = result.rows;
+
+        // Build race context — try to get qualifying results from Jolpica
+        const raceContext = {
+            circuitName: `${nextRace.circuit} (${nextRace.city})`,
+            weather: undefined as string | undefined,
+            lastResults: undefined as string | undefined,
+        };
+
+        try {
+            const jolpicaRes = await fetch(`https://api.jolpi.ca/ergast/f1/2026/${nextRace.round}/qualifying.json`);
+            if (jolpicaRes.ok) {
+                const jData = await jolpicaRes.json();
+                const qual = jData?.MRData?.RaceTable?.Races?.[0]?.QualifyingResults;
+                if (qual && qual.length > 0) {
+                    const top3 = qual.slice(0, 3).map((r: any, i: number) =>
+                        `Q${i + 1}: ${r.Driver.givenName} ${r.Driver.familyName}`
+                    ).join(', ');
+                    raceContext.lastResults = `Qualifying: ${top3}`;
+                }
+            }
+        } catch { /* no context available, oracle proceeds without it */ }
+
+        // Fetch current leaderboard
+        const lbResult = await pool.query('SELECT name, pts FROM leaderboard ORDER BY pts DESC');
+        const leaderboard = lbResult.rows;
+
+        const roast = await generateOracleRoast(predictions, raceContext, leaderboard);
+        res.json({ analysis: roast, race: nextRace.name });
+    } catch (error) {
+        console.error('Error en Oracle (roast alias):', error);
+        res.status(500).json({ error: 'Failed to generate Oracle Analysis' });
+    }
+});
+
 // --- Session schedule — fetches times from Jolpica (UTC→ARG)
 app.get('/api/races/:round/schedule', requireAuth, async (req: Request, res: Response) => {
     try {
