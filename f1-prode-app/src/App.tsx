@@ -33,7 +33,6 @@ const useProfiles = () => useContext(ProfilesContext);
 
 // --- Navigation Context ---
 const ActiveTabContext = createContext<(tab: string) => void>(() => { });
-const useSetActiveTab = () => useContext(ActiveTabContext);
 
 function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
