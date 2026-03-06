@@ -172,6 +172,11 @@ const initDb = async () => {
         // 7. Add explicit constraints to link players and profiles to users
         await pool.query(`
             DO $$ BEGIN
+                -- Clean orphans that prevent FK creation (records with usernames that don't exist in 'users' table)
+                DELETE FROM user_profiles WHERE username NOT IN (SELECT username FROM users);
+                DELETE FROM leaderboard WHERE name NOT IN (SELECT username FROM users);
+                DELETE FROM predictions WHERE player NOT IN (SELECT username FROM users);
+
                 -- Link user_profiles to users
                 IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_profile_user_status') THEN
                     ALTER TABLE user_profiles 
