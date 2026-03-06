@@ -160,13 +160,39 @@ const initDb = async () => {
         await pool.query(`
             CREATE TABLE IF NOT EXISTS media_ratings (
                 id SERIAL PRIMARY KEY,
-                user_id INTEGER REFERENCES users(id),
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
                 media_type VARCHAR(20) NOT NULL, -- 'series', 'movies', 'boardgames'
                 media_id INTEGER NOT NULL,
                 rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(user_id, media_type, media_id)
             );
+        `);
+
+        // 7. Add explicit constraints to link players and profiles to users
+        await pool.query(`
+            DO $$ BEGIN
+                -- Link user_profiles to users
+                IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_profile_user_status') THEN
+                    ALTER TABLE user_profiles 
+                    ADD CONSTRAINT fk_profile_user_status
+                    FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE;
+                END IF;
+
+                -- Link leaderboard to users
+                IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_leaderboard_user') THEN
+                    ALTER TABLE leaderboard 
+                    ADD CONSTRAINT fk_leaderboard_user
+                    FOREIGN KEY (name) REFERENCES users(username) ON DELETE CASCADE;
+                END IF;
+
+                -- Link predictions to users
+                IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_predictions_user') THEN
+                    ALTER TABLE predictions 
+                    ADD CONSTRAINT fk_predictions_user
+                    FOREIGN KEY (player) REFERENCES users(username) ON DELETE CASCADE;
+                END IF;
+            END $$;
         `);
 
         console.log('✅ Base de datos inicializada y migrada');
@@ -569,17 +595,32 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
 
     try {
+        console.log(`[DEBUG_AUTH] Intento login: "${username}" (len: ${username.length})`);
         const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
         const user = result.rows[0];
 
-        if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+        if (!user) {
+            console.log(`[DEBUG_AUTH] Usuario NO encontrado: "${username}"`);
+            // Check if it exists with different casing
+            const caseResult = await pool.query('SELECT username FROM users WHERE LOWER(username) = LOWER($1)', [username]);
+            if (caseResult.rows.length > 0) {
+                console.log(`[DEBUG_AUTH] ¡ATENCIÓN! El usuario existe con otro casing: "${caseResult.rows[0].username}"`);
+            }
+            return res.status(401).json({ success: false, message: 'Credenciales inválidas' });
+        }
+
+        console.log(`[DEBUG_AUTH] Usuario encontrado. Comprando hash...`);
+        const isMatch = await bcrypt.compare(password, user.password_hash);
+        console.log(`[DEBUG_AUTH] Password match: ${isMatch ? 'SÍ' : 'NO'}`);
+
+        if (!isMatch) {
             return res.status(401).json({ success: false, message: 'Credenciales inválidas' });
         }
 
         const token = jwt.sign({ userId: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
         res.json({ success: true, token, username: user.username });
     } catch (err) {
-        console.error('Login error:', err);
+        console.error('[DEBUG_AUTH] Error crítico en login:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
