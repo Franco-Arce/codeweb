@@ -1019,7 +1019,7 @@ function F1ProdeView() {
                     </div>
                   </div>
 
-                  <div className="pt-2">
+                  <div className="pt-2 flex flex-col gap-3">
                     {existingPrediction && (
                       <p className="text-[10px] text-yellow-400/70 mb-2 flex items-center gap-1">
                         <AlertCircle size={10} /> Actualizarás tu pronóstico de {currentForm.label} existente
@@ -1036,6 +1036,14 @@ function F1ProdeView() {
                           Guardando...
                         </span>
                       ) : isSessionClosed ? '🚫 Sesión cerrada' : existingPrediction ? `🔄 Actualizar ${currentForm.label}` : `🏁 Enviar ${currentForm.label}`}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setF1Tab('grilla')}
+                      className="w-full bg-white/5 border border-white/10 hover:bg-white/10 text-white font-semibold py-2.5 rounded-lg transition-colors text-sm flex items-center justify-center gap-2"
+                    >
+                      <LayoutDashboard size={16} /> Ver Pronósticos de los Demás
                     </button>
                   </div>
                 </form>
