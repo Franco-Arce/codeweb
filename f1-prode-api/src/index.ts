@@ -170,19 +170,27 @@ const initDb = async () => {
         `);
 
         // 7. Add explicit constraints to link players and profiles to users
+
+        console.log('--- Limpiando datos huérfanos y normalizando ---');
+        // Step 7a: Normalize casing
+        await pool.query(`
+            UPDATE users SET username = LOWER(TRIM(username));
+            UPDATE user_profiles SET username = LOWER(TRIM(username));
+            UPDATE leaderboard SET name = LOWER(TRIM(name));
+            UPDATE predictions SET player = LOWER(TRIM(player));
+        `);
+
+        // Step 7b: Clean orphans that prevent FK creation
+        await pool.query(`
+            DELETE FROM user_profiles WHERE username NOT IN (SELECT username FROM users);
+            DELETE FROM leaderboard WHERE name NOT IN (SELECT username FROM users);
+            DELETE FROM predictions WHERE player NOT IN (SELECT username FROM users);
+        `);
+
+        console.log('--- Aplicando resticciones de llave foránea ---');
+        // Step 7c: Link tables
         await pool.query(`
             DO $$ BEGIN
-                -- Normalize casing: make all usernames lowercase to avoid "NestorMcNestor" vs "nestormcnestor" issues
-                UPDATE users SET username = LOWER(TRIM(username));
-                UPDATE user_profiles SET username = LOWER(TRIM(username));
-                UPDATE leaderboard SET name = LOWER(TRIM(name));
-                UPDATE predictions SET player = LOWER(TRIM(player));
-
-                -- Clean orphans that prevent FK creation
-                DELETE FROM user_profiles WHERE username NOT IN (SELECT username FROM users);
-                DELETE FROM leaderboard WHERE name NOT IN (SELECT username FROM users);
-                DELETE FROM predictions WHERE player NOT IN (SELECT username FROM users);
-
                 -- Link user_profiles to users
                 IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_profile_user_status') THEN
                     ALTER TABLE user_profiles 
