@@ -2,7 +2,7 @@ import React, { useState, useCallback, useContext, createContext } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Trophy, Film, Gamepad2, Tv, LayoutDashboard, Settings,
-  RefreshCw, AlertCircle, CheckCircle, XCircle, Menu, Edit2, Trash2,
+  RefreshCw, AlertCircle, CheckCircle, XCircle, Edit2, Trash2,
   Star, Info, Dices, Sparkles, Lock, ShieldAlert, Ghost
 } from 'lucide-react';
 const Diced = Gamepad2; // Fallback or Alias if needed
@@ -271,7 +271,7 @@ const fetchWithAuth = async (endpoint: string, options: RequestInit = {}) => {
 function App() {
   const [activeTab, setActiveTabInternal] = useState<string>(() => localStorage.getItem('prode_active_tab') || 'dashboard');
   const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('prode_auth_token'));
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   const [currentUser, setCurrentUser] = useState<string>(localStorage.getItem('prode_username') || '');
   const [isLoading, setIsLoading] = React.useState(true);
 
@@ -316,8 +316,6 @@ function App() {
           setIsAuthenticated={setIsAuthenticated}
           currentUser={currentUser}
           handleLogout={handleLogout}
-          isMobileMenuOpen={isMobileMenuOpen}
-          setIsMobileMenuOpen={setIsMobileMenuOpen}
         />
       </ProfilesProvider>
     </ToastProvider>
@@ -361,14 +359,12 @@ function MobileBottomNav({ activeTab, onNavigate }: { activeTab: string; onNavig
   );
 }
 
-function AppShell({ activeTab, setActiveTab, setIsAuthenticated, currentUser, handleLogout, isMobileMenuOpen, setIsMobileMenuOpen }: {
+function AppShell({ activeTab, setActiveTab, setIsAuthenticated, currentUser, handleLogout }: {
   activeTab: string;
   setActiveTab: (t: string) => void;
   setIsAuthenticated: (v: boolean) => void;
   currentUser: string;
   handleLogout: () => void;
-  isMobileMenuOpen: boolean;
-  setIsMobileMenuOpen: (v: boolean) => void;
 }) {
   // Close menu on navigation for mobile
   const handleNavClick = (tab: string) => {
