@@ -5,7 +5,7 @@ import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
-import { generateOracleRoast } from './groqOracle';
+import { generateOracleRoast, RaceContext } from './groqOracle';
 import { sendWhatsAppMessage } from './whatsappAlerts';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'f1prode_secret_key_2026';
@@ -1174,11 +1174,72 @@ app.get('/api/oracle/roast', async (req: Request, res: Response) => {
         const nextRace = getNextRace();
         const raceId = `round_${nextRace.round}`;
 
-        const predsRes = await pool.query('SELECT * FROM predictions WHERE race_id = $1 OR race_id = \'current\'', [raceId]);
-        const lbRes = await pool.query('SELECT * FROM leaderboard ORDER BY pts DESC');
+        const [predsRes, lbRes] = await Promise.all([
+            pool.query('SELECT * FROM predictions WHERE race_id = $1 OR race_id = \'current\'', [raceId]),
+            pool.query('SELECT * FROM leaderboard ORDER BY pts DESC'),
+        ]);
 
-        // Contexto opcional (podría hidratarse desde el front o de una tabla de clima)
-        const raceCtx = { circuitName: nextRace.name || 'Próximo GP' };
+        // Build rich context from Jolpica + our own race_results table
+        const sessionResults: string[] = [];
+
+        const fetchJolpica = async (round: number, endpoint: string): Promise<any> => {
+            try {
+                const r = await fetch(`https://api.jolpi.ca/ergast/f1/2026/${round}/${endpoint}.json`);
+                return r.ok ? await r.json() : null;
+            } catch { return null; }
+        };
+
+        const formatTop5 = (results: any[], nameKey = 'Driver'): string =>
+            results.slice(0, 5).map((r: any, i: number) =>
+                `P${i + 1}: ${r[nameKey]?.givenName} ${r[nameKey]?.familyName}`
+            ).join(', ');
+
+        // Check our own race_results table for any loaded results
+        try {
+            const dbResults = await pool.query(
+                'SELECT * FROM race_results ORDER BY race_id DESC, session_type ASC LIMIT 10'
+            );
+            for (const row of dbResults.rows) {
+                const race = races2026.find(r => `round_${r.round}` === row.race_id);
+                const raceName = race?.name || row.race_id;
+                const positions = [row.p1, row.p2, row.p3, row.p4, row.p5].filter(Boolean)
+                    .map((d: string, i: number) => `P${i + 1}: ${d}`).join(', ');
+                if (positions) sessionResults.push(`[Resultado oficial] ${raceName} — ${row.session_type}: ${positions}`);
+            }
+        } catch { /* no race_results yet */ }
+
+        // Fetch previous round results from Jolpica
+        const prevRound = nextRace.round - 1;
+        if (prevRound >= 1) {
+            const [prevQualy, prevRace] = await Promise.all([
+                fetchJolpica(prevRound, 'qualifying'),
+                fetchJolpica(prevRound, 'results'),
+            ]);
+
+            const prevQual = prevQualy?.MRData?.RaceTable?.Races?.[0];
+            if (prevQual?.QualifyingResults?.length) {
+                const raceName = prevQual.raceName || `Round ${prevRound}`;
+                sessionResults.push(`Clasificación ${raceName}: ${formatTop5(prevQual.QualifyingResults)}`);
+            }
+
+            const prevRaceData = prevRace?.MRData?.RaceTable?.Races?.[0];
+            if (prevRaceData?.Results?.length) {
+                const raceName = prevRaceData.raceName || `Round ${prevRound}`;
+                sessionResults.push(`Carrera ${raceName}: ${formatTop5(prevRaceData.Results)}`);
+            }
+        }
+
+        // Fetch current round qualifying if it already happened
+        const currentQualy = await fetchJolpica(nextRace.round, 'qualifying');
+        const currentQualData = currentQualy?.MRData?.RaceTable?.Races?.[0];
+        if (currentQualData?.QualifyingResults?.length) {
+            sessionResults.push(`Clasificación ${nextRace.name}: ${formatTop5(currentQualData.QualifyingResults)}`);
+        }
+
+        const raceCtx: RaceContext = {
+            circuitName: `${nextRace.name} — ${nextRace.circuit || ''}`,
+            lastResults: sessionResults.length > 0 ? sessionResults.join(' | ') : undefined,
+        };
 
         const roast = await generateOracleRoast(predsRes.rows, raceCtx, lbRes.rows);
         res.json({ analysis: roast });
