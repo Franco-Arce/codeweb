@@ -3084,11 +3084,13 @@ function AdminView() {
         const res = await fetch(`https://api.jolpi.ca/ergast/f1/2026/${selectedRound}/qualifying.json`);
         const data = await res.json();
         const qResults = data.MRData.RaceTable.Races[0]?.QualifyingResults;
-        if (qResults && qResults.length >= 3) {
+        if (qResults && qResults.length >= 5) {
           setP1(driverName(qResults[0].Driver));
           setP2(driverName(qResults[1].Driver));
           setP3(driverName(qResults[2].Driver));
-          setResultMessage({ message: "¡Top 3 de Clasificación sincronizados!" });
+          setP4(driverName(qResults[3].Driver));
+          setP5(driverName(qResults[4].Driver));
+          setResultMessage({ message: "¡Top 5 de Clasificación sincronizados!" });
         } else {
           setResultMessage({ error: "No hay datos de Clasificación todavía para este GP." });
         }
@@ -3097,17 +3099,31 @@ function AdminView() {
         const res = await fetch(`https://api.jolpi.ca/ergast/f1/2026/${selectedRound}/sprint.json`);
         const data = await res.json();
         const sprintResults = data.MRData.RaceTable.Races[0]?.SprintResults;
-        if (sprintResults && sprintResults.length >= 3) {
+        if (sprintResults && sprintResults.length >= 5) {
           setP1(driverName(sprintResults[0].Driver));
           setP2(driverName(sprintResults[1].Driver));
           setP3(driverName(sprintResults[2].Driver));
-          setResultMessage({ message: "¡Resultados de Sprint sincronizados!" });
+          setP4(driverName(sprintResults[3].Driver));
+          setP5(driverName(sprintResults[4].Driver));
+          setResultMessage({ message: "¡Top 5 de Sprint sincronizados!" });
         } else {
           setResultMessage({ error: "No hay datos de Sprint todavía para este GP." });
         }
 
       } else if (selectedSession === 'sprint_qualifying') {
-        setResultMessage({ error: "La Sprint Qualifying no está en la API automática. Cargá el P1 manualmente." });
+        const res = await fetch(`https://api.jolpi.ca/ergast/f1/2026/${selectedRound}/qualifying.json`);
+        const data = await res.json();
+        const sqResults = data.MRData.RaceTable.Races[0]?.QualifyingResults;
+        if (sqResults && sqResults.length >= 5) {
+          setP1(driverName(sqResults[0].Driver));
+          setP2(driverName(sqResults[1].Driver));
+          setP3(driverName(sqResults[2].Driver));
+          setP4(driverName(sqResults[3].Driver));
+          setP5(driverName(sqResults[4].Driver));
+          setResultMessage({ message: "¡Top 5 de Sprint Qualifying sincronizados!" });
+        } else {
+          setResultMessage({ error: "No hay datos de Sprint Qualifying todavía para este GP." });
+        }
       }
     } catch (err) {
       console.error(err);
