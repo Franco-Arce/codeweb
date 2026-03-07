@@ -1119,6 +1119,53 @@ app.get('/api/admin/results/:round', requireAuth, requireAdmin, async (req: Requ
     }
 });
 
+// --- Manual WhatsApp reminder for missing predictions ---
+app.post('/api/admin/whatsapp/remind', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+        const { session_type = 'race' } = req.body;
+        const nextRace = getNextRace();
+        const raceId = `round_${nextRace.round}`;
+
+        const SESSION_LABELS: Record<string, string> = {
+            race: 'Carrera', qualifying: 'Clasificación',
+            sprint: 'Sprint Race', sprint_qualifying: 'Sprint Qualifying',
+        };
+
+        // Get all players who have predicted for any session of this race
+        const allPredsResult = await pool.query(
+            'SELECT DISTINCT player FROM predictions WHERE race_id = $1',
+            [raceId]
+        );
+        const activePlayers = allPredsResult.rows.map(r => r.player);
+
+        if (activePlayers.length === 0) {
+            return res.json({ sent: false, message: 'No hay jugadores activos para esta ronda aún.' });
+        }
+
+        // Get who already predicted for the requested session
+        const sessionPredsResult = await pool.query(
+            'SELECT player FROM predictions WHERE race_id = $1 AND session_type = $2',
+            [raceId, session_type]
+        );
+        const submittedPlayers = new Set(sessionPredsResult.rows.map(r => r.player.toLowerCase()));
+        const missingPlayers = activePlayers.filter(p => !submittedPlayers.has(p.toLowerCase()));
+
+        if (missingPlayers.length === 0) {
+            return res.json({ sent: false, message: 'Todos los jugadores ya cargaron su pronóstico.' });
+        }
+
+        const mentions = missingPlayers.map(u => `*${u}*`).join(', ');
+        const sessionLabel = SESSION_LABELS[session_type] || session_type;
+        const message = `⚠️ *¡ALERTA F1 PRODE!* ⚠️\n\nFaltan pronósticos para la *${sessionLabel}* del *${nextRace.name}*.\n\nLos siguientes pilotos aún no cargaron:\n${mentions}\n\n¡Carguen ya antes de que cierre! 🏎️💨`;
+
+        await sendWhatsAppMessage(message);
+        res.json({ sent: true, missing: missingPlayers, message: `Mensaje enviado. Faltan: ${missingPlayers.join(', ')}` });
+    } catch (error) {
+        console.error('WhatsApp remind error:', error);
+        res.status(500).json({ error: 'Error enviando mensaje' });
+    }
+});
+
 // --- Score History per race (for Chart.js) ---
 app.get('/api/leaderboard/history', requireAuth, async (req: Request, res: Response) => {
     try {

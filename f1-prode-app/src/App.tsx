@@ -3043,6 +3043,8 @@ function AdminView() {
   const [p5, setP5] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
   const [resultMessage, setResultMessage] = React.useState<any>(null);
+  const [sendingReminder, setSendingReminder] = React.useState(false);
+  const [reminderMsg, setReminderMsg] = React.useState<string | null>(null);
 
   const SESSION_CONFIG = {
     race: { label: '🏁 Carrera', fields: ['p1', 'p2', 'p3', 'p4', 'p5'], hasPole: false },
@@ -3167,6 +3169,23 @@ function AdminView() {
 
   const selectedRaceName = races.find(r => String(r.round) === selectedRound)?.name || '';
 
+  const handleSendReminder = async (sessionType: string) => {
+    setSendingReminder(true);
+    setReminderMsg(null);
+    try {
+      const res = await fetchWithAuth('/api/admin/whatsapp/remind', {
+        method: 'POST',
+        body: JSON.stringify({ session_type: sessionType }),
+      });
+      const data = await res.json();
+      setReminderMsg(data.message || (data.sent ? 'Mensaje enviado.' : 'Sin cambios.'));
+    } catch {
+      setReminderMsg('Error al enviar el mensaje.');
+    } finally {
+      setSendingReminder(false);
+    }
+  };
+
   return (
     <div className="space-y-8 animate-fade-in pb-12">
       <header>
@@ -3268,7 +3287,7 @@ function AdminView() {
         </form>
 
         {resultMessage && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-6 p-4 rounded-xl bg-green-500/10 border border-green-500/30">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-6 p-4 rounded-xl bg-green-500/10 border border-green-500/30 ">
             {resultMessage.error ? (
               <p className="text-red-400 font-medium">{resultMessage.error}</p>
             ) : (
@@ -3290,6 +3309,35 @@ function AdminView() {
               </>
             )}
           </motion.div>
+        )}
+      </div>
+
+      {/* WhatsApp Reminders */}
+      <div className="glass-card p-5 md:p-8 max-w-2xl">
+        <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+          <span className="text-green-400">💬</span> Recordatorios WhatsApp
+        </h3>
+        <p className="text-codeflow-muted text-sm mb-6">Envía un mensaje al grupo indicando quién falta cargar pronóstico para la próxima sesión.</p>
+        <div className="flex flex-wrap gap-3">
+          {(['race', 'qualifying', 'sprint', 'sprint_qualifying'] as const).map(s => {
+            const labels: Record<string, string> = { race: '🏁 Carrera', qualifying: '🏎️ Clasificación', sprint: '🏃 Sprint', sprint_qualifying: '⚡ Sprint Q' };
+            return (
+              <button
+                key={s}
+                onClick={() => handleSendReminder(s)}
+                disabled={sendingReminder}
+                className="px-4 py-2.5 rounded-xl border border-green-500/30 bg-green-500/10 text-green-400 font-bold text-sm hover:bg-green-500/20 transition-all disabled:opacity-40 flex items-center gap-2"
+              >
+                {sendingReminder ? <RefreshCw size={14} className="animate-spin" /> : null}
+                {labels[s]}
+              </button>
+            );
+          })}
+        </div>
+        {reminderMsg && (
+          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4 text-sm text-green-300 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3">
+            {reminderMsg}
+          </motion.p>
         )}
       </div>
     </div>
