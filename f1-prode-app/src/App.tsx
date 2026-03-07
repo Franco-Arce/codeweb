@@ -1928,143 +1928,274 @@ function StarRating({ rating, onRate, disabled, label, size = 12 }: { rating: nu
   );
 }
 
-// MediaCard: auto-fetches TMDB poster for series/movies/animes
+// --- Media Detail Modal ---
+function MediaDetailModal({ item, tab, isGame, getGenreColor, poster, onClose, onEdit, onDelete, onUpdateRating }: {
+  item: any; tab: string; isGame: boolean; getGenreColor: (g: string) => string;
+  poster: string | null; onClose: () => void;
+  onEdit: (item: any) => void; onDelete: (id: string) => void; onUpdateRating: (id: string, r: number) => void;
+}) {
+  const [overview, setOverview] = React.useState<string | null>(null);
+  const [userRatings, setUserRatings] = React.useState<{ username: string; rating: number }[]>([]);
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [localRating, setLocalRating] = React.useState(Number(item.user_rating) || 0);
+  const currentUser = localStorage.getItem('prode_username') || '';
+  const { profiles } = useProfiles();
+  const endpointTab = tab === 'games' ? 'boardgames' : tab;
+
+  React.useEffect(() => {
+    if (!isGame) {
+      const tmdbType = tab === 'movies' ? 'movie' : 'tv';
+      fetchWithAuth(`/api/tmdb/search?query=${encodeURIComponent(item.name)}&type=${tmdbType}`)
+        .then(r => r.json())
+        .then((results: any[]) => { if (results?.length > 0) setOverview(results[0].overview || null); })
+        .catch(() => { });
+    }
+    fetchWithAuth(`/api/media/${endpointTab}/${item.id}/ratings`)
+      .then(r => r.json())
+      .then(data => setUserRatings(Array.isArray(data) ? data : []))
+      .catch(() => { });
+  }, [item.id]);
+
+  const handleRate = (r: number) => {
+    setLocalRating(r);
+    onUpdateRating(item.id, r);
+    setUserRatings(prev => {
+      const idx = prev.findIndex(u => u.username === currentUser);
+      if (idx >= 0) return prev.map((u, i) => i === idx ? { ...u, rating: r } : u);
+      return [...prev, { username: currentUser, rating: r }];
+    });
+  };
+
+  const avgRating = userRatings.length > 0
+    ? userRatings.reduce((s, r) => s + r.rating, 0) / userRatings.length
+    : 0;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-codeflow-dark/85 backdrop-blur-md" onClick={onClose} />
+      <motion.div
+        initial={{ opacity: 0, y: 60 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 60 }}
+        transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+        className="relative bg-codeflow-card border border-white/10 rounded-t-3xl sm:rounded-2xl w-full sm:max-w-2xl shadow-2xl max-h-[92vh] overflow-hidden flex flex-col"
+      >
+        {/* Handle bar mobile */}
+        <div className="sm:hidden flex justify-center pt-3 pb-1 shrink-0">
+          <div className="w-10 h-1 bg-white/20 rounded-full" />
+        </div>
+        {/* Header */}
+        <div className="flex items-center gap-3 px-5 py-3 border-b border-white/5 shrink-0">
+          <div className="flex-1 min-w-0">
+            <h2 className="text-base font-bold text-white line-clamp-1">{item.name}</h2>
+            {item.recommender && <p className="text-[10px] text-codeflow-muted">Recomendó: <strong className="text-white/70">{item.recommender}</strong></p>}
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button onClick={() => { onClose(); onEdit(item); }} className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/50 hover:text-codeflow-accent transition-colors" title="Editar"><Edit2 size={15} /></button>
+            <button onClick={() => setConfirmDelete(true)} className="p-2 rounded-lg bg-white/5 hover:bg-red-500/15 text-white/50 hover:text-red-400 transition-colors" title="Eliminar"><Trash2 size={15} /></button>
+            <button onClick={onClose} className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition-colors"><XCircle size={15} /></button>
+          </div>
+        </div>
+
+        {/* Scrollable content */}
+        <div className="overflow-y-auto flex-1 no-scrollbar">
+          {/* Poster + info */}
+          <div className="flex gap-4 p-5">
+            {!isGame && (
+              <div className="shrink-0 w-28 sm:w-36 rounded-xl overflow-hidden bg-codeflow-base border border-white/10 self-start">
+                {poster
+                  ? <img src={poster} alt={item.name} className="w-full object-cover" />
+                  : <div className="w-full aspect-[2/3] flex items-center justify-center text-4xl opacity-20">
+                      {tab === 'movies' ? '🎬' : tab === 'animes' ? '🎌' : '📺'}
+                    </div>
+                }
+              </div>
+            )}
+            <div className="flex-1 space-y-3 min-w-0">
+              <div className="flex flex-wrap gap-1">
+                {!isGame && item.genre && item.genre.split(',').map((g: string) => (
+                  <span key={g} className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${getGenreColor(g.trim())}`}>{g.trim()}</span>
+                ))}
+                {isGame && <>
+                  {item.game_type && <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${getGenreColor(item.game_type)}`}>{item.game_type}</span>}
+                  {item.difficulty && <span className="text-[10px] text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md font-semibold">{item.difficulty}</span>}
+                  {item.players && <span className="text-[10px] text-green-400 bg-green-500/10 px-2 py-0.5 rounded-md font-semibold">{item.players} jug.</span>}
+                  {item.duration && <span className="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md font-semibold">{item.duration}</span>}
+                </>}
+              </div>
+              <p className="text-sm text-white/70 leading-relaxed">
+                {overview || item.description || item.notes || <span className="italic text-white/30 text-xs">Sin descripción disponible.</span>}
+              </p>
+              <p className="text-[10px] text-codeflow-muted">
+                {new Date(item.created_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}
+              </p>
+            </div>
+          </div>
+
+          {/* Ratings section */}
+          {!isGame && (
+            <div className="px-5 pb-6 space-y-4 border-t border-white/5 pt-4">
+              {/* Your rating */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-codeflow-accent/5 border border-codeflow-accent/15">
+                <span className="text-sm font-bold text-white">Tu Calificación</span>
+                <StarRating rating={localRating} onRate={handleRate} size={24} />
+              </div>
+              {/* Group average */}
+              {userRatings.length > 0 && (
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-xs text-codeflow-muted font-bold uppercase tracking-wider">Promedio del grupo</span>
+                  <div className="flex items-center gap-2">
+                    <StarRating rating={avgRating} disabled size={14} />
+                    <span className="text-sm font-bold text-white">{avgRating.toFixed(1)}</span>
+                    <span className="text-[10px] text-codeflow-muted">({userRatings.length} voto{userRatings.length !== 1 ? 's' : ''})</span>
+                  </div>
+                </div>
+              )}
+              {/* Per-user ratings */}
+              {userRatings.length > 0 ? (
+                <div className="rounded-xl border border-white/5 overflow-hidden">
+                  {userRatings.map(ur => {
+                    const seed = profiles[ur.username] || ur.username;
+                    const avatarUrl = (seed && seed.includes(':'))
+                      ? `https://api.dicebear.com/7.x/${seed.split(':')[0]}/svg?seed=${seed.split(':')[1]}`
+                      : `https://api.dicebear.com/7.x/notionists/svg?seed=${seed}&backgroundColor=transparent`;
+                    const isMe = ur.username === currentUser;
+                    return (
+                      <div key={ur.username} className={`flex items-center justify-between px-4 py-3 border-b border-white/5 last:border-0 ${isMe ? 'bg-codeflow-accent/5' : 'bg-white/[0.02]'}`}>
+                        <div className="flex items-center gap-2.5">
+                          <img src={avatarUrl} alt={ur.username} className="w-7 h-7 rounded-full bg-codeflow-base border border-white/10" />
+                          <span className="text-sm text-white font-medium">{ur.username}</span>
+                          {isMe && <span className="text-[9px] text-codeflow-accent bg-codeflow-accent/15 px-1.5 py-0.5 rounded-full font-bold border border-codeflow-accent/20">Tú</span>}
+                        </div>
+                        <StarRating rating={ur.rating} disabled size={14} />
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-center text-codeflow-muted/60 text-sm py-3 italic">¡Sé el primero en calificar!</p>
+              )}
+            </div>
+          )}
+        </div>
+      </motion.div>
+      <ConfirmModal
+        isOpen={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={() => { onDelete(item.id); onClose(); }}
+        title="Eliminar item"
+        message={`¿Seguro que querés eliminar "${item.name}" de la bóveda?`}
+        confirmLabel="Eliminar"
+        danger
+      />
+    </div>
+  );
+}
+
+// MediaCard: poster-centric, opens detail modal on click
 function MediaCard({ item, i, isGame, getGenreColor, tab, onEdit, onDelete, onUpdateRating }: {
   item: any; i: number; isGame: boolean; getGenreColor: (g: string) => string; tab: string;
   onEdit: (item: any) => void; onDelete: (id: string) => void; onUpdateRating: (id: string, r: number) => void;
 }) {
   const [poster, setPoster] = React.useState<string | null>(null);
-  const [overview, setOverview] = React.useState<string | null>(null);
-  const [hovered, setHovered] = React.useState(false);
+  const [showDetail, setShowDetail] = React.useState(false);
   const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const avgRating = Number(item.avg_rating) || 0;
 
   React.useEffect(() => {
     if (isGame) return;
     const type = tab === 'movies' ? 'movie' : 'tv';
     fetchWithAuth(`/api/tmdb/search?query=${encodeURIComponent(item.name)}&type=${type}`)
       .then(r => r.json())
-      .then((results: any[]) => {
-        if (results && results.length > 0) {
-          setPoster(results[0].poster || null);
-          setOverview(results[0].overview || null);
-        }
-      })
+      .then((results: any[]) => { if (results?.length > 0) setPoster(results[0].poster || null); })
       .catch(() => { });
   }, [item.name, isGame, tab]);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: i * 0.05 }}
-      className="glass-card p-5 flex flex-col items-start gap-3 hover:border-codeflow-accent/40 group relative overflow-hidden cursor-pointer h-full"
-      onClick={() => setHovered(!hovered)}
-      onMouseEnter={() => !('ontouchstart' in window) && setHovered(true)}
-      onMouseLeave={() => !('ontouchstart' in window) && setHovered(false)}
-    >
-      {/* Poster + body layout */}
-      <div className="flex gap-4 w-full">
-        {/* Poster */}
-        {!isGame && (
-          <div className="shrink-0 w-16 h-24 rounded-lg overflow-hidden bg-white/5 border border-white/10 flex items-center justify-center text-2xl relative">
+    <>
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: i * 0.05 }}
+        className="glass-card flex flex-col group relative overflow-hidden cursor-pointer hover:border-codeflow-accent/50 transition-all duration-300 h-full"
+        onClick={() => setShowDetail(true)}
+      >
+        {/* Visual area */}
+        {!isGame ? (
+          <div className="relative w-full aspect-[2/3] overflow-hidden rounded-t-2xl bg-codeflow-base">
             {poster
-              ? <img src={poster} alt={item.name} className="w-full h-full object-cover" loading="lazy" />
-              : <span>{tab === 'movies' ? '🎬' : tab === 'animes' ? '🎌' : '📺'}</span>
+              ? <img src={poster} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+              : <div className="absolute inset-0 flex items-center justify-center text-5xl opacity-15">
+                  {tab === 'movies' ? '🎬' : tab === 'animes' ? '🎌' : '📺'}
+                </div>
             }
-          </div>
-        )}
-        <div className="flex-1 min-w-0">
-          <div className="flex justify-between items-start gap-2 mb-1">
-            <h3 className="text-base font-bold text-white group-hover:text-codeflow-accent transition-colors leading-tight line-clamp-2">{item.name}</h3>
-            {!isGame && (
-              <div className="flex flex-col items-end gap-2 shrink-0">
-                <StarRating
-                  label="Tu Nota"
-                  rating={Number(item.user_rating) || 0}
-                  onRate={(r) => onUpdateRating(item.id, r)}
-                  size={14}
-                />
-                {item.total_votes > 0 && (
-                  <StarRating
-                    label={`Promedio (${Number(item.avg_rating).toFixed(1)})`}
-                    rating={Number(item.avg_rating)}
-                    disabled
-                    size={10}
-                  />
-                )}
+            <div className="absolute inset-0 bg-gradient-to-t from-codeflow-dark/90 via-codeflow-dark/20 to-transparent" />
+            {avgRating > 0 && (
+              <div className="absolute top-2 left-2 flex items-center gap-0.5 bg-black/70 backdrop-blur-sm px-1.5 py-0.5 rounded-full">
+                <Star size={8} className="fill-yellow-400 text-yellow-400" />
+                <span className="text-[10px] font-bold text-white">{avgRating.toFixed(1)}</span>
+              </div>
+            )}
+            {Number(item.user_rating) > 0 && (
+              <div className="absolute top-2 right-8 flex items-center gap-0.5 bg-codeflow-accent/80 backdrop-blur-sm px-1.5 py-0.5 rounded-full">
+                <Star size={8} className="fill-white text-white" />
+                <span className="text-[10px] font-bold text-white">{item.user_rating}</span>
+              </div>
+            )}
+            {item.genre && (
+              <div className="absolute bottom-2 left-2 right-8 flex flex-wrap gap-1">
+                {item.genre.split(',').slice(0, 2).map((g: string) => (
+                  <span key={g} className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-sm text-white/80">{g.trim()}</span>
+                ))}
               </div>
             )}
           </div>
-          {!isGame && item.genre && (
-            <div className="flex flex-wrap gap-1 mb-2">
-              {item.genre.split(',').slice(0, 2).map((g: string) => (
-                <span key={g} className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${getGenreColor(g.trim())}`}>{g.trim()}</span>
-              ))}
+        ) : (
+          <div className="relative w-full aspect-[4/3] overflow-hidden rounded-t-2xl bg-gradient-to-br from-white/5 to-transparent flex items-center justify-center">
+            <span className="text-5xl opacity-20">🎲</span>
+            <div className="absolute inset-0 bg-gradient-to-t from-codeflow-dark/80 to-transparent" />
+            <div className="absolute bottom-2 left-2 flex flex-wrap gap-1">
+              {item.game_type && <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-sm ${getGenreColor(item.game_type)}`}>{item.game_type}</span>}
+              {item.difficulty && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-sm text-purple-300">{item.difficulty}</span>}
             </div>
-          )}
-          {isGame && (
-            <div className="flex flex-wrap gap-1">
-              {item.game_type && <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${getGenreColor(item.game_type)}`}>{item.game_type}</span>}
-              {item.difficulty && <span className="text-[10px] font-semibold text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded-md">{item.difficulty}</span>}
-              {item.players && <span className="text-[10px] font-semibold text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded-md">{item.players} jug.</span>}
-            </div>
-          )}
-          <p className="text-xs text-codeflow-text/70 italic line-clamp-2 mt-1">{item.description || item.notes}</p>
-        </div>
-      </div>
-
-      {/* TMDB overview overlay */}
-      {!isGame && overview && (
-        <AnimatePresence>
-          {hovered && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-codeflow-dark/95 backdrop-blur-sm p-5 flex flex-col items-center justify-center z-10 text-center"
-            >
-              <Info size={20} className="text-codeflow-accent mb-3 opacity-50" />
-              <p className="text-[13px] text-white/90 leading-relaxed italic line-clamp-6">{overview}</p>
-              <p className="text-[10px] text-codeflow-muted mt-4 uppercase tracking-widest font-bold">Tocar para cerrar</p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      )}
-
-      <div className="w-full pt-3 mt-auto border-t border-white/5 text-[10px] text-codeflow-muted flex flex-col gap-2 relative z-20">
-        <div className="flex justify-between items-center">
-          <span>Recomendó: <strong className="text-white">{item.recommender || '—'}</strong></span>
-          <span>{new Date(item.created_at).toLocaleDateString('es-AR')}</span>
-        </div>
-
-        {item.voters && (
-          <p className="text-[9px] text-codeflow-accent/70 italic truncate">
-            Votado por: {item.voters}
-          </p>
+          </div>
         )}
 
-        <div className="flex justify-between items-center pt-1">
-          <span className="text-[9px] group-hover:text-white transition-colors">
-            {isGame ? 'Juego de Mesa' : tab === 'series' ? 'Serie' : tab === 'animes' ? 'Anime' : 'Película'}
-          </span>
-          <div className="flex gap-2 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
-              onClick={(e) => { e.stopPropagation(); onEdit(item); }}
-              className="p-1 hover:text-codeflow-accent transition-colors"
-              title="Editar"
-            >
-              <Edit2 size={12} />
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
-              className="p-1 hover:text-red-400 transition-colors"
-              title="Eliminar"
-            >
-              <Trash2 size={12} />
-            </button>
+        {/* Info */}
+        <div className="p-3 flex flex-col gap-1 flex-1">
+          <h3 className="text-xs font-bold text-white group-hover:text-codeflow-accent transition-colors leading-snug line-clamp-2">{item.name}</h3>
+          {(item.description || item.notes) && (
+            <p className="text-[10px] text-codeflow-text/50 leading-relaxed line-clamp-2">{item.description || item.notes}</p>
+          )}
+          <div className="flex items-center justify-between mt-auto pt-1">
+            <span className="text-[9px] text-codeflow-muted truncate">{item.recommender || '—'}</span>
+            {Number(item.total_votes) > 0 && (
+              <span className="text-[9px] text-codeflow-muted">{item.total_votes}★</span>
+            )}
           </div>
         </div>
-      </div>
+
+        {/* Edit / Delete on hover */}
+        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20" onClick={e => e.stopPropagation()}>
+          <button onClick={(e) => { e.stopPropagation(); onEdit(item); }} className="p-1.5 rounded-lg bg-black/70 backdrop-blur-sm text-white/70 hover:text-codeflow-accent transition-colors"><Edit2 size={11} /></button>
+          <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }} className="p-1.5 rounded-lg bg-black/70 backdrop-blur-sm text-white/70 hover:text-red-400 transition-colors"><Trash2 size={11} /></button>
+        </div>
+      </motion.div>
+
+      <AnimatePresence>
+        {showDetail && (
+          <MediaDetailModal
+            item={item} tab={tab} isGame={isGame} getGenreColor={getGenreColor}
+            poster={poster}
+            onClose={() => setShowDetail(false)}
+            onEdit={(it) => { setShowDetail(false); onEdit(it); }}
+            onDelete={(id) => { setShowDetail(false); onDelete(id); }}
+            onUpdateRating={onUpdateRating}
+          />
+        )}
+      </AnimatePresence>
+
       <ConfirmModal
         isOpen={confirmDelete}
         onClose={() => setConfirmDelete(false)}
@@ -2074,7 +2205,7 @@ function MediaCard({ item, i, isGame, getGenreColor, tab, onEdit, onDelete, onUp
         confirmLabel="Eliminar"
         danger
       />
-    </motion.div>
+    </>
   );
 }
 
@@ -2091,6 +2222,7 @@ function MediaVaultView({ tab }: { tab: string }) {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [showCustomGenre, setShowCustomGenre] = React.useState(false);
   const [tempGenre, setTempGenre] = React.useState('');
+  const [initialStarRating, setInitialStarRating] = React.useState(0);
 
   const endpointTab = tab === 'games' ? 'boardgames' : tab;
 
@@ -2211,9 +2343,18 @@ function MediaVaultView({ tab }: { tab: string }) {
         body: JSON.stringify(submissionData)
       });
       if (res.ok) {
+        const savedData = await res.json();
+        // Auto-rate on new item creation if user selected an initial rating
+        if (!isEditing && initialStarRating > 0 && savedData.item?.id) {
+          await fetchWithAuth(`/api/media/${endpointTab}/${savedData.item.id}/rate`, {
+            method: 'POST',
+            body: JSON.stringify({ rating: initialStarRating })
+          }).catch(() => { });
+        }
         setShowForm(false);
         setIsEditing(false);
         setEditingId(null);
+        setInitialStarRating(0);
         setFormData({ recommender: '', name: '', genre: '', description: '', rating: '', game_type: '', players: '', duration: '', difficulty: '', notes: '' });
         setTempGenre('');
         setShowCustomGenre(false);
@@ -2259,6 +2400,7 @@ function MediaVaultView({ tab }: { tab: string }) {
               setEditingId(null);
               setFormData({ recommender: '', name: '', genre: '', description: '', rating: '', game_type: '', players: '', duration: '', difficulty: '', notes: '' });
             }
+            setInitialStarRating(0);
             setShowForm(!showForm);
           }}>
             {showForm ? 'Cancelar' : 'Añadir Nuevo'}
@@ -2325,6 +2467,15 @@ function MediaVaultView({ tab }: { tab: string }) {
 
                     <input type="text" placeholder="Rating (Ej: Obra Maestra, Mediocre)" className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.rating} onChange={e => setFormData({ ...formData, rating: e.target.value })} />
                     <textarea placeholder="¿De qué trata? / Sinopsis breve" required className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent md:col-span-2 min-h-[100px]" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} />
+                    {!isEditing && (
+                      <div className="md:col-span-2 flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10">
+                        <div>
+                          <span className="text-sm text-white font-medium">Tu nota inicial</span>
+                          <span className="text-[10px] text-codeflow-muted ml-2">(opcional)</span>
+                        </div>
+                        <StarRating rating={initialStarRating} onRate={setInitialStarRating} size={20} />
+                      </div>
+                    )}
                   </>
                 )}
                 {isGame && (
@@ -2416,7 +2567,7 @@ function MediaVaultView({ tab }: { tab: string }) {
           <p className="text-codeflow-muted text-sm">Probá con otro filtro de género.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 px-4 sm:px-0">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4">
           {filteredItems.map((item, i) => (
             <MediaCard
               key={item.id}

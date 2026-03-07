@@ -4,7 +4,9 @@ import { Pool } from 'pg';
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import rateLimit from 'express-rate-limit';
 import { generateOracleRoast } from './groqOracle';
+import { sendWhatsAppMessage } from './whatsappAlerts';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'f1prode_secret_key_2026';
 
@@ -12,10 +14,34 @@ const app = express();
 const port = process.env.PORT || 3001;
 
 // Middleware
+const allowedOrigins = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',').map(s => s.trim())
+    : ['http://localhost:5173', 'http://localhost:3000'];
+
 app.use(cors({
-    origin: '*', // Permitir Vercel y local
+    origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+        return callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
 }));
 app.use(express.json());
+
+// Rate limiting for auth routes
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Demasiados intentos. Esperá 15 minutos.' },
+});
+
+// Oracle in-memory cache: race_id -> { result, timestamp }
+const oracleCache = new Map<string, { result: string; ts: number }>();
+const ORACLE_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 // --- Simple Auth Middleware ---
 const requireAuth = (req: Request, res: Response, next: any) => {
@@ -26,11 +52,25 @@ const requireAuth = (req: Request, res: Response, next: any) => {
 
     const token = authHeader.split(' ')[1];
     try {
-        const decoded = jwt.verify(token, JWT_SECRET) as { userId: number, username: string };
+        const decoded = jwt.verify(token, JWT_SECRET) as { userId: number, username: string, isAdmin?: boolean };
         (req as any).user = decoded;
         next();
     } catch (err) {
         return res.status(401).json({ error: 'Invalid or expired token.' });
+    }
+};
+
+const requireAdmin = async (req: Request, res: Response, next: any) => {
+    const user = (req as any).user;
+    if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+    try {
+        const result = await pool.query('SELECT is_admin FROM users WHERE id = $1', [user.userId]);
+        if (!result.rows[0]?.is_admin) {
+            return res.status(403).json({ error: 'Acceso denegado. Solo admins.' });
+        }
+        next();
+    } catch {
+        return res.status(500).json({ error: 'Error verificando permisos.' });
     }
 };
 
@@ -95,6 +135,7 @@ const initDb = async () => {
                 id SERIAL PRIMARY KEY,
                 username VARCHAR(100) UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
+                is_admin BOOLEAN DEFAULT false,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
@@ -163,6 +204,11 @@ const initDb = async () => {
                 END IF;
             END $$;
         `);
+        // 5a. Add is_admin column to users if not exists
+        await pool.query(`
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT false;
+        `);
+
         // 5. Add created_by_user_id to media tables
         await pool.query(`
             ALTER TABLE media_series ADD COLUMN IF NOT EXISTS created_by_user_id INTEGER REFERENCES users(id);
@@ -252,6 +298,18 @@ initDb();
 
 app.post('/api/auth/logout', (req: Request, res: Response) => {
     res.json({ success: true, message: 'Logged out' });
+});
+
+// Get current user info (including is_admin)
+app.get('/api/auth/me', requireAuth, async (req: Request, res: Response) => {
+    const user = (req as any).user;
+    try {
+        const result = await pool.query('SELECT id, username, is_admin FROM users WHERE id = $1', [user.userId]);
+        if (!result.rows[0]) return res.status(404).json({ error: 'User not found' });
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: 'Error fetching user info' });
+    }
 });
 
 app.get('/api/auth/session', requireAuth, (req: Request, res: Response) => {
@@ -618,7 +676,7 @@ app.get('/api/leaderboard', requireAuth, async (req: Request, res: Response) => 
 
 // --- AUTH ROUTES ---
 
-app.post('/api/auth/register', async (req: Request, res: Response) => {
+app.post('/api/auth/register', authLimiter, async (req: Request, res: Response) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
 
@@ -641,7 +699,7 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     }
 });
 
-app.post('/api/auth/login', async (req: Request, res: Response) => {
+app.post('/api/auth/login', authLimiter, async (req: Request, res: Response) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
 
@@ -898,7 +956,7 @@ app.get('/api/tmdb/search', requireAuth, async (req: Request, res: Response) => 
 });
 
 // --- Admin: Submit official race results and calculate scores ---
-app.post('/api/admin/results', requireAuth, async (req: Request, res: Response) => {
+app.post('/api/admin/results', requireAuth, requireAdmin, async (req: Request, res: Response) => {
     try {
         const { race_round, session_type = 'race', p1, p2, p3, p4, p5, pole_position } = req.body;
         const race_id = `round_${race_round}`;
@@ -942,6 +1000,26 @@ app.post('/api/admin/results', requireAuth, async (req: Request, res: Response) 
             );
         }
 
+        // Send WhatsApp notification with score breakdown
+        if (scoreUpdates.length > 0) {
+            const raceName = races2026.find(r => r.round === Number(race_round))?.name || race_id;
+            const sessionLabel: Record<string, string> = {
+                race: 'Carrera', qualifying: 'Clasificación',
+                sprint: 'Sprint Race', sprint_qualifying: 'Sprint Qualifying'
+            };
+            const breakdown = scoreUpdates
+                .sort((a, b) => b.scored - a.scored)
+                .map(u => `  • *${u.player}*: +${u.scored} pts`)
+                .join('
+');
+            const msg = `🏁 *Resultados de ${sessionLabel[session_type] || session_type} — ${raceName}*
+
+${breakdown}
+
+¡El leaderboard fue actualizado!`;
+            sendWhatsAppMessage(msg).catch(() => {});
+        }
+
         res.json({
             message: `Resultados de ${session_type} procesados para ${race_id}`,
             scoreUpdates,
@@ -954,7 +1032,7 @@ app.post('/api/admin/results', requireAuth, async (req: Request, res: Response) 
 });
 
 // Get official results for a specific race
-app.get('/api/admin/results/:round', requireAuth, async (req: Request, res: Response) => {
+app.get('/api/admin/results/:round', requireAuth, requireAdmin, async (req: Request, res: Response) => {
     try {
         const raceId = `round_${req.params.round}`;
         const result = await pool.query("SELECT * FROM race_results WHERE race_id = $1", [raceId]);
@@ -1161,6 +1239,24 @@ app.post('/api/media/:type/:id/rate', requireAuth, async (req: Request, res: Res
     } catch (err) {
         console.error('Error rating media:', err);
         res.status(500).json({ error: 'Error saving rating' });
+    }
+});
+
+// GET per-user ratings for a specific media item
+app.get('/api/media/:type/:id/ratings', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const { type, id } = req.params;
+        const result = await pool.query(`
+            SELECT u.username, r.rating
+            FROM media_ratings r
+            JOIN users u ON u.id = r.user_id
+            WHERE r.media_id = $1 AND r.media_type = $2
+            ORDER BY r.rating DESC
+        `, [id, type]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching item ratings:', err);
+        res.status(500).json({ error: 'Error fetching ratings' });
     }
 });
 
