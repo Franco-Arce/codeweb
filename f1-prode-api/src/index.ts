@@ -1010,8 +1010,7 @@ app.post('/api/admin/results', requireAuth, requireAdmin, async (req: Request, r
             const breakdown = scoreUpdates
                 .sort((a, b) => b.scored - a.scored)
                 .map(u => `  • *${u.player}*: +${u.scored} pts`)
-                .join('
-');
+                .join('\n');
             const msg = `🏁 *Resultados de ${sessionLabel[session_type] || session_type} — ${raceName}*
 
 ${breakdown}
