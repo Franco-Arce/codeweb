@@ -188,6 +188,67 @@ function AvatarPicker({ isOpen, onClose, username, currentSeed }: { isOpen: bool
   );
 }
 
+// --- Confirm Modal ---
+function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confirmLabel = 'Confirmar', danger = false }: {
+  isOpen: boolean; onClose: () => void; onConfirm: () => void;
+  title: string; message: string; confirmLabel?: string; danger?: boolean;
+}) {
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-codeflow-dark/85 backdrop-blur-md" onClick={onClose} />
+          <motion.div
+            initial={{ scale: 0.94, opacity: 0, y: 8 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.94, opacity: 0, y: 8 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            className="relative bg-codeflow-card border border-white/10 p-6 rounded-2xl w-full max-w-sm shadow-2xl"
+          >
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-4 ${danger ? 'bg-red-500/15' : 'bg-codeflow-accent/15'}`}>
+              {danger
+                ? <AlertCircle size={20} className="text-red-400" />
+                : <Info size={20} className="text-codeflow-accent" />}
+            </div>
+            <h3 className="text-base font-bold text-white mb-1">{title}</h3>
+            <p className="text-codeflow-muted text-sm mb-6 leading-relaxed">{message}</p>
+            <div className="flex gap-3">
+              <button onClick={onClose}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 text-white font-semibold hover:bg-white/10 transition-colors text-sm">
+                Cancelar
+              </button>
+              <button onClick={() => { onConfirm(); onClose(); }}
+                className={`flex-1 px-4 py-2.5 rounded-xl font-bold text-white transition-all text-sm ${danger
+                  ? 'bg-gradient-to-r from-red-600 to-red-700 hover:opacity-90'
+                  : 'bg-gradient-to-r from-codeflow-accent to-fuchsia-600 hover:opacity-90'}`}>
+                {confirmLabel}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// --- Animated Number ---
+function AnimatedNumber({ value, suffix = '' }: { value: number; suffix?: string }) {
+  const [display, setDisplay] = React.useState(0);
+  React.useEffect(() => {
+    let start = 0;
+    const duration = 900;
+    const step = value / (duration / 16);
+    const timer = setInterval(() => {
+      start += step;
+      if (start >= value) { setDisplay(value); clearInterval(timer); }
+      else { setDisplay(Math.floor(start)); }
+    }, 16);
+    return () => clearInterval(timer);
+  }, [value]);
+  return <span>{display}{suffix}</span>;
+}
+
 // --- API Helpers ---
 const fetchWithAuth = async (endpoint: string, options: RequestInit = {}) => {
   const token = localStorage.getItem('prode_auth_token');
@@ -263,6 +324,43 @@ function App() {
   );
 }
 
+// --- Mobile Bottom Navigation ---
+function MobileBottomNav({ activeTab, onNavigate }: { activeTab: string; onNavigate: (tab: string) => void }) {
+  const mediaActive = ['series', 'animes', 'movies', 'games'].includes(activeTab);
+  const items = [
+    { icon: <LayoutDashboard size={22} />, label: 'Inicio', tab: 'dashboard' },
+    { icon: <Trophy size={22} />, label: 'F1', tab: 'f1' },
+    { icon: <Film size={22} />, label: 'Bóveda', tab: 'series', isMedia: true },
+    { icon: <Settings size={22} />, label: 'Config.', tab: 'settings' },
+  ];
+  return (
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-white/8"
+      style={{ background: 'rgba(10,10,15,0.92)', backdropFilter: 'blur(24px)', paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
+      <div className="flex items-center justify-around px-2 pt-2 pb-1">
+        {items.map(item => {
+          const isActive = item.isMedia ? mediaActive : activeTab === item.tab;
+          return (
+            <button key={item.tab} onClick={() => onNavigate(item.tab)}
+              className="flex flex-col items-center gap-1 px-5 py-1.5 rounded-xl transition-all relative">
+              <span className={`transition-all duration-200 ${isActive ? 'text-codeflow-accent drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]' : 'text-codeflow-muted'}`}>
+                {item.icon}
+              </span>
+              <span className={`text-[10px] font-bold uppercase tracking-wide transition-colors ${isActive ? 'text-codeflow-accent' : 'text-codeflow-muted/60'}`}>
+                {item.label}
+              </span>
+              {isActive && (
+                <motion.div layoutId="mobileNavDot"
+                  className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-5 h-0.5 rounded-full bg-codeflow-accent"
+                  transition={{ type: 'spring', stiffness: 400, damping: 30 }} />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
 function AppShell({ activeTab, setActiveTab, setIsAuthenticated, currentUser, handleLogout, isMobileMenuOpen, setIsMobileMenuOpen }: {
   activeTab: string;
   setActiveTab: (t: string) => void;
@@ -285,40 +383,14 @@ function AppShell({ activeTab, setActiveTab, setIsAuthenticated, currentUser, ha
 
   return (
     <div className="flex min-h-screen bg-codeflow-dark relative overflow-hidden">
-      {/* Background blobs for depth */}
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-600/10 rounded-full blur-[120px] pointer-events-none animate-blob" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-600/10 rounded-full blur-[120px] pointer-events-none animate-blob [animation-delay:2s]" />
-
-      {/* Mobile Top Bar */}
-      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-codeflow-base/80 backdrop-blur-xl border-b border-white/5 z-50 flex items-center justify-between px-6">
-        <div className="flex items-center gap-3">
-          <img src={logoCodeflow} alt="CodeWeb" className="w-8 h-8 object-contain" />
-          <span className="font-display font-bold text-lg text-white">CodeWeb</span>
-        </div>
-        <button
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="p-2 text-white hover:bg-white/5 rounded-lg transition-colors"
-        >
-          {isMobileMenuOpen ? <XCircle size={24} /> : <Menu size={24} />}
-        </button>
-      </div>
-
-      {/* Sidebar - Desktop fixed, Mobile hidden/absolute */}
-      <aside className={`
-        fixed md:sticky top-0 left-0 bottom-0 z-40
-        w-64 border-r border-white/5 bg-codeflow-base/80 backdrop-blur-3xl
-        flex flex-col h-screen transition-transform duration-300 ease-in-out
-        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-      `}>
-        <div className="p-6 hidden md:flex items-center gap-3 border-b border-white/5">
+      {/* Sidebar - Desktop only */}
+      <aside className="hidden md:flex md:sticky top-0 left-0 bottom-0 z-40 w-64 border-r border-white/5 bg-codeflow-base/80 backdrop-blur-3xl flex-col h-screen">
+        <div className="p-6 flex items-center gap-3 border-b border-white/5">
           <img src={logoCodeflow} alt="CodeWeb" className="w-10 h-10 object-contain drop-shadow-[0_0_8px_rgba(168,85,247,0.4)]" />
           <h1 className="font-display font-bold text-xl bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60">
             CodeWeb
           </h1>
         </div>
-
-        {/* Mobile menu padding top */}
-        <div className="md:hidden h-20" />
 
         <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto no-scrollbar">
           <NavItem icon={<LayoutDashboard size={20} />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleNavClick('dashboard')} />
@@ -352,15 +424,10 @@ function AppShell({ activeTab, setActiveTab, setIsAuthenticated, currentUser, ha
       {/* Avatar Picker Modal */}
       <AvatarTrigger username={currentUser} />
 
-      {/* Mobile Overlay */}
-      {isMobileMenuOpen && (
-        <div
-          className="fixed inset-0 bg-codeflow-dark/60 backdrop-blur-sm z-30 md:hidden"
-          onClick={() => setIsMobileMenuOpen(false)}
-        />
-      )}
+      {/* Mobile Bottom Navigation */}
+      <MobileBottomNav activeTab={activeTab} onNavigate={handleNavClick} />
 
-      <main className="flex-1 p-4 md:p-8 relative z-0 overflow-x-hidden md:mt-0 mt-16">
+      <main className="flex-1 p-4 md:p-8 relative z-0 overflow-x-hidden pb-24 md:pb-8">
         <ActiveTabContext.Provider value={setActiveTab}>
           <AnimatePresence mode="wait">
             <motion.div
@@ -453,7 +520,10 @@ function SettingsView({ username }: { username: string }) {
   return (
     <div className="space-y-8 animate-fade-in max-w-4xl mx-auto py-6">
       <header>
-        <h1 className="text-4xl font-display font-bold text-white mb-2">Configuración <span className="text-codeflow-accent">⚙️</span></h1>
+        <h1 className="text-4xl font-display font-bold text-white mb-2 flex items-center gap-3">
+          <Settings size={30} className="text-codeflow-accent shrink-0" />
+          Configuración
+        </h1>
         <p className="text-codeflow-muted text-sm px-1">Gestiona tu identidad y seguridad.</p>
       </header>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -590,7 +660,7 @@ function LoginView({ onLogin }: { onLogin: (username: string) => void }) {
               type="text"
               autoComplete="username"
               placeholder="Usuario"
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-codeflow-accent transition-colors"
+              className="input-base"
               value={user}
               onChange={(e) => { setUser(e.target.value); setError(''); }}
               required
@@ -601,7 +671,7 @@ function LoginView({ onLogin }: { onLogin: (username: string) => void }) {
               type="password"
               autoComplete="current-password"
               placeholder="Contraseña"
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-codeflow-accent transition-colors"
+              className="input-base"
               value={pass}
               onChange={(e) => { setPass(e.target.value); setError(''); }}
               required
@@ -709,7 +779,10 @@ function DashboardView() {
   return (
     <div className="space-y-6 animate-fade-in pb-12">
       <header>
-        <h1 className="text-4xl font-display font-bold text-white mb-1">Panel Principal <span className="text-codeflow-accent">🚀</span></h1>
+        <h1 className="text-4xl font-display font-bold text-white mb-1 flex items-center gap-3">
+          <LayoutDashboard size={32} className="text-codeflow-accent shrink-0" />
+          Panel Principal
+        </h1>
         <p className="text-codeflow-muted">Tu plataforma centralizada para deportes, métricas y entretenimiento.</p>
       </header>
 
@@ -721,8 +794,8 @@ function DashboardView() {
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
           <div className="flex-1">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/20 text-red-400 text-xs font-bold border border-red-500/30 uppercase tracking-wider mb-4">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-f1-redSoft text-f1-red text-xs font-bold border border-f1-red/30 uppercase tracking-wider mb-4 shadow-[0_0_12px_rgba(225,6,0,0.2)]">
+              <span className="w-1.5 h-1.5 rounded-full bg-f1-red animate-pulse" />
               Siguiente Carrera
             </span>
             {loading || !nextRace ? (
@@ -755,10 +828,10 @@ function DashboardView() {
                 <React.Fragment key={unit.l}>
                   {i > 0 && <span className="text-2xl text-white/30 font-bold mb-4">:</span>}
                   <div className="flex flex-col items-center">
-                    <span className="text-4xl md:text-5xl font-display font-extrabold text-white tabular-nums leading-none">
+                    <span className="font-racing text-4xl md:text-6xl text-white tabular-nums leading-none" style={{ letterSpacing: '-0.03em' }}>
                       {pad(unit.v)}
                     </span>
-                    <span className="text-[10px] text-codeflow-muted uppercase tracking-widest mt-1">{unit.l}</span>
+                    <span className="text-[10px] text-codeflow-muted uppercase tracking-widest mt-1.5 font-bold">{unit.l}</span>
                   </div>
                 </React.Fragment>
               ))}
@@ -767,9 +840,9 @@ function DashboardView() {
             {/* CTA */}
             <button
               onClick={() => setActiveTab('f1')}
-              className="w-full md:w-auto bg-gradient-to-r from-codeflow-accent to-fuchsia-600 hover:opacity-90 text-white font-bold py-3 px-8 rounded-xl transition-all shadow-[0_0_20px_rgba(168,85,247,0.3)] hover:shadow-[0_0_30px_rgba(168,85,247,0.5)] text-sm tracking-wide"
+              className="btn-f1 w-full md:w-auto text-sm tracking-wide px-8 py-3"
             >
-              🏁 Cargar mi Pronóstico
+              Cargar mi Pronóstico
             </button>
           </div>
         </div>
@@ -802,8 +875,10 @@ function DashboardView() {
               ))}
             </div>
           ) : leaderboard.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-center text-codeflow-muted py-10">
-              <p>Nadie tiene puntos todavía. ¡El campeonato está abierto!</p>
+            <div className="flex-1 flex flex-col items-center justify-center text-center py-12 gap-3">
+              <div className="text-5xl opacity-30">🏁</div>
+              <p className="text-white font-semibold">El campeonato está por comenzar</p>
+              <p className="text-codeflow-muted text-sm">Nadie tiene puntos todavía. Cargá tu primer pronóstico.</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -817,56 +892,69 @@ function DashboardView() {
                     : i === 2 ? 'bg-orange-600/20 text-orange-400 border-orange-600/50'
                       : 'bg-white/5 text-white/40 border-white/10';
 
+                const isLeader = i === 0;
+                const avatarSeed = profiles[user.name] || user.name || '';
+                const avatarUrl = (avatarSeed && typeof avatarSeed === 'string' && avatarSeed.includes(':'))
+                  ? `https://api.dicebear.com/7.x/${avatarSeed.split(':')[0]}/svg?seed=${avatarSeed.split(':')[1]}`
+                  : `https://api.dicebear.com/7.x/notionists/svg?seed=${avatarSeed || 'default'}&backgroundColor=transparent`;
+
                 return (
                   <motion.div
                     key={user.name}
-                    initial={{ opacity: 0, x: -10 }}
+                    initial={{ opacity: 0, x: -12 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.04 }}
-                    className={`flex items-center gap-4 p-4 rounded-xl border transition-all hover:bg-white/5 ${i === 0 ? 'bg-yellow-500/5 border-yellow-500/20' : 'bg-white/[0.02] border-white/5'}`}
+                    transition={{ delay: i * 0.04, type: 'spring', stiffness: 300, damping: 28 }}
+                    className={`flex items-center gap-4 rounded-xl border transition-all ${
+                      isLeader
+                        ? 'p-5 bg-gradient-to-r from-f1-gold/10 via-yellow-500/5 to-transparent border-f1-gold/30 shadow-[0_0_24px_rgba(245,197,24,0.08)]'
+                        : i === 1 ? 'p-4 bg-white/[0.02] border-white/8 hover:bg-white/5'
+                        : i === 2 ? 'p-4 bg-white/[0.02] border-white/5 hover:bg-white/5'
+                        : 'p-3.5 bg-transparent border-white/[0.04] hover:bg-white/[0.03]'
+                    }`}
                   >
-                    <div className="relative">
-                      <div className={`w-12 h-12 rounded-full flex items-center justify-center border-2 overflow-hidden bg-codeflow-base ${medalStyle}`}>
-                        {(() => {
-                          const seed = profiles[user.name] || user.name || '';
-                          const url = (seed && typeof seed === 'string' && seed.includes(':'))
-                            ? `https://api.dicebear.com/7.x/${seed.split(':')[0]}/svg?seed=${seed.split(':')[1]}`
-                            : `https://api.dicebear.com/7.x/notionists/svg?seed=${seed || 'default'}&backgroundColor=transparent`;
-                          return <img src={url} alt={user.name} className="w-10 h-10 object-cover" />;
-                        })()}
+                    {/* Avatar + medal badge */}
+                    <div className="relative shrink-0">
+                      <div className={`rounded-full overflow-hidden bg-codeflow-base border-2 ${
+                        isLeader ? 'w-14 h-14 border-f1-gold/60 shadow-[0_0_12px_rgba(245,197,24,0.3)]'
+                        : i === 1 ? 'w-12 h-12 border-f1-silver/50'
+                        : i === 2 ? 'w-12 h-12 border-f1-bronze/40'
+                        : 'w-10 h-10 border-white/10'
+                      }`}>
+                        <img src={avatarUrl} alt={user.name} className="w-full h-full object-cover" />
                       </div>
-                      <div className={`absolute -bottom-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border-2 border-codeflow-dark z-10 ${medalStyle}`}>
-                        {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
+                      <div className={`absolute -bottom-1.5 -right-1.5 rounded-full flex items-center justify-center font-bold border-2 border-codeflow-dark z-10 ${
+                        isLeader ? 'w-7 h-7 text-sm' : 'w-5 h-5 text-[10px]'
+                      } ${medalStyle}`}>
+                        {i === 0 ? '1' : i === 1 ? '2' : i === 2 ? '3' : i + 1}
                       </div>
                     </div>
 
+                    {/* Name + info */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-white block truncate text-lg">{user.name}</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`font-bold text-white truncate ${isLeader ? 'text-xl' : 'text-base'}`}>{user.name}</span>
                         {streak >= 2 && (
-                          <motion.span
-                            initial={{ scale: 0 }} animate={{ scale: 1 }}
-                            className="text-xs text-orange-400 font-bold bg-orange-500/20 px-1.5 py-0.5 rounded flex items-center gap-1"
-                            title={`¡Racha de puntos en ${streak} carreras seguidas!`}
-                          >
+                          <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }}
+                            className="text-xs text-orange-400 font-bold bg-orange-500/15 px-1.5 py-0.5 rounded-full border border-orange-500/25 flex items-center gap-1"
+                            title={`Racha de ${streak} carreras con puntos`}>
                             🔥 {streak}
                           </motion.span>
                         )}
+                        {isLeader && <span className="text-[10px] font-bold text-f1-gold bg-f1-gold/10 border border-f1-gold/25 px-2 py-0.5 rounded-full uppercase tracking-wider">Líder</span>}
                       </div>
-                      {i > 0 && (
-                        <span className="text-xs text-red-400/70">-{gapToLeader} pts del líder</span>
-                      )}
-                      {i === 0 && <span className="text-xs text-yellow-400/70">Líder del campeonato</span>}
+                      {i > 0 && <span className="text-xs text-red-400/60">-{gapToLeader} del líder</span>}
                     </div>
 
-                    {/* Prediction submitted badge */}
-                    <div className={`flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full border ${hasSubmitted ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-orange-500/10 text-orange-400 border-orange-500/30'}`}>
-                      {hasSubmitted ? <><CheckCircle size={10} /> SÍ</> : <><AlertCircle size={10} /> PENDIENTE</>}
+                    {/* Submitted badge */}
+                    <div className={`hidden sm:flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full border ${hasSubmitted ? 'bg-green-500/10 text-green-400 border-green-500/25' : 'bg-orange-500/10 text-orange-400 border-orange-500/25'}`}>
+                      {hasSubmitted ? <><CheckCircle size={9} /> OK</> : <><AlertCircle size={9} /> —</>}
                     </div>
 
-                    <span className="font-display font-extrabold text-xl text-white tabular-nums">
-                      {user.pts} <span className="text-xs font-normal text-codeflow-muted">PTS</span>
-                    </span>
+                    {/* Points */}
+                    <div className={`text-right tabular-nums shrink-0 ${isLeader ? 'text-2xl' : 'text-lg'} font-display font-extrabold text-white`}>
+                      <AnimatedNumber value={user.pts} />
+                      <span className="text-xs font-normal text-codeflow-muted ml-1">PTS</span>
+                    </div>
                   </motion.div>
                 );
               })}
@@ -887,9 +975,12 @@ function DashboardView() {
               {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-[44px] bg-white/5 rounded-lg animate-pulse" />)}
             </div>
           ) : predictions.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-center text-codeflow-muted py-8">
-              <span className="text-3xl mb-2 opacity-50">😴</span>
-              <p className="text-sm">Aún no hay pronósticos cargados para esta ronda.</p>
+            <div className="flex-1 flex flex-col items-center justify-center text-center py-10 gap-2">
+              <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/8 flex items-center justify-center mb-1">
+                <Trophy size={22} className="text-codeflow-muted/40" />
+              </div>
+              <p className="text-white/70 font-semibold text-sm">Sin pronósticos aún</p>
+              <p className="text-codeflow-muted text-xs">Los picks del grupo aparecerán aquí.</p>
             </div>
           ) : (
             <div className="space-y-3 flex-1">
@@ -1056,20 +1147,27 @@ function ScoreHistoryChart({ history, loading }: { history: any[], loading: bool
 // --- Driver Select Modal Component ---
 function DriverSelect({ value, onChange, drivers, label, color, hasError }: { value: string, onChange: (v: string) => void, drivers: string[], label: string, color: string, hasError?: boolean }) {
   const [isOpen, setIsOpen] = React.useState(false);
+  const [search, setSearch] = React.useState('');
+  const searchRef = React.useRef<HTMLInputElement>(null);
 
-  // Split driver into first and last name for better display
+  const filteredDrivers = search.trim()
+    ? drivers.filter(d => d.toLowerCase().includes(search.toLowerCase()))
+    : drivers;
+
+  React.useEffect(() => {
+    if (isOpen) { setSearch(''); setTimeout(() => searchRef.current?.focus(), 80); }
+  }, [isOpen]);
+
   const renderDriverName = (d: string) => {
     const parts = d.split(' ');
     const lastName = parts.pop();
-    return <><span className="text-xs text-white/50 block mb-0.5">{parts.join(' ')}</span> <strong className="text-white text-sm">{lastName}</strong></>;
-  }
+    return <><span className="text-xs text-white/50 block mb-0.5">{parts.join(' ')}</span><strong className="text-white text-sm">{lastName}</strong></>;
+  };
 
   return (
     <div className="flex-1 w-full">
-      <div
-        onClick={() => setIsOpen(true)}
-        className={`w-full rounded-xl px-4 py-3 text-white border transition-colors cursor-pointer flex justify-between items-center ${hasError ? 'border-red-500/60 bg-red-500/10' : color}`}
-      >
+      <div onClick={() => setIsOpen(true)}
+        className={`w-full rounded-xl px-4 py-3 text-white border transition-colors cursor-pointer flex justify-between items-center ${hasError ? 'border-red-500/60 bg-red-500/10' : color}`}>
         <div className="flex flex-col text-left">
           {value ? renderDriverName(value) : <span className="text-codeflow-muted text-sm font-medium">Elegir piloto...</span>}
         </div>
@@ -1079,31 +1177,46 @@ function DriverSelect({ value, onChange, drivers, label, color, hasError }: { va
       <AnimatePresence>
         {isOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-codeflow-dark/80 backdrop-blur-md" onClick={() => setIsOpen(false)} />
-            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="relative bg-codeflow-card border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
-              <div className="p-4 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
-                <h3 className="font-bold text-lg text-white">Seleccionar para: <span className="text-codeflow-accent">{label}</span></h3>
-                <button onClick={() => setIsOpen(false)} className="p-2 hover:bg-white/10 rounded-lg text-white/50 hover:text-white transition-colors"><XCircle size={20} /></button>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-codeflow-dark/85 backdrop-blur-md" onClick={() => setIsOpen(false)} />
+            <motion.div initial={{ scale: 0.95, opacity: 0, y: 16 }} animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 16 }} transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+              className="relative bg-codeflow-card border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+              {/* Header */}
+              <div className="p-4 border-b border-white/5 flex justify-between items-center bg-white/[0.02] shrink-0">
+                <h3 className="font-bold text-base text-white">
+                  <span className="text-codeflow-muted font-normal">Posición: </span>
+                  <span className="text-codeflow-accent">{label}</span>
+                </h3>
+                <button onClick={() => setIsOpen(false)} className="p-1.5 hover:bg-white/10 rounded-lg text-white/40 hover:text-white transition-colors">
+                  <XCircle size={18} />
+                </button>
               </div>
-
+              {/* Search */}
+              <div className="px-4 py-3 border-b border-white/5 shrink-0">
+                <input ref={searchRef} type="text" value={search} onChange={e => setSearch(e.target.value)}
+                  placeholder="Buscar piloto..."
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder:text-codeflow-muted/50 focus:border-codeflow-accent focus:outline-none transition-colors" />
+              </div>
+              {/* Grid */}
               <div className="p-4 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {drivers.map(d => (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => { onChange(d); setIsOpen(false); }}
-                    className={`p-3 rounded-xl border text-left transition-all flex flex-col ${value === d ? 'border-codeflow-accent bg-codeflow-accent/20 shadow-[0_0_15px_rgba(168,85,247,0.2)]' : 'border-white/5 bg-white/[0.02] hover:bg-white/10 hover:border-white/20'}`}
-                  >
-                    {renderDriverName(d)}
-                  </button>
-                ))}
+                {filteredDrivers.length === 0
+                  ? <div className="col-span-3 py-8 text-center text-codeflow-muted text-sm">Sin resultados para "{search}"</div>
+                  : filteredDrivers.map(d => (
+                    <button key={d} type="button" onClick={() => { onChange(d); setIsOpen(false); }}
+                      className={`p-3 rounded-xl border text-left transition-all flex flex-col ${value === d
+                        ? 'border-codeflow-accent bg-codeflow-accent/20 shadow-[0_0_12px_rgba(168,85,247,0.2)]'
+                        : 'border-white/5 bg-white/[0.02] hover:bg-white/8 hover:border-white/20'}`}>
+                      {renderDriverName(d)}
+                    </button>
+                  ))}
               </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
     </div>
-  )
+  );
 }
 
 
@@ -1116,6 +1229,8 @@ function F1ProdeView() {
   const [nextRace, setNextRace] = React.useState<any>(null);
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
+  const [pendingSubmit, setPendingSubmit] = React.useState<(() => void) | null>(null);
 
   // Form State
   const [pName, setPName] = React.useState('');
@@ -1261,9 +1376,14 @@ function F1ProdeView() {
     if (hasDuplicates) { addToast('error', '¡Tenés pilotos repetidos!'); return; }
     if (isSessionClosed) { addToast('error', 'Las predicciones ya están cerradas para esta sesión.'); return; }
     if (existingPrediction) {
-      const ok = window.confirm(`Ya tenés un pronóstico de ${currentForm.label} para ${pName}. ¿Actualizar?`);
-      if (!ok) return;
+      setPendingSubmit(() => () => doSubmit());
+      setConfirmOpen(true);
+      return;
     }
+    doSubmit();
+  };
+
+  const doSubmit = async () => {
     setIsSubmitting(true);
     try {
       const res = await fetchWithAuth('/api/predictions', {
@@ -1274,7 +1394,7 @@ function F1ProdeView() {
         })
       });
       if (!res.ok) throw new Error("Falla al guardar");
-      addToast('success', `✅ Pronóstico de ${currentForm.label} guardado para ${pName}!`);
+      addToast('success', `Pronóstico de ${currentForm.label} guardado para ${pName}`);
       setExistingPrediction({ player: pName, session_type: selectedSession, pole_position: pPole, p1, p2, p3, p4, p5 });
     } catch (err) {
       addToast('error', 'Error guardando el pronóstico. Verificá la conexión.');
@@ -1285,6 +1405,14 @@ function F1ProdeView() {
 
   return (
     <div className="space-y-8 animate-fade-in pb-12">
+      <ConfirmModal
+        isOpen={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={() => pendingSubmit && pendingSubmit()}
+        title="Actualizar pronóstico"
+        message={`Ya cargaste un pronóstico de ${currentForm?.label} para ${pName}. ¿Querés actualizarlo?`}
+        confirmLabel="Actualizar"
+      />
       {/* Header F1 & Nav Tabs */}
       <header className="flex flex-col gap-6 mb-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
@@ -1303,38 +1431,40 @@ function F1ProdeView() {
             onClick={() => setF1Tab('rules')}
             className={`w-full md:w-auto btn-secondary transition-all flex items-center justify-center gap-2 ${f1Tab === 'rules' ? 'bg-codeflow-accent/20 border-codeflow-accent/40 text-codeflow-accent' : ''}`}
           >
-            <AlertCircle size={18} />
-            <span>Reglas del Campeonato</span>
+            <Info size={18} />
+            <span>Reglas</span>
           </button>
         </div>
 
-        {/* F1 Sub-Navigation */}
+        {/* F1 Sub-Navigation - sticky */}
+        <div className="sticky-subnav">
         <div className="flex items-center gap-1 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 overflow-x-auto no-scrollbar scroll-smooth">
           <button
             onClick={() => setF1Tab('prode')}
             className={`flex-1 flex justify-center items-center px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${f1Tab === 'prode' ? 'text-white bg-white/10 border border-white/10 shadow-lg' : 'text-codeflow-muted hover:text-white hover:bg-white/5'}`}>
-            🔮 Prode
+            Prode
           </button>
           <button
             onClick={() => setF1Tab('leaderboard')}
             className={`flex-1 flex justify-center items-center px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${f1Tab === 'leaderboard' ? 'text-white bg-white/10 border border-white/10 shadow-lg' : 'text-codeflow-muted hover:text-white hover:bg-white/5'}`}>
-            📊 Tabla
+            Tabla
           </button>
           <button
             onClick={() => setF1Tab('calendar')}
             className={`flex-1 flex justify-center items-center px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${f1Tab === 'calendar' ? 'text-white bg-white/10 border border-white/10 shadow-lg' : 'text-codeflow-muted hover:text-white hover:bg-white/5'}`}>
-            📅 Calendario
+            Calendario
           </button>
           <button
             onClick={() => setF1Tab('grilla')}
             className={`flex-1 flex justify-center items-center px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${f1Tab === 'grilla' ? 'text-white bg-white/10 border border-white/10 shadow-lg' : 'text-codeflow-muted hover:text-white hover:bg-white/5'}`}>
-            🏁 Grilla
+            Grilla
           </button>
           <button
             onClick={() => setF1Tab('rules')}
             className={`flex-1 flex justify-center items-center px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${f1Tab === 'rules' ? 'text-white bg-white/10 border border-white/10 shadow-lg' : 'text-codeflow-muted hover:text-white hover:bg-white/5'}`}>
-            📚 Reglas
+            Reglas
           </button>
+        </div>
         </div>
       </header>
 
@@ -1615,40 +1745,60 @@ function F1LeaderboardTab() {
                 : i === 2 ? 'bg-orange-600/20 text-orange-400 border border-orange-600/50'
                   : 'bg-white/5 text-white/50 border border-white/10';
 
+            const isLeader2 = i === 0;
+            const seed2 = profiles[user.name] || user.name;
+            const avatarUrl2 = seed2.includes(':')
+              ? `https://api.dicebear.com/7.x/${seed2.split(':')[0]}/svg?seed=${seed2.split(':')[1]}`
+              : `https://api.dicebear.com/7.x/notionists/svg?seed=${seed2}&backgroundColor=transparent`;
+
             return (
-              <div key={user.name} className="flex items-center justify-between p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-colors border border-transparent hover:border-white/10 group">
+              <motion.div
+                key={user.name}
+                initial={{ opacity: 0, x: -12 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.05, type: 'spring', stiffness: 300, damping: 28 }}
+                className={`flex items-center justify-between rounded-xl border transition-all group ${
+                  isLeader2
+                    ? 'p-5 bg-gradient-to-r from-f1-gold/10 via-yellow-500/5 to-transparent border-f1-gold/30 shadow-[0_0_24px_rgba(245,197,24,0.07)]'
+                    : i === 1 ? 'p-4 bg-white/[0.025] border-white/8 hover:bg-white/5'
+                    : i === 2 ? 'p-4 bg-white/[0.015] border-white/5 hover:bg-white/5'
+                    : 'p-3.5 bg-transparent border-white/[0.04] hover:bg-white/[0.03]'
+                }`}
+              >
                 <div className="flex items-center gap-4">
-                  <div className="relative">
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center border-2 overflow-hidden bg-codeflow-base ${medalStyle}`}>
-                      {(() => {
-                        const seed = profiles[user.name] || user.name;
-                        const url = seed.includes(':')
-                          ? `https://api.dicebear.com/7.x/${seed.split(':')[0]}/svg?seed=${seed.split(':')[1]}`
-                          : `https://api.dicebear.com/7.x/notionists/svg?seed=${seed}&backgroundColor=transparent`;
-                        return <img src={url} alt={user.name} className="w-10 h-10 object-cover" />;
-                      })()}
+                  <div className="relative shrink-0">
+                    <div className={`rounded-full overflow-hidden bg-codeflow-base border-2 ${
+                      isLeader2 ? 'w-14 h-14 border-f1-gold/60 shadow-[0_0_12px_rgba(245,197,24,0.25)]'
+                      : i === 1 ? 'w-12 h-12 border-f1-silver/40'
+                      : i === 2 ? 'w-12 h-12 border-f1-bronze/35'
+                      : 'w-10 h-10 border-white/10'
+                    }`}>
+                      <img src={avatarUrl2} alt={user.name} className="w-full h-full object-cover" />
                     </div>
-                    <div className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border-2 border-codeflow-dark z-10 ${medalStyle}`}>
-                      {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
+                    <div className={`absolute -bottom-1.5 -right-1.5 rounded-full flex items-center justify-center font-bold border-2 border-codeflow-dark z-10 ${
+                      isLeader2 ? 'w-7 h-7 text-sm' : 'w-5 h-5 text-[10px]'
+                    } ${medalStyle}`}>
+                      {i === 0 ? '1' : i === 1 ? '2' : i === 2 ? '3' : i + 1}
                     </div>
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-white text-lg group-hover:text-codeflow-accent transition-colors">{user.name}</span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`font-bold text-white transition-colors ${isLeader2 ? 'text-xl' : 'text-base'} group-hover:text-codeflow-accent`}>{user.name}</span>
                       {streak >= 2 && (
-                        <motion.span
-                          initial={{ scale: 0 }} animate={{ scale: 1 }}
-                          className="text-xs text-orange-400 font-bold bg-orange-500/20 px-1.5 py-0.5 rounded flex items-center gap-1"
-                          title={`¡Racha de puntos en ${streak} carreras seguidas!`}
-                        >
+                        <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }}
+                          className="text-xs text-orange-400 font-bold bg-orange-500/15 px-1.5 py-0.5 rounded-full border border-orange-500/25 flex items-center gap-1">
                           🔥 {streak}
                         </motion.span>
                       )}
+                      {isLeader2 && <span className="text-[10px] font-bold text-f1-gold bg-f1-gold/10 border border-f1-gold/25 px-2 py-0.5 rounded-full uppercase tracking-wider">Líder</span>}
                     </div>
                   </div>
                 </div>
-                <span className="font-display font-extrabold text-2xl text-white">{user.pts} <span className="text-sm font-normal text-codeflow-muted">PTS</span></span>
-              </div>
+                <div className={`font-display font-extrabold text-white tabular-nums ${isLeader2 ? 'text-3xl' : 'text-xl'}`}>
+                  <AnimatedNumber value={user.pts} />
+                  <span className="text-sm font-normal text-codeflow-muted ml-1">PTS</span>
+                </div>
+              </motion.div>
             );
           })}
         </div>
@@ -1792,6 +1942,7 @@ function MediaCard({ item, i, isGame, getGenreColor, tab, onEdit, onDelete, onUp
   const [poster, setPoster] = React.useState<string | null>(null);
   const [overview, setOverview] = React.useState<string | null>(null);
   const [hovered, setHovered] = React.useState(false);
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
 
   React.useEffect(() => {
     if (isGame) return;
@@ -1911,7 +2062,7 @@ function MediaCard({ item, i, isGame, getGenreColor, tab, onEdit, onDelete, onUp
               <Edit2 size={12} />
             </button>
             <button
-              onClick={(e) => { e.stopPropagation(); if (window.confirm('¿Eliminar este item?')) onDelete(item.id); }}
+              onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
               className="p-1 hover:text-red-400 transition-colors"
               title="Eliminar"
             >
@@ -1920,6 +2071,15 @@ function MediaCard({ item, i, isGame, getGenreColor, tab, onEdit, onDelete, onUp
           </div>
         </div>
       </div>
+      <ConfirmModal
+        isOpen={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={() => onDelete(item.id)}
+        title="Eliminar item"
+        message={`¿Seguro que querés eliminar "${item.name}" de la bóveda?`}
+        confirmLabel="Eliminar"
+        danger
+      />
     </motion.div>
   );
 }
@@ -2254,8 +2414,12 @@ function MediaVaultView({ tab }: { tab: string }) {
           ))}
         </div>
       ) : filteredItems.length === 0 ? (
-        <div className="text-center py-20 text-codeflow-muted text-xl border-2 border-dashed border-white/10 rounded-2xl">
-          No hay elementos que coincidan con la búsqueda.
+        <div className="text-center py-20 border-2 border-dashed border-white/8 rounded-2xl flex flex-col items-center gap-3">
+          <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/8 flex items-center justify-center">
+            <Film size={24} className="text-codeflow-muted/40" />
+          </div>
+          <p className="text-white/60 font-semibold">Sin resultados</p>
+          <p className="text-codeflow-muted text-sm">Probá con otro filtro de género.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 px-4 sm:px-0">
@@ -2568,7 +2732,10 @@ function AdminView() {
   return (
     <div className="space-y-8 animate-fade-in pb-12">
       <header>
-        <h1 className="text-4xl font-display font-bold text-white mb-2">Panel de Administración <span className="text-codeflow-accent">⚙️</span></h1>
+        <h1 className="text-4xl font-display font-bold text-white mb-2 flex items-center gap-3">
+          <ShieldAlert size={30} className="text-codeflow-accent shrink-0" />
+          Panel de Administración
+        </h1>
         <p className="text-codeflow-muted text-lg">Cargá los resultados oficiales de cada GP para calcular los puntajes automáticamente.</p>
       </header>
 
