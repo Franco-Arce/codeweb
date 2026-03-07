@@ -1083,17 +1083,18 @@ app.get('/api/media/:type', requireAuth, async (req: Request, res: Response) => 
         const userId = (req as any).user.userId;
 
         // Query joining with average ratings and personal vote
+        // m.id is UUID but media_ratings.media_id is TEXT — explicit cast required
         const mediaWithRatings = await pool.query(`
-            SELECT m.*, 
+            SELECT m.*,
                    COALESCE(AVG(r.rating), 0) as avg_rating,
                    COUNT(r.id) as total_votes,
-                   (SELECT rating FROM media_ratings WHERE user_id = $2 AND media_id = m.id AND media_type = $1) as user_rating,
-                   (SELECT string_agg(u.username, ', ') 
-                    FROM media_ratings mr 
-                    JOIN users u ON u.id = mr.user_id 
-                    WHERE mr.media_id = m.id AND mr.media_type = $1) as voters
+                   (SELECT rating FROM media_ratings WHERE user_id = $2 AND media_id = m.id::text AND media_type = $1) as user_rating,
+                   (SELECT string_agg(u.username, ', ')
+                    FROM media_ratings mr
+                    JOIN users u ON u.id = mr.user_id
+                    WHERE mr.media_id = m.id::text AND mr.media_type = $1) as voters
             FROM ${baseTable} m
-            LEFT JOIN media_ratings r ON r.media_id = m.id AND r.media_type = $1
+            LEFT JOIN media_ratings r ON r.media_id = m.id::text AND r.media_type = $1
             ${extraFilter}
             GROUP BY m.id
             ORDER BY m.created_at DESC
