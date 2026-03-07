@@ -44,7 +44,7 @@ function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ addToast }}>
       {children}
-      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none">
+      <div className="fixed bottom-24 right-4 md:bottom-6 md:right-6 z-50 flex flex-col gap-2 pointer-events-none">
         <AnimatePresence>
           {toasts.map(toast => (
             <motion.div
@@ -366,10 +366,8 @@ function AppShell({ activeTab, setActiveTab, setIsAuthenticated, currentUser, ha
   currentUser: string;
   handleLogout: () => void;
 }) {
-  // Close menu on navigation for mobile
   const handleNavClick = (tab: string) => {
     setActiveTab(tab);
-    setIsMobileMenuOpen(false);
   };
 
   const logout = () => {
@@ -516,14 +514,14 @@ function SettingsView({ username }: { username: string }) {
   return (
     <div className="space-y-8 animate-fade-in max-w-4xl mx-auto py-6">
       <header>
-        <h1 className="text-4xl font-display font-bold text-white mb-2 flex items-center gap-3">
-          <Settings size={30} className="text-codeflow-accent shrink-0" />
+        <h1 className="text-2xl md:text-4xl font-display font-bold text-white mb-2 flex items-center gap-3">
+          <Settings size={26} className="text-codeflow-accent shrink-0" />
           Configuración
         </h1>
         <p className="text-codeflow-muted text-sm px-1">Gestiona tu identidad y seguridad.</p>
       </header>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <section className="glass-card p-8 flex flex-col items-center border border-white/5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <section className="glass-card p-5 md:p-8 flex flex-col items-center border border-white/5">
           <div className="relative mb-6">
             <div className="w-32 h-32 rounded-full overflow-hidden bg-codeflow-base border-4 border-codeflow-accent/20 relative">
               <img src={avatarUrl} alt="Your Avatar" className="w-full h-full object-cover" />
@@ -535,7 +533,7 @@ function SettingsView({ username }: { username: string }) {
             <Sparkles size={16} className="text-codeflow-accent" /> Cambiar Avatar
           </button>
         </section>
-        <section className="glass-card p-8 border border-white/5">
+        <section className="glass-card p-5 md:p-8 border border-white/5">
           <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><Lock size={20} className="text-codeflow-accent" /> Seguridad</h3>
           <form onSubmit={handleUpdatePassword} className="space-y-4">
             <input
@@ -643,12 +641,12 @@ function LoginView({ onLogin }: { onLogin: (username: string) => void }) {
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="glass-card p-10 max-w-md w-full relative z-10 flex flex-col items-center border border-white/10 shadow-2xl"
+        className="glass-card p-6 md:p-10 max-w-md w-full relative z-10 flex flex-col items-center border border-white/10 shadow-2xl"
       >
         <img src={logoCodeflow} alt="CodeWeb" className="w-20 h-20 mb-6 object-contain drop-shadow-[0_0_15px_rgba(168,85,247,0.6)]" />
 
-        <h1 className="text-3xl font-display font-bold text-white mb-2">{isRegister ? 'Crear Cuenta' : 'Acceso a CodeWeb'}</h1>
-        <p className="text-codeflow-muted mb-8 text-center">{isRegister ? 'Súmate a la comunidad' : 'Plataforma Central'}</p>
+        <h1 className="text-2xl md:text-3xl font-display font-bold text-white mb-2">{isRegister ? 'Crear Cuenta' : 'Acceso a CodeWeb'}</h1>
+        <p className="text-codeflow-muted mb-6 md:mb-8 text-center text-sm">{isRegister ? 'Súmate a la comunidad' : 'Plataforma Central'}</p>
 
         <form onSubmit={handleSubmit} className="w-full space-y-4">
           <div>
@@ -775,20 +773,20 @@ function DashboardView() {
   return (
     <div className="space-y-6 animate-fade-in pb-12">
       <header>
-        <h1 className="text-4xl font-display font-bold text-white mb-1 flex items-center gap-3">
-          <LayoutDashboard size={32} className="text-codeflow-accent shrink-0" />
+        <h1 className="text-2xl md:text-4xl font-display font-bold text-white mb-1 flex items-center gap-3">
+          <LayoutDashboard size={28} className="text-codeflow-accent shrink-0" />
           Panel Principal
         </h1>
-        <p className="text-codeflow-muted">Tu plataforma centralizada para deportes, métricas y entretenimiento.</p>
+        <p className="text-codeflow-muted text-sm md:text-base">Tu plataforma centralizada para deportes, métricas y entretenimiento.</p>
       </header>
 
       {/* ===== HERO FULL-WIDTH COUNTDOWN ===== */}
-      <div className="relative overflow-hidden rounded-2xl border border-codeflow-accent/20 bg-gradient-to-br from-codeflow-accent/10 via-purple-900/10 to-codeflow-dark p-8 shadow-[0_0_80px_rgba(168,85,247,0.08)]">
+      <div className="relative overflow-hidden rounded-2xl border border-codeflow-accent/20 bg-gradient-to-br from-codeflow-accent/10 via-purple-900/10 to-codeflow-dark p-5 md:p-8 shadow-[0_0_80px_rgba(168,85,247,0.08)]">
         {/* Background decoration */}
         <div className="absolute top-0 right-0 w-64 h-full bg-gradient-to-l from-red-600/10 to-transparent pointer-events-none" />
         <div className="absolute -bottom-8 -right-8 text-[12rem] leading-none opacity-5 pointer-events-none select-none">🏎️</div>
 
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-8">
           <div className="flex-1">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-f1-redSoft text-f1-red text-xs font-bold border border-f1-red/30 uppercase tracking-wider mb-4 shadow-[0_0_12px_rgba(225,6,0,0.2)]">
               <span className="w-1.5 h-1.5 rounded-full bg-f1-red animate-pulse" />
@@ -824,7 +822,7 @@ function DashboardView() {
                 <React.Fragment key={unit.l}>
                   {i > 0 && <span className="text-2xl text-white/30 font-bold mb-4">:</span>}
                   <div className="flex flex-col items-center">
-                    <span className="font-racing text-4xl md:text-6xl text-white tabular-nums leading-none" style={{ letterSpacing: '-0.03em' }}>
+                    <span className="font-racing text-3xl md:text-6xl text-white tabular-nums leading-none" style={{ letterSpacing: '-0.03em' }}>
                       {pad(unit.v)}
                     </span>
                     <span className="text-[10px] text-codeflow-muted uppercase tracking-widest mt-1.5 font-bold">{unit.l}</span>
@@ -1715,8 +1713,8 @@ function F1LeaderboardTab() {
   };
 
   return (
-    <div className="glass-card p-8 min-h-[500px] border-t-4 border-t-yellow-500 rounded-t-none">
-      <h3 className="text-2xl font-bold text-white mb-2">Posiciones Oficiales del Prode 2026</h3>
+    <div className="glass-card p-5 md:p-8 min-h-[500px] border-t-4 border-t-yellow-500 rounded-t-none">
+      <h3 className="text-xl md:text-2xl font-bold text-white mb-2">Posiciones Oficiales del Prode 2026</h3>
       <p className="text-codeflow-muted italic text-sm mb-8">Las posiciones se actualizarán al bajar la bandera a cuadros de cada GP.</p>
 
       {loading ? (
@@ -1843,7 +1841,7 @@ function PredictionsGridTab({ nextRace }: { nextRace: any }) {
   return (
     <div className="space-y-4">
       <div className="glass-card p-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
           <h3 className="text-xl font-bold text-white">Grilla de Pronósticos</h3>
           <div className="flex gap-2 flex-wrap">
             {Object.entries(SESSION_LABELS).map(([k, v]) => (
@@ -2239,8 +2237,8 @@ function MediaVaultView({ tab }: { tab: string }) {
     <div className="space-y-8 animate-fade-in pb-12">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
         <div>
-          <h1 className="text-4xl font-display font-bold text-white mb-2">{translations[tab]}</h1>
-          <p className="text-codeflow-muted text-lg">Bóveda de recomendaciones grupales.</p>
+          <h1 className="text-2xl md:text-4xl font-display font-bold text-white mb-2">{translations[tab]}</h1>
+          <p className="text-codeflow-muted text-sm md:text-lg">Bóveda de recomendaciones grupales.</p>
         </div>
         <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
           {items.length > 0 && (
@@ -2450,8 +2448,8 @@ function F1CalendarTab() {
   }, []);
 
   return (
-    <div className="glass-card p-8 min-h-[500px] border-t-4 border-t-red-500 rounded-t-none">
-      <h3 className="text-2xl font-bold text-white mb-2 flex items-center gap-3">
+    <div className="glass-card p-5 md:p-8 min-h-[500px] border-t-4 border-t-red-500 rounded-t-none">
+      <h3 className="text-xl md:text-2xl font-bold text-white mb-2 flex items-center gap-3">
         Calendario Oficial 2026 <span className="text-[10px] uppercase font-bold tracking-wider bg-red-500/20 border border-red-500/30 px-2 py-1 rounded text-red-400">FIA</span>
       </h3>
       <p className="text-codeflow-muted italic text-sm mb-8">24 carreras confirmadas para la temporada 2026.</p>
@@ -2572,11 +2570,11 @@ function F1RulesTab() {
   ];
 
   return (
-    <div className="glass-card p-8 min-h-[500px] border-t-4 border-t-purple-500 rounded-t-none">
+    <div className="glass-card p-5 md:p-8 min-h-[500px] border-t-4 border-t-purple-500 rounded-t-none">
       <div className="max-w-4xl mx-auto">
-        <header className="mb-10 text-center text-balance">
-          <h3 className="text-3xl font-display font-bold text-white mb-3 tracking-tight">Manual de Operaciones: CodeWeb F1</h3>
-          <p className="text-codeflow-muted text-lg">Todo lo que necesitás saber para dominar el paddock.</p>
+        <header className="mb-8 md:mb-10 text-center text-balance">
+          <h3 className="text-xl md:text-3xl font-display font-bold text-white mb-3 tracking-tight">Manual de Operaciones: CodeWeb F1</h3>
+          <p className="text-codeflow-muted text-sm md:text-lg">Todo lo que necesitás saber para dominar el paddock.</p>
         </header>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -2728,14 +2726,14 @@ function AdminView() {
   return (
     <div className="space-y-8 animate-fade-in pb-12">
       <header>
-        <h1 className="text-4xl font-display font-bold text-white mb-2 flex items-center gap-3">
-          <ShieldAlert size={30} className="text-codeflow-accent shrink-0" />
+        <h1 className="text-2xl md:text-4xl font-display font-bold text-white mb-2 flex items-center gap-3">
+          <ShieldAlert size={26} className="text-codeflow-accent shrink-0" />
           Panel de Administración
         </h1>
-        <p className="text-codeflow-muted text-lg">Cargá los resultados oficiales de cada GP para calcular los puntajes automáticamente.</p>
+        <p className="text-codeflow-muted text-sm md:text-lg">Cargá los resultados oficiales de cada GP para calcular los puntajes automáticamente.</p>
       </header>
 
-      <div className="glass-card p-8 max-w-2xl">
+      <div className="glass-card p-5 md:p-8 max-w-2xl">
         <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
           <Settings size={22} className="text-codeflow-accent" /> Cargar Resultados Oficiales
         </h3>
