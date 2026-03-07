@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useContext, createContext } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Trophy, Film, Gamepad2, Tv, LayoutDashboard, Settings,
@@ -232,7 +233,7 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confirmLabel
   isOpen: boolean; onClose: () => void; onConfirm: () => void;
   title: string; message: string; confirmLabel?: string; danger?: boolean;
 }) {
-  return (
+  return createPortal(
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
@@ -267,7 +268,8 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confirmLabel
           </motion.div>
         </div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }
 
@@ -2299,18 +2301,21 @@ function MediaCard({ item, i, isGame, getGenreColor, tab, onEdit, onDelete, onUp
         </div>
       </motion.div>
 
-      <AnimatePresence>
-        {showDetail && (
-          <MediaDetailModal
-            item={item} tab={tab} isGame={isGame} getGenreColor={getGenreColor}
-            poster={poster}
-            onClose={() => setShowDetail(false)}
-            onEdit={(it) => { setShowDetail(false); onEdit(it); }}
-            onDelete={(id) => { setShowDetail(false); onDelete(id); }}
-            onUpdateRating={onUpdateRating}
-          />
-        )}
-      </AnimatePresence>
+      {createPortal(
+        <AnimatePresence>
+          {showDetail && (
+            <MediaDetailModal
+              item={item} tab={tab} isGame={isGame} getGenreColor={getGenreColor}
+              poster={poster}
+              onClose={() => setShowDetail(false)}
+              onEdit={(it) => { setShowDetail(false); onEdit(it); }}
+              onDelete={(id) => { setShowDetail(false); onDelete(id); }}
+              onUpdateRating={onUpdateRating}
+            />
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       <ConfirmModal
         isOpen={confirmDelete}
