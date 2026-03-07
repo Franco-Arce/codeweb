@@ -288,8 +288,8 @@ const initDb = async () => {
             END $$;
         `);
 
-        // Grant admin to kazter
-        await pool.query(`UPDATE users SET is_admin = true WHERE username = 'kazter'`);
+        // Grant admin to kazter and mrforii
+        await pool.query(`UPDATE users SET is_admin = true WHERE username IN ('kazter', 'mrforii')`);
 
         // Seed Australia 2026 qualifying predictions (3 positions, already happened)
         await pool.query(`

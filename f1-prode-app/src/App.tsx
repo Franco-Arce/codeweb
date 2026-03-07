@@ -2072,8 +2072,8 @@ function PredictionsGridTab({ nextRace }: { nextRace: any }) {
       const v = pred[pos]; if (v) consensus[pos][v] = (consensus[pos][v] || 0) + 1;
     }
   }
-  const submittedPlayers = new Set(predictions.map((p: any) => p.player));
-  const missingPlayers = USERS.filter(u => !submittedPlayers.has(u));
+  const submittedPlayers = new Set(predictions.map((p: any) => p.player.toLowerCase()));
+  const missingPlayers = USERS.filter(u => !submittedPlayers.has(u.toLowerCase()));
 
   return (
     <div className="space-y-4">
