@@ -2039,9 +2039,22 @@ function F1LeaderboardTab() {
 // --- Predictions Grid Tab ---
 function PredictionsGridTab({ nextRace }: { nextRace: any }) {
   const [predictions, setPredictions] = React.useState<any[]>([]);
+  const [activePlayers, setActivePlayers] = React.useState<string[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [sessionFilter, setSessionFilter] = React.useState('race');
-  const USERS = ["MrKazter", "Eliana", "NestorMcNestor", "GuilleGb", "Rubiola", "Colorado", "MrFori"];
+
+  // Load active players once: union of all players who predicted for any session of this race
+  React.useEffect(() => {
+    if (!nextRace?.round) return;
+    const raceId = `round_${nextRace.round}`;
+    fetchWithAuth(`/api/predictions?race_id=${raceId}`)
+      .then(r => r.json())
+      .then((all: any[]) => {
+        const unique = [...new Set(all.map((p: any) => p.player))];
+        setActivePlayers(unique);
+      })
+      .catch(() => {});
+  }, [nextRace?.round]);
 
   React.useEffect(() => {
     setLoading(true);
@@ -2073,7 +2086,7 @@ function PredictionsGridTab({ nextRace }: { nextRace: any }) {
     }
   }
   const submittedPlayers = new Set(predictions.map((p: any) => p.player.toLowerCase()));
-  const missingPlayers = USERS.filter(u => !submittedPlayers.has(u.toLowerCase()));
+  const missingPlayers = activePlayers.filter(u => !submittedPlayers.has(u.toLowerCase()));
 
   return (
     <div className="space-y-4">
