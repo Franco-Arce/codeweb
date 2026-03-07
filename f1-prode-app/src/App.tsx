@@ -1078,7 +1078,7 @@ function DashboardView() {
               <Trophy size={20} className="text-yellow-500" /> Tabla de Analistas
             </h3>
             <span className="text-xs text-codeflow-muted italic">
-              {nextRace ? `Pronósticos para ${nextRace.name}` : ''}
+              {nextRace ? `Se actualiza tras cada sesión de ${nextRace.name}` : ''}
             </span>
           </div>
 
@@ -1942,7 +1942,7 @@ function F1LeaderboardTab() {
   return (
     <div className="glass-card p-5 md:p-8 min-h-[500px] border-t-4 border-t-yellow-500 rounded-t-none">
       <h3 className="text-xl md:text-2xl font-bold text-white mb-2">Posiciones Oficiales del Prode 2026</h3>
-      <p className="text-codeflow-muted italic text-sm mb-8">Las posiciones se actualizarán al bajar la bandera a cuadros de cada GP.</p>
+      <p className="text-codeflow-muted italic text-sm mb-8">Las posiciones se actualizan tras cada sesión: Qualy, Sprint o Carrera.</p>
 
       {loading ? (
         <div className="space-y-4">
