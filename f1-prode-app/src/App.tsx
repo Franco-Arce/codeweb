@@ -123,21 +123,30 @@ function AvatarPicker({ isOpen, onClose, username, currentSeed }: { isOpen: bool
     { id: 'notionists', label: 'Notion' },
     { id: 'open-peeps', label: 'Doodley' },
     { id: 'bottts', label: 'Robot' },
-    { id: 'croodles', label: 'Garabato' }
+    { id: 'croodles', label: 'Garabato' },
+    { id: 'micah', label: 'Micah' },
+    { id: 'personas', label: 'Persona 3D' },
+    { id: 'rings', label: 'Rings' },
   ];
 
-  const handleShuffle = () => {
+  const shuffleOne = (styleId: string) => {
+    setRandomSeeds(prev => ({ ...prev, [styleId]: Math.random().toString(36).substring(7) }));
+  };
+
+  const handleShuffleAll = () => {
     const newSeeds: Record<string, string> = {};
-    STYLES.forEach(s => {
-      newSeeds[s.id] = Math.random().toString(36).substring(7);
-    });
+    STYLES.forEach(s => { newSeeds[s.id] = Math.random().toString(36).substring(7); });
     setRandomSeeds(newSeeds);
   };
 
-  const currentSeeds = STYLES.map(s => {
+  const currentOptions = STYLES.map(s => {
     const seedValue = randomSeeds[s.id] || username;
-    return { seed: `${s.id}:${seedValue}`, label: s.label };
+    return { seed: `${s.id}:${seedValue}`, label: s.label, styleId: s.id };
   });
+
+  const selectedStyle = selected.includes(':') ? selected.split(':')[0] : 'notionists';
+  const selectedSeedVal = selected.includes(':') ? selected.split(':')[1] : selected;
+  const previewUrl = `https://api.dicebear.com/7.x/${selectedStyle}/svg?seed=${selectedSeedVal}`;
 
   const handleSave = () => {
     updateAvatar(username, selected);
@@ -149,37 +158,67 @@ function AvatarPicker({ isOpen, onClose, username, currentSeed }: { isOpen: bool
       {isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-codeflow-dark/80 backdrop-blur-md" onClick={onClose} />
-          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-codeflow-card border border-white/10 p-6 rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between mb-6">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+            className="relative bg-codeflow-card border border-white/10 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col"
+            style={{ maxHeight: '90vh' }}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <Sparkles size={20} className="text-codeflow-accent" /> Elige tu Identidad
               </h3>
-              <button onClick={handleShuffle} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-bold text-codeflow-accent border border-codeflow-accent/20 transition-all">
-                <Dices size={16} /> Mezclar Variaciones
+              <button onClick={handleShuffleAll} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-bold text-codeflow-accent border border-codeflow-accent/20 transition-all">
+                <Dices size={16} /> Mezclar Todo
               </button>
             </div>
 
-            <div className="grid grid-cols-3 sm:grid-cols-3 gap-4 mb-8 overflow-y-auto pr-2 no-scrollbar">
-              {currentSeeds.map(item => {
-                const [style, name] = item.seed.split(':');
-                const url = `https://api.dicebear.com/7.x/${style}/svg?seed=${name}`;
-                const isActive = selected === item.seed;
-                return (
-                  <button
-                    key={item.seed}
-                    onClick={() => setSelected(item.seed)}
-                    className={`p-3 rounded-2xl transition-all border-2 flex flex-col items-center gap-2 group relative ${isActive ? 'border-codeflow-accent bg-codeflow-accent/10' : 'border-transparent bg-white/5 hover:bg-white/10'}`}
-                  >
-                    <img src={url} alt={item.label} className="w-16 h-16 sm:w-20 sm:h-20" />
-                    <span className={`text-[10px] font-bold uppercase tracking-wider ${isActive ? 'text-codeflow-accent' : 'text-codeflow-muted'}`}>{item.label}</span>
-                  </button>
-                );
-              })}
+            <div className="flex flex-col sm:flex-row flex-1 overflow-hidden">
+              {/* Preview panel */}
+              <div className="sm:w-48 flex flex-col items-center justify-center p-6 bg-white/[0.02] border-b sm:border-b-0 sm:border-r border-white/5 gap-3 shrink-0">
+                <div className="w-28 h-28 rounded-full overflow-hidden bg-codeflow-base border-4 border-codeflow-accent/30 shadow-lg shadow-codeflow-accent/10">
+                  <img key={selected} src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
+                </div>
+                <p className="text-white font-bold text-sm text-center">{username}</p>
+                <span className="text-codeflow-accent text-xs font-bold uppercase tracking-wider bg-codeflow-accent/10 px-2 py-0.5 rounded-full border border-codeflow-accent/20">
+                  {STYLES.find(s => s.id === selectedStyle)?.label ?? selectedStyle}
+                </span>
+              </div>
+
+              {/* Style grid */}
+              <div className="flex-1 overflow-y-auto p-4 no-scrollbar">
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                  {currentOptions.map(item => {
+                    const [style, name] = item.seed.split(':');
+                    const url = `https://api.dicebear.com/7.x/${style}/svg?seed=${name}`;
+                    const isActive = selected === item.seed;
+                    return (
+                      <div key={item.styleId} className="relative group">
+                        <button
+                          onClick={() => setSelected(item.seed)}
+                          className={`w-full p-2.5 rounded-xl transition-all border-2 flex flex-col items-center gap-1.5 ${isActive ? 'border-codeflow-accent bg-codeflow-accent/10' : 'border-transparent bg-white/5 hover:bg-white/10'}`}
+                        >
+                          <img src={url} alt={item.label} className="w-14 h-14" />
+                          <span className={`text-[9px] font-bold uppercase tracking-wider ${isActive ? 'text-codeflow-accent' : 'text-codeflow-muted'}`}>{item.label}</span>
+                        </button>
+                        {/* Per-style shuffle button */}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); shuffleOne(item.styleId); if (isActive) setSelected(`${item.styleId}:${Math.random().toString(36).substring(7)}`); }}
+                          className="absolute top-1.5 right-1.5 p-1 rounded-md bg-black/40 text-white/60 hover:text-codeflow-accent hover:bg-codeflow-accent/10 opacity-0 group-hover:opacity-100 transition-all"
+                        >
+                          <Dices size={11} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
-            <div className="flex gap-3 mt-auto pt-4 border-t border-white/5">
-              <button onClick={onClose} className="flex-1 px-4 py-3 rounded-xl bg-white/5 text-white font-bold hover:bg-white/10 transition-colors">Cancelar</button>
-              <button onClick={handleSave} className="flex-2 px-8 py-3 rounded-xl bg-gradient-to-r from-codeflow-accent to-fuchsia-600 text-white font-bold shadow-lg hover:opacity-90 transition-all">Guardar Cambios</button>
+            {/* Footer */}
+            <div className="flex gap-3 px-6 py-4 border-t border-white/5">
+              <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 text-white font-bold hover:bg-white/10 transition-colors text-sm">Cancelar</button>
+              <button onClick={handleSave} className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-codeflow-accent to-fuchsia-600 text-white font-bold shadow-lg hover:opacity-90 transition-all text-sm">Guardar</button>
             </div>
           </motion.div>
         </div>
@@ -307,6 +346,12 @@ function App() {
     return <ToastProvider><LoginView onLogin={handleLogin} /></ToastProvider>;
   }
 
+  const handleUsernameChange = (newUsername: string, newToken: string) => {
+    setCurrentUser(newUsername);
+    localStorage.setItem('prode_username', newUsername);
+    localStorage.setItem('prode_auth_token', newToken);
+  };
+
   return (
     <ToastProvider>
       <ProfilesProvider>
@@ -316,6 +361,7 @@ function App() {
           setIsAuthenticated={setIsAuthenticated}
           currentUser={currentUser}
           handleLogout={handleLogout}
+          onUsernameChange={handleUsernameChange}
         />
       </ProfilesProvider>
     </ToastProvider>
@@ -359,12 +405,13 @@ function MobileBottomNav({ activeTab, onNavigate }: { activeTab: string; onNavig
   );
 }
 
-function AppShell({ activeTab, setActiveTab, setIsAuthenticated, currentUser, handleLogout }: {
+function AppShell({ activeTab, setActiveTab, setIsAuthenticated, currentUser, handleLogout, onUsernameChange }: {
   activeTab: string;
   setActiveTab: (t: string) => void;
   setIsAuthenticated: (v: boolean) => void;
   currentUser: string;
   handleLogout: () => void;
+  onUsernameChange: (newUsername: string, newToken: string) => void;
 }) {
   const handleNavClick = (tab: string) => {
     setActiveTab(tab);
@@ -435,7 +482,7 @@ function AppShell({ activeTab, setActiveTab, setIsAuthenticated, currentUser, ha
               {activeTab === 'dashboard' && <DashboardView />}
               {activeTab === 'f1' && <F1ProdeView />}
               {activeTab === 'admin' && <AdminView />}
-              {activeTab === 'settings' && <SettingsView username={currentUser} />}
+              {activeTab === 'settings' && <SettingsView username={currentUser} onUsernameChange={onUsernameChange} />}
               {['series', 'animes', 'movies', 'games'].includes(activeTab) && (
                 <MediaVaultView tab={activeTab} />
               )}
@@ -473,12 +520,15 @@ function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, labe
 }
 
 // --- Settings View Component ---
-function SettingsView({ username }: { username: string }) {
-  const { profiles } = useProfiles();
+function SettingsView({ username, onUsernameChange }: { username: string; onUsernameChange: (newUsername: string, newToken: string) => void }) {
+  const { profiles, refreshProfiles } = useProfiles();
   const { addToast } = useToast();
   const [showPicker, setShowPicker] = useState(false);
   const [newPass, setNewPass] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loadingPass, setLoadingPass] = useState(false);
+  const [newUsername, setNewUsername] = useState('');
+  const [loadingUser, setLoadingUser] = useState(false);
+  const [usernameError, setUsernameError] = useState('');
 
   const currentSeed = profiles[username] || username || '';
   const avatarUrl = (currentSeed && typeof currentSeed === 'string' && currentSeed.includes(':'))
@@ -488,7 +538,7 @@ function SettingsView({ username }: { username: string }) {
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPass) return;
-    setLoading(true);
+    setLoadingPass(true);
     try {
       const res = await fetch(`${API_URL}/api/auth/update-password`, {
         method: 'POST',
@@ -504,15 +554,54 @@ function SettingsView({ username }: { username: string }) {
       } else {
         addToast('error', 'Falla al actualizar contraseña');
       }
-    } catch (err) {
+    } catch {
       addToast('error', 'Error de red');
     } finally {
-      setLoading(false);
+      setLoadingPass(false);
+    }
+  };
+
+  const handleUpdateUsername = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setUsernameError('');
+    const trimmed = newUsername.trim().toLowerCase();
+    if (!trimmed) return;
+    if (trimmed.length < 3 || trimmed.length > 30) {
+      setUsernameError('Debe tener entre 3 y 30 caracteres');
+      return;
+    }
+    if (!/^[a-z0-9_]+$/.test(trimmed)) {
+      setUsernameError('Solo letras minúsculas, números y guión bajo');
+      return;
+    }
+    setLoadingUser(true);
+    try {
+      const res = await fetch(`${API_URL}/api/auth/update-username`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('prode_auth_token')}`
+        },
+        body: JSON.stringify({ newUsername: trimmed })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        addToast('success', `Nombre actualizado a "${data.username}"`);
+        setNewUsername('');
+        onUsernameChange(data.username, data.token);
+        refreshProfiles();
+      } else {
+        setUsernameError(data.error || 'Error al cambiar nombre');
+      }
+    } catch {
+      setUsernameError('Error de red');
+    } finally {
+      setLoadingUser(false);
     }
   };
 
   return (
-    <div className="space-y-8 animate-fade-in max-w-4xl mx-auto py-6">
+    <div className="space-y-6 animate-fade-in max-w-4xl mx-auto py-6">
       <header>
         <h1 className="text-2xl md:text-4xl font-display font-bold text-white mb-2 flex items-center gap-3">
           <Settings size={26} className="text-codeflow-accent shrink-0" />
@@ -520,36 +609,63 @@ function SettingsView({ username }: { username: string }) {
         </h1>
         <p className="text-codeflow-muted text-sm px-1">Gestiona tu identidad y seguridad.</p>
       </header>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <section className="glass-card p-5 md:p-8 flex flex-col items-center border border-white/5">
-          <div className="relative mb-6">
-            <div className="w-32 h-32 rounded-full overflow-hidden bg-codeflow-base border-4 border-codeflow-accent/20 relative">
+
+      {/* Avatar + Username */}
+      <section className="glass-card p-5 md:p-8 border border-white/5">
+        <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><Sparkles size={20} className="text-codeflow-accent" /> Identidad</h3>
+        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
+          {/* Avatar */}
+          <div className="relative shrink-0">
+            <div className="w-28 h-28 rounded-full overflow-hidden bg-codeflow-base border-4 border-codeflow-accent/20">
               <img src={avatarUrl} alt="Your Avatar" className="w-full h-full object-cover" />
             </div>
-            <button onClick={() => setShowPicker(true)} className="absolute bottom-0 right-0 p-3 bg-codeflow-accent rounded-full text-white shadow-lg"><Edit2 size={18} /></button>
-          </div>
-          <h2 className="text-2xl font-bold text-white mb-1">{username}</h2>
-          <button onClick={() => setShowPicker(true)} className="mt-4 px-6 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white text-sm font-bold border border-white/10 transition-all flex items-center gap-2">
-            <Sparkles size={16} className="text-codeflow-accent" /> Cambiar Avatar
-          </button>
-        </section>
-        <section className="glass-card p-5 md:p-8 border border-white/5">
-          <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><Lock size={20} className="text-codeflow-accent" /> Seguridad</h3>
-          <form onSubmit={handleUpdatePassword} className="space-y-4">
-            <input
-              type="password"
-              autoComplete="new-password"
-              placeholder="Nueva Contraseña"
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-codeflow-accent outline-none"
-              value={newPass}
-              onChange={e => setNewPass(e.target.value)}
-            />
-            <button type="submit" disabled={loading || !newPass} className="w-full bg-codeflow-accent text-white font-bold py-3 rounded-xl hover:opacity-90 transition-all disabled:opacity-50">
-              {loading ? 'Actualizando...' : 'Actualizar Contraseña'}
+            <button onClick={() => setShowPicker(true)} className="absolute bottom-0 right-0 p-2.5 bg-codeflow-accent rounded-full text-white shadow-lg hover:opacity-90 transition-opacity">
+              <Edit2 size={16} />
             </button>
-          </form>
-        </section>
-      </div>
+          </div>
+          {/* Username form */}
+          <div className="flex-1 w-full">
+            <p className="text-codeflow-muted text-xs mb-1 font-medium uppercase tracking-wider">Nombre actual</p>
+            <p className="text-white font-bold text-xl mb-4">{username}</p>
+            <form onSubmit={handleUpdateUsername} className="space-y-3">
+              <div>
+                <input
+                  type="text"
+                  placeholder="Nuevo nombre de usuario"
+                  autoComplete="username"
+                  className={`w-full bg-white/5 border rounded-xl px-4 py-3 text-white focus:outline-none transition-all ${usernameError ? 'border-red-500/60 focus:border-red-500' : 'border-white/10 focus:border-codeflow-accent'}`}
+                  value={newUsername}
+                  onChange={e => { setNewUsername(e.target.value); setUsernameError(''); }}
+                />
+                {usernameError && <p className="text-red-400 text-xs mt-1.5 px-1">{usernameError}</p>}
+                <p className="text-codeflow-muted/60 text-xs mt-1.5 px-1">Solo letras minúsculas, números y _ (3–30 caracteres)</p>
+              </div>
+              <button type="submit" disabled={loadingUser || !newUsername.trim()} className="px-6 py-2.5 bg-codeflow-accent text-white font-bold rounded-xl hover:opacity-90 transition-all disabled:opacity-40 text-sm">
+                {loadingUser ? 'Actualizando...' : 'Cambiar Nombre'}
+              </button>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      {/* Security */}
+      <section className="glass-card p-5 md:p-8 border border-white/5">
+        <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><Lock size={20} className="text-codeflow-accent" /> Seguridad</h3>
+        <form onSubmit={handleUpdatePassword} className="space-y-4 max-w-sm">
+          <input
+            type="password"
+            autoComplete="new-password"
+            placeholder="Nueva Contraseña"
+            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-codeflow-accent outline-none"
+            value={newPass}
+            onChange={e => setNewPass(e.target.value)}
+          />
+          <button type="submit" disabled={loadingPass || !newPass} className="px-6 py-2.5 bg-white/10 border border-white/10 text-white font-bold rounded-xl hover:bg-white/15 transition-all disabled:opacity-40 text-sm">
+            {loadingPass ? 'Actualizando...' : 'Actualizar Contraseña'}
+          </button>
+        </form>
+      </section>
+
       <AvatarPicker isOpen={showPicker} onClose={() => setShowPicker(false)} username={username} currentSeed={currentSeed} />
     </div>
   );

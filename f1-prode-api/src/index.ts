@@ -746,6 +746,39 @@ app.post('/api/auth/update-password', requireAuth, async (req: Request, res: Res
     }
 });
 
+app.post('/api/auth/update-username', requireAuth, async (req: Request, res: Response) => {
+    const { newUsername } = req.body;
+    const userId = (req as any).user.userId;
+
+    if (!newUsername || typeof newUsername !== 'string') return res.status(400).json({ error: 'New username required' });
+
+    const lowerNew = newUsername.toLowerCase().trim();
+    if (lowerNew.length < 3 || lowerNew.length > 30) return res.status(400).json({ error: 'Username must be 3-30 characters' });
+    if (!/^[a-z0-9_]+$/.test(lowerNew)) return res.status(400).json({ error: 'Only lowercase letters, numbers and underscores' });
+
+    try {
+        const current = await pool.query('SELECT username FROM users WHERE id = $1', [userId]);
+        if (current.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+        const oldUsername = current.rows[0].username;
+
+        if (oldUsername === lowerNew) return res.status(400).json({ error: 'Same username' });
+
+        const existing = await pool.query('SELECT id FROM users WHERE username = $1', [lowerNew]);
+        if (existing.rows.length > 0) return res.status(409).json({ error: 'Username already taken' });
+
+        await pool.query('UPDATE users SET username = $1 WHERE id = $2', [lowerNew, userId]);
+        await pool.query('UPDATE user_profiles SET username = $1 WHERE username = $2', [lowerNew, oldUsername]);
+        await pool.query('UPDATE leaderboard SET name = $1 WHERE name = $2', [lowerNew, oldUsername]);
+        await pool.query('UPDATE predictions SET player = $1 WHERE player = $2', [lowerNew, oldUsername]);
+
+        const token = jwt.sign({ userId, username: lowerNew }, JWT_SECRET, { expiresIn: '7d' });
+        res.json({ success: true, token, username: lowerNew });
+    } catch (err) {
+        console.error('Update username error:', err);
+        res.status(500).json({ error: 'Error updating username' });
+    }
+});
+
 // Get context for AI Oracle
 app.get('/api/oracle/context', requireAuth, async (req: Request, res: Response) => {
     try {
