@@ -3057,32 +3057,57 @@ function AdminView() {
     if (!selectedRound) return;
     setSubmitting(true);
     setResultMessage(null);
+    const driverName = (d: any) => `${d.givenName} ${d.familyName}`;
     try {
-      // 1. Fetch Winners (Race Results)
-      const resVal = await fetch(`https://api.jolpi.ca/ergast/f1/2026/${selectedRound}/results.json`);
-      const dataVal = await resVal.json();
-      const results = dataVal.MRData.RaceTable.Races[0]?.Results;
+      if (selectedSession === 'race') {
+        const [resRace, resQual] = await Promise.all([
+          fetch(`https://api.jolpi.ca/ergast/f1/2026/${selectedRound}/results.json`),
+          fetch(`https://api.jolpi.ca/ergast/f1/2026/${selectedRound}/qualifying.json`),
+        ]);
+        const raceData = await resRace.json();
+        const qualData = await resQual.json();
+        const results = raceData.MRData.RaceTable.Races[0]?.Results;
+        const qResults = qualData.MRData.RaceTable.Races[0]?.QualifyingResults;
+        if (results && results.length >= 5) {
+          setP1(driverName(results[0].Driver)); setP2(driverName(results[1].Driver));
+          setP3(driverName(results[2].Driver)); setP4(driverName(results[3].Driver));
+          setP5(driverName(results[4].Driver));
+          setResultMessage({ message: "¡Resultados de carrera sincronizados!" });
+        }
+        if (qResults?.[0]) {
+          setPole(driverName(qResults[0].Driver));
+          setResultMessage((prev: any) => ({ ...prev, message: (prev?.message || '') + ' ¡Pole sincronizada!' }));
+        }
+        if (!results && !qResults) setResultMessage({ error: "No hay datos oficiales todavía para este GP." });
 
-      if (results && results.length >= 5) {
-        setP1(`${results[0].Driver.givenName} ${results[0].Driver.familyName}`);
-        setP2(`${results[1].Driver.givenName} ${results[1].Driver.familyName}`);
-        setP3(`${results[2].Driver.givenName} ${results[2].Driver.familyName}`);
-        setP4(`${results[3].Driver.givenName} ${results[3].Driver.familyName}`);
-        setP5(`${results[4].Driver.givenName} ${results[4].Driver.familyName}`);
-        setResultMessage({ message: "¡Resultados de carrera sincronizados!" });
-      }
+      } else if (selectedSession === 'qualifying') {
+        const res = await fetch(`https://api.jolpi.ca/ergast/f1/2026/${selectedRound}/qualifying.json`);
+        const data = await res.json();
+        const qResults = data.MRData.RaceTable.Races[0]?.QualifyingResults;
+        if (qResults && qResults.length >= 3) {
+          setP1(driverName(qResults[0].Driver));
+          setP2(driverName(qResults[1].Driver));
+          setP3(driverName(qResults[2].Driver));
+          setResultMessage({ message: "¡Top 3 de Clasificación sincronizados!" });
+        } else {
+          setResultMessage({ error: "No hay datos de Clasificación todavía para este GP." });
+        }
 
-      // 2. Fetch Pole (Qualifying)
-      const resQual = await fetch(`https://api.jolpi.ca/ergast/f1/2026/${selectedRound}/qualifying.json`);
-      const dataQual = await resQual.json();
-      const qResults = dataQual.MRData.RaceTable.Races[0]?.QualifyingResults;
-      if (qResults && qResults[0]) {
-        setPole(`${qResults[0].Driver.givenName} ${qResults[0].Driver.familyName}`);
-        setResultMessage((prev: any) => ({ ...prev, message: (prev?.message || "") + " ¡Pole position sincronizada!" }));
-      }
+      } else if (selectedSession === 'sprint') {
+        const res = await fetch(`https://api.jolpi.ca/ergast/f1/2026/${selectedRound}/sprint.json`);
+        const data = await res.json();
+        const sprintResults = data.MRData.RaceTable.Races[0]?.SprintResults;
+        if (sprintResults && sprintResults.length >= 3) {
+          setP1(driverName(sprintResults[0].Driver));
+          setP2(driverName(sprintResults[1].Driver));
+          setP3(driverName(sprintResults[2].Driver));
+          setResultMessage({ message: "¡Resultados de Sprint sincronizados!" });
+        } else {
+          setResultMessage({ error: "No hay datos de Sprint todavía para este GP." });
+        }
 
-      if (!results && !qResults) {
-        setResultMessage({ error: "No hay datos oficiales todavía para este GP en la API de la FIA." });
+      } else if (selectedSession === 'sprint_qualifying') {
+        setResultMessage({ error: "La Sprint Qualifying no está en la API automática. Cargá el P1 manualmente." });
       }
     } catch (err) {
       console.error(err);
@@ -3091,7 +3116,6 @@ function AdminView() {
       setSubmitting(false);
     }
   };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRound) return;
