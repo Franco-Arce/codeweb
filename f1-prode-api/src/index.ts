@@ -85,9 +85,9 @@ const pool = new Pool({
 // Session types for the prode
 export type SessionType = 'race' | 'qualifying' | 'sprint' | 'sprint_qualifying';
 
-// Points per session type
-const SESSION_POINTS: Record<SessionType, { pick: number; pole?: number }> = {
-    race: { pick: 10, pole: 5 },
+// Points per session type (5 positions, no pole)
+const SESSION_POINTS: Record<SessionType, { pick: number }> = {
+    race: { pick: 10 },
     qualifying: { pick: 10 },
     sprint: { pick: 8 },
     sprint_qualifying: { pick: 5 },
@@ -286,6 +286,20 @@ const initDb = async () => {
                     FOREIGN KEY (player) REFERENCES users(username) ON DELETE CASCADE;
                 END IF;
             END $$;
+        `);
+
+        // Seed Australia 2026 qualifying predictions (3 positions, already happened)
+        await pool.query(`
+            INSERT INTO predictions (player, race_id, session_type, p1, p2, p3)
+            SELECT u.username, 'round_1', 'qualifying', data.p1, data.p2, data.p3
+            FROM (VALUES
+                ('lu',      'George Russell',  'Lewis Hamilton',  'Oscar Piastri'),
+                ('eliana',  'Oscar Piastri',   'Max Verstappen',  'Charles Leclerc'),
+                ('guille',  'Charles Leclerc', 'Lando Norris',    'Max Verstappen'),
+                ('nestor',  'Charles Leclerc', 'Lando Norris',    'Max Verstappen')
+            ) AS data(username, p1, p2, p3)
+            JOIN users u ON u.username = data.username
+            ON CONFLICT (player, race_id, session_type) DO NOTHING
         `);
 
         console.log('✅ Base de datos inicializada y migrada');
@@ -896,7 +910,7 @@ app.get('/api/races/:round/schedule', requireAuth, async (req: Request, res: Res
             date_arg: toArg(qualyDate),
             isOpen: isOpen(qualyDate),
             points_per_pick: 10,
-            picks: ['q1', 'q2', 'q3'],
+            picks: ['p1', 'p2', 'p3', 'p4', 'p5'],
         });
 
         // Sprint weekend?
@@ -911,7 +925,7 @@ app.get('/api/races/:round/schedule', requireAuth, async (req: Request, res: Res
                 date_arg: toArg(sqDate),
                 isOpen: isOpen(sqDate),
                 points_per_pick: 5,
-                picks: ['p1'],
+                picks: ['p1', 'p2', 'p3', 'p4', 'p5'],
             });
 
             const sprintDate = raceInfo?.Sprint
@@ -924,7 +938,7 @@ app.get('/api/races/:round/schedule', requireAuth, async (req: Request, res: Res
                 date_arg: toArg(sprintDate),
                 isOpen: isOpen(sprintDate),
                 points_per_pick: 8,
-                picks: ['p1', 'p2', 'p3'],
+                picks: ['p1', 'p2', 'p3', 'p4', 'p5'],
             });
         }
 
@@ -939,8 +953,7 @@ app.get('/api/races/:round/schedule', requireAuth, async (req: Request, res: Res
             date_arg: toArg(raceDate),
             isOpen: isOpen(raceDate),
             points_per_pick: 10,
-            points_pole: 5,
-            picks: ['pole_position', 'p1', 'p2', 'p3', 'p4', 'p5'],
+            picks: ['p1', 'p2', 'p3', 'p4', 'p5'],
         });
 
         res.json({
@@ -1038,7 +1051,7 @@ app.post('/api/admin/results', requireAuth, requireAdmin, async (req: Request, r
             [race_id, session_type]
         );
 
-        const officialResult = { p1, p2, p3, p4, p5, pole_position };
+        const officialResult = { p1, p2, p3, p4, p5 };
         const posFields = ['p1', 'p2', 'p3', 'p4', 'p5'] as const;
         const scoreUpdates: { player: string; scored: number }[] = [];
 
@@ -1046,9 +1059,6 @@ app.post('/api/admin/results', requireAuth, requireAdmin, async (req: Request, r
             let scored = 0;
             for (const pos of posFields) {
                 if (pred[pos] && pred[pos] === (officialResult as any)[pos]) scored += pts.pick;
-            }
-            if (pts.pole && pred.pole_position && pred.pole_position === officialResult.pole_position) {
-                scored += pts.pole;
             }
             if (scored > 0) scoreUpdates.push({ player: pred.player, scored });
         }

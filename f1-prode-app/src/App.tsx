@@ -1210,7 +1210,7 @@ function DashboardView() {
                 let totalVotes = 0;
                 predictions.forEach((p: any) => {
                   // Direct fallback parsing:
-                  const drivers = [p.pole_position, p.p1, p.p2, p.p3, p.p4, p.p5].filter(Boolean);
+                  const drivers = [p.p1, p.p2, p.p3, p.p4, p.p5].filter(Boolean);
                   drivers.forEach(d => {
                     tallies[d] = (tallies[d] || 0) + 1;
                     totalVotes++;
@@ -1552,6 +1552,8 @@ function F1ProdeView() {
         { key: 'p1', label: 'Pole (1° Qualy)', pts: '10 pts', color: 'border-yellow-500/30 focus:border-yellow-500 bg-yellow-500/5' },
         { key: 'p2', label: '2° Qualy', pts: '10 pts', color: 'border-gray-400/20 focus:border-gray-400 bg-gray-400/5' },
         { key: 'p3', label: '3° Qualy', pts: '10 pts', color: 'border-orange-600/20 focus:border-orange-600 bg-orange-600/5' },
+        { key: 'p4', label: '4° Qualy', pts: '10 pts', color: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
+        { key: 'p5', label: '5° Qualy', pts: '10 pts', color: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
       ],
       hasPole: false,
     },
@@ -1559,6 +1561,10 @@ function F1ProdeView() {
       label: '⚡ Sprint Qualifying',
       fields: [
         { key: 'p1', label: '1° Sprint Qualifying', pts: '5 pts', color: 'border-yellow-500/30 focus:border-yellow-500 bg-yellow-500/5' },
+        { key: 'p2', label: '2° Sprint Qualifying', pts: '5 pts', color: 'border-gray-400/20 focus:border-gray-400 bg-gray-400/5' },
+        { key: 'p3', label: '3° Sprint Qualifying', pts: '5 pts', color: 'border-orange-600/20 focus:border-orange-600 bg-orange-600/5' },
+        { key: 'p4', label: '4° Sprint Qualifying', pts: '5 pts', color: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
+        { key: 'p5', label: '5° Sprint Qualifying', pts: '5 pts', color: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
       ],
       hasPole: false,
     },
@@ -1568,6 +1574,8 @@ function F1ProdeView() {
         { key: 'p1', label: '1° Sprint', pts: '8 pts', color: 'border-yellow-500/30 focus:border-yellow-500 bg-yellow-500/5' },
         { key: 'p2', label: '2° Sprint', pts: '8 pts', color: 'border-gray-400/20 focus:border-gray-400 bg-gray-400/5' },
         { key: 'p3', label: '3° Sprint', pts: '8 pts', color: 'border-orange-600/20 focus:border-orange-600 bg-orange-600/5' },
+        { key: 'p4', label: '4° Sprint', pts: '8 pts', color: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
+        { key: 'p5', label: '5° Sprint', pts: '8 pts', color: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
       ],
       hasPole: false,
     },
@@ -1580,7 +1588,7 @@ function F1ProdeView() {
         { key: 'p4', label: '4° Puesto', pts: '10 pts', color: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
         { key: 'p5', label: '5° Puesto', pts: '10 pts', color: 'border-white/10 focus:border-codeflow-accent bg-white/5' },
       ],
-      hasPole: true,
+      hasPole: false,
     },
   };
 
@@ -2048,11 +2056,13 @@ function PredictionsGridTab({ nextRace }: { nextRace: any }) {
     sprint: '🏃 Sprint', sprint_qualifying: '⚡ Sprint Qualifying',
   };
   const POSITIONS: Record<string, string[]> = {
-    race: ['pole_position', 'p1', 'p2', 'p3', 'p4', 'p5'],
-    qualifying: ['p1', 'p2', 'p3'], sprint: ['p1', 'p2', 'p3'], sprint_qualifying: ['p1'],
+    race: ['p1', 'p2', 'p3', 'p4', 'p5'],
+    qualifying: ['p1', 'p2', 'p3', 'p4', 'p5'],
+    sprint: ['p1', 'p2', 'p3', 'p4', 'p5'],
+    sprint_qualifying: ['p1', 'p2', 'p3', 'p4', 'p5'],
   };
   const POS_LABELS: Record<string, string> = {
-    pole_position: '🏎️ Pole', p1: '🥇 1°', p2: '🥈 2°', p3: '🥉 3°', p4: '4°', p5: '5°',
+    p1: '🥇 1°', p2: '🥈 2°', p3: '🥉 3°', p4: '4°', p5: '5°',
   };
   const positions = POSITIONS[sessionFilter] || POSITIONS.race;
   const consensus: Record<string, Record<string, number>> = {};
@@ -3022,10 +3032,10 @@ function AdminView() {
   const [resultMessage, setResultMessage] = React.useState<any>(null);
 
   const SESSION_CONFIG = {
-    race: { label: '🏁 Carrera', fields: ['p1', 'p2', 'p3', 'p4', 'p5'], hasPole: true },
-    qualifying: { label: '🏎️ Clasificación', fields: ['p1', 'p2', 'p3'], hasPole: false },
-    sprint: { label: '🏃 Sprint Race', fields: ['p1', 'p2', 'p3'], hasPole: false },
-    sprint_qualifying: { label: '⚡ Sprint Qualifying', fields: ['p1'], hasPole: false },
+    race: { label: '🏁 Carrera', fields: ['p1', 'p2', 'p3', 'p4', 'p5'], hasPole: false },
+    qualifying: { label: '🏎️ Clasificación', fields: ['p1', 'p2', 'p3', 'p4', 'p5'], hasPole: false },
+    sprint: { label: '🏃 Sprint Race', fields: ['p1', 'p2', 'p3', 'p4', 'p5'], hasPole: false },
+    sprint_qualifying: { label: '⚡ Sprint Qualifying', fields: ['p1', 'p2', 'p3', 'p4', 'p5'], hasPole: false },
   } as const;
   const sessionCfg = SESSION_CONFIG[selectedSession];
 
