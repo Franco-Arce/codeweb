@@ -153,6 +153,16 @@ const initDb = async () => {
                 END IF;
             END $$;
         `);
+        await pool.query(`
+            DO $$ BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint WHERE conname = 'race_results_race_id_session_unique'
+                ) THEN
+                    ALTER TABLE race_results ADD CONSTRAINT race_results_race_id_session_unique
+                    UNIQUE (race_id, session_type);
+                END IF;
+            END $$;
+        `);
         // 5. Add created_by_user_id to media tables
         await pool.query(`
             ALTER TABLE media_series ADD COLUMN IF NOT EXISTS created_by_user_id INTEGER REFERENCES users(id);
@@ -160,13 +170,27 @@ const initDb = async () => {
             ALTER TABLE media_boardgames ADD COLUMN IF NOT EXISTS created_by_user_id INTEGER REFERENCES users(id);
         `);
 
-        // 6. Create media_ratings table for multi-user voting
+        // 6. Create media_ratings table for multi-user voting (media_id is TEXT to support UUIDs)
+        // If the table exists with media_id INTEGER (old schema), drop and recreate with TEXT
+        await pool.query(`
+            DO $$
+            DECLARE col_type TEXT;
+            BEGIN
+                SELECT data_type INTO col_type
+                FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'media_ratings' AND column_name = 'media_id';
+
+                IF col_type = 'integer' THEN
+                    DROP TABLE IF EXISTS media_ratings;
+                END IF;
+            END $$;
+        `);
         await pool.query(`
             CREATE TABLE IF NOT EXISTS media_ratings (
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-                media_type VARCHAR(20) NOT NULL, -- 'series', 'movies', 'boardgames'
-                media_id INTEGER NOT NULL,
+                media_type VARCHAR(20) NOT NULL,
+                media_id TEXT NOT NULL,
                 rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(user_id, media_type, media_id)
@@ -225,68 +249,6 @@ const initDb = async () => {
 };
 
 initDb();
-
-// --- Auth Routes ---
-app.post('/api/auth/login', async (req: Request, res: Response) => {
-    try {
-        const { username, password } = req.body;
-        const normalizedUser = username.toLowerCase().trim();
-
-        const result = await pool.query('SELECT * FROM users WHERE username = $1', [normalizedUser]);
-        if (result.rows.length === 0) {
-            return res.status(401).json({ success: false, message: 'Bandera negra: Usuario no encontrado' });
-        }
-
-        const user = result.rows[0];
-        const isMatch = await bcrypt.compare(password, user.password_hash);
-
-        if (!isMatch) {
-            return res.status(401).json({ success: false, message: 'Bandera negra: Contraseña incorrecta' });
-        }
-
-        const token = jwt.sign(
-            { userId: user.id, username: user.username },
-            JWT_SECRET,
-            { expiresIn: '24h' }
-        );
-
-        res.json({
-            success: true,
-            message: 'Welcome to the Paddock',
-            token,
-            username: user.username
-        });
-    } catch (e) {
-        console.error('Login error:', e);
-        res.status(500).json({ success: false, message: 'Falla en telemetría (Error de servidor)' });
-    }
-});
-
-app.post('/api/auth/register', async (req: Request, res: Response) => {
-    try {
-        const { username, password } = req.body;
-        const normalizedUser = username.toLowerCase().trim();
-
-        // Check if exists
-        const exists = await pool.query('SELECT id FROM users WHERE username = $1', [normalizedUser]);
-        if (exists.rows.length > 0) {
-            return res.status(400).json({ success: false, message: 'Piloto ya registrado' });
-        }
-
-        const salt = await bcrypt.genSalt(10);
-        const hash = await bcrypt.hash(password, salt);
-
-        await pool.query(
-            'INSERT INTO users (username, password_hash) VALUES ($1, $2)',
-            [normalizedUser, hash]
-        );
-
-        res.status(201).json({ success: true, message: 'Fichaje completado con éxito' });
-    } catch (e) {
-        console.error('Register error:', e);
-        res.status(500).json({ success: false, message: 'Error en el proceso de registro' });
-    }
-});
 
 app.post('/api/auth/logout', (req: Request, res: Response) => {
     res.json({ success: true, message: 'Logged out' });
@@ -804,10 +766,10 @@ app.get('/api/races/:round/schedule', requireAuth, async (req: Request, res: Res
         // Build the session list
         const sessions: any[] = [];
 
-        // Qualifying (always)
+        // Qualifying (always) — fallback to hardcoded calendar if Jolpica has no data yet
         const qualyDate = raceInfo?.Qualifying
             ? `${raceInfo.Qualifying.date}T${raceInfo.Qualifying.time || '00:00:00Z'}`
-            : null;
+            : local.qualy_date || null;
         sessions.push({
             type: 'qualifying',
             label: '🏎️ Clasificación',
@@ -1068,30 +1030,10 @@ app.get('/api/oracle/roast', async (req: Request, res: Response) => {
         const raceCtx = { circuitName: nextRace.name || 'Próximo GP' };
 
         const roast = await generateOracleRoast(predsRes.rows, raceCtx, lbRes.rows);
-        res.json({ roast });
+        res.json({ analysis: roast });
     } catch (err) {
         console.error('Oracle error:', err);
         res.status(500).json({ error: 'El oráculo se quedó sin nafta.' });
-    }
-});
-
-app.post('/api/auth/update-password', requireAuth, async (req: Request, res: Response) => {
-    try {
-        const { password } = req.body;
-        const userId = (req as any).user.userId;
-
-        if (!password || password.length < 4) {
-            return res.status(400).json({ success: false, message: 'Contraseña muy corta' });
-        }
-
-        const salt = await bcrypt.genSalt(10);
-        const hash = await bcrypt.hash(password, salt);
-
-        await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, userId]);
-        res.json({ success: true, message: 'Contraseña actualizada' });
-    } catch (err) {
-        console.error('Update password error:', err);
-        res.status(500).json({ success: false, message: 'Error de servidor' });
     }
 });
 
