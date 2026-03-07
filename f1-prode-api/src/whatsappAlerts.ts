@@ -1,8 +1,21 @@
 import cron from 'node-cron';
 import { Pool } from 'pg';
 
-const GREEN_API_URL = "https://7103.api.greenapi.com/waInstance7103523905/sendMessage/31a3b591e91b48e0adef98fb205b06f64e25920d7cbe402dbe";
-const GROUP_ID = "5493516009843-1633467350@g.us";
+const GREEN_API_URL = process.env.GREEN_API_URL || "https://7103.api.greenapi.com/waInstance7103523905/sendMessage/31a3b591e91b48e0adef98fb205b06f64e25920d7cbe402dbe";
+const GROUP_ID = process.env.WHATSAPP_GROUP_ID || "5493516009843-1633467350@g.us";
+
+export async function sendWhatsAppMessage(message: string): Promise<void> {
+    try {
+        const res = await fetch(GREEN_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chatId: GROUP_ID, message })
+        });
+        if (!res.ok) console.error('❌ WhatsApp send failed:', await res.text());
+    } catch (err) {
+        console.error('❌ WhatsApp send error:', err);
+    }
+}
 
 export function startWhatsAppCron(pool: Pool, getNextRace: () => any, races2026: any[]) {
     // Run every 15 minutes
