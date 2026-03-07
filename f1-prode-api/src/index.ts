@@ -674,6 +674,38 @@ app.post('/api/predictions', requireAuth, async (req: Request, res: Response) =>
             [lowerPlayer, race_id, session_type, p1, p2, p3, p4, p5, pole_position]
         );
         res.status(201).json({ message: 'Prediction saved', prediction: result.rows[0] });
+
+        // Fire-and-forget: send WhatsApp reminder to whoever is still missing
+        (async () => {
+            try {
+                const SESSION_LABELS: Record<string, string> = {
+                    race: 'Carrera', qualifying: 'Clasificación',
+                    sprint: 'Sprint Race', sprint_qualifying: 'Sprint Qualifying',
+                };
+                // Active players = everyone who predicted for ANY session this race
+                const activePreds = await pool.query(
+                    'SELECT DISTINCT player FROM predictions WHERE race_id = $1', [race_id]
+                );
+                const activePlayers = activePreds.rows.map((r: any) => r.player);
+
+                // Who already predicted this session
+                const sessionPreds = await pool.query(
+                    'SELECT player FROM predictions WHERE race_id = $1 AND session_type = $2',
+                    [race_id, session_type]
+                );
+                const submitted = new Set(sessionPreds.rows.map((r: any) => r.player.toLowerCase()));
+                const missing = activePlayers.filter((p: string) => !submitted.has(p.toLowerCase()));
+
+                if (missing.length === 0) return;
+
+                const mentions = missing.map((u: string) => `*${u}*`).join(', ');
+                const sessionLabel = SESSION_LABELS[session_type] || session_type;
+                const msg = `🏎️ *${lowerPlayer}* acaba de cargar su pronóstico para la *${sessionLabel}* de *${nextRace.name}*.\n\nTodavía faltan: ${mentions}\n\n¡No se queden afuera! ⏱️`;
+                await sendWhatsAppMessage(msg);
+            } catch (err) {
+                console.error('WhatsApp auto-remind error:', err);
+            }
+        })();
     } catch (error) {
         console.error('Error saving prediction', error);
         res.status(500).json({ error: 'Database error' });

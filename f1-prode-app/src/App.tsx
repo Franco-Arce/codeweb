@@ -2954,11 +2954,10 @@ function F1RulesTab() {
       icon: <CheckCircle className="text-green-500" />,
       isPoints: true,
       points: [
-        { label: "Pole Position (Sábado)", pts: "+5 pts", desc: "Acertar quién hace la Pole oficial el sábado." },
-        { label: "Carrera (Top 5)", pts: "+10 pts c/u", desc: "Cada posición del Top 5 que aciertes exactamente el domingo." },
-        { label: "Sprint Race (Top 3)", pts: "+8 pts c/u", desc: "Acertar los 3 primeros de la carrera corta." },
-        { label: "Clasificación (Top 3)", pts: "+10 pts c/u", desc: "Acertar los 3 pilotos más rápidos de la Qualy tradicional." },
-        { label: "Sprint Qualy (1°)", pts: "+5 pts", desc: "Acertar quién sale primero en la tanda del viernes." },
+        { label: "Carrera (Top 5)", pts: "+10 pts c/u", desc: "Acertá las 5 primeras posiciones exactas del domingo. Máximo 50 pts por carrera." },
+        { label: "Clasificación (Top 5)", pts: "+10 pts c/u", desc: "Acertá los 5 pilotos más rápidos de la Qualy tradicional en orden exacto. Máximo 50 pts." },
+        { label: "Sprint Race (Top 5)", pts: "+8 pts c/u", desc: "Acertá los 5 primeros de la carrera corta en orden exacto. Máximo 40 pts." },
+        { label: "Sprint Qualifying (Top 5)", pts: "+5 pts c/u", desc: "Acertá los 5 primeros de la tanda del viernes en orden exacto. Máximo 25 pts." },
       ]
     },
     {
