@@ -746,6 +746,34 @@ app.post('/api/auth/update-password', requireAuth, async (req: Request, res: Res
     }
 });
 
+app.delete('/api/auth/account', requireAuth, async (req: Request, res: Response) => {
+    const { password } = req.body;
+    const userId = (req as any).user.userId;
+
+    if (!password) return res.status(400).json({ error: 'Password required' });
+
+    try {
+        const result = await pool.query('SELECT password_hash FROM users WHERE id = $1', [userId]);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+
+        const valid = await bcrypt.compare(password, result.rows[0].password_hash);
+        if (!valid) return res.status(401).json({ error: 'Contraseña incorrecta' });
+
+        // NULL out created_by_user_id (no ON DELETE CASCADE on these columns)
+        await pool.query('UPDATE media_series SET created_by_user_id = NULL WHERE created_by_user_id = $1', [userId]);
+        await pool.query('UPDATE media_movies SET created_by_user_id = NULL WHERE created_by_user_id = $1', [userId]);
+        await pool.query('UPDATE media_boardgames SET created_by_user_id = NULL WHERE created_by_user_id = $1', [userId]);
+
+        // Delete user — cascades to user_profiles, leaderboard, predictions, media_ratings
+        await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Delete account error:', err);
+        res.status(500).json({ error: 'Error deleting account' });
+    }
+});
+
 app.post('/api/auth/update-username', requireAuth, async (req: Request, res: Response) => {
     const { newUsername } = req.body;
     const userId = (req as any).user.userId;

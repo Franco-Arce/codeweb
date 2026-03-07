@@ -484,7 +484,7 @@ function AppShell({ activeTab, setActiveTab, setIsAuthenticated, currentUser, ha
               {activeTab === 'dashboard' && <DashboardView />}
               {activeTab === 'f1' && <F1ProdeView />}
               {activeTab === 'admin' && <AdminView />}
-              {activeTab === 'settings' && <SettingsView username={currentUser} onUsernameChange={onUsernameChange} />}
+              {activeTab === 'settings' && <SettingsView username={currentUser} onUsernameChange={onUsernameChange} onDeleted={handleLogout} />}
               {['series', 'animes', 'movies', 'games'].includes(activeTab) && (
                 <MediaVaultView tab={activeTab} />
               )}
@@ -522,7 +522,7 @@ function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, labe
 }
 
 // --- Settings View Component ---
-function SettingsView({ username, onUsernameChange }: { username: string; onUsernameChange: (newUsername: string, newToken: string) => void }) {
+function SettingsView({ username, onUsernameChange, onDeleted }: { username: string; onUsernameChange: (newUsername: string, newToken: string) => void; onDeleted: () => void }) {
   const { profiles, refreshProfiles } = useProfiles();
   const { addToast } = useToast();
   const [showPicker, setShowPicker] = useState(false);
@@ -531,6 +531,11 @@ function SettingsView({ username, onUsernameChange }: { username: string; onUser
   const [newUsername, setNewUsername] = useState('');
   const [loadingUser, setLoadingUser] = useState(false);
   const [usernameError, setUsernameError] = useState('');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [loadingDelete, setLoadingDelete] = useState(false);
+  const [deleteStep, setDeleteStep] = useState<'confirm' | 'password'>('confirm');
 
   const currentSeed = profiles[username] || username || '';
   const avatarUrl = (currentSeed && typeof currentSeed === 'string' && currentSeed.includes(':'))
@@ -602,6 +607,31 @@ function SettingsView({ username, onUsernameChange }: { username: string; onUser
     }
   };
 
+  const handleDeleteAccount = async () => {
+    setDeleteError('');
+    setLoadingDelete(true);
+    try {
+      const res = await fetch(`${API_URL}/api/auth/account`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('prode_auth_token')}`
+        },
+        body: JSON.stringify({ password: deletePassword })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onDeleted();
+      } else {
+        setDeleteError(data.error || 'Error al eliminar cuenta');
+      }
+    } catch {
+      setDeleteError('Error de red');
+    } finally {
+      setLoadingDelete(false);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in max-w-4xl mx-auto py-6">
       <header>
@@ -668,7 +698,86 @@ function SettingsView({ username, onUsernameChange }: { username: string; onUser
         </form>
       </section>
 
+      {/* Danger Zone */}
+      <section className="border border-red-500/20 rounded-2xl p-5 md:p-8 bg-red-500/[0.03]">
+        <h3 className="text-xl font-bold text-red-400 mb-2 flex items-center gap-2">
+          <Trash2 size={20} /> Zona Peligrosa
+        </h3>
+        <p className="text-codeflow-muted text-sm mb-5">
+          Eliminar tu cuenta borrará permanentemente todos tus datos: pronósticos, puntajes, valoraciones y perfil. Esta acción no se puede deshacer.
+        </p>
+        <button
+          onClick={() => { setShowDeleteModal(true); setDeleteStep('confirm'); setDeletePassword(''); setDeleteError(''); }}
+          className="px-5 py-2.5 rounded-xl border border-red-500/40 text-red-400 font-bold text-sm hover:bg-red-500/10 transition-all"
+        >
+          Eliminar mi cuenta
+        </button>
+      </section>
+
       <AvatarPicker isOpen={showPicker} onClose={() => setShowPicker(false)} username={username} currentSeed={currentSeed} />
+
+      {/* Delete Account Modal */}
+      <AnimatePresence>
+        {showDeleteModal && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-codeflow-dark/85 backdrop-blur-md"
+              onClick={() => !loadingDelete && setShowDeleteModal(false)} />
+            <motion.div
+              initial={{ scale: 0.94, opacity: 0, y: 8 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.94, opacity: 0, y: 8 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+              className="relative bg-codeflow-card border border-red-500/20 p-6 rounded-2xl w-full max-w-sm shadow-2xl"
+            >
+              <div className="w-12 h-12 rounded-xl bg-red-500/15 flex items-center justify-center mb-4">
+                <Trash2 size={24} className="text-red-400" />
+              </div>
+
+              {deleteStep === 'confirm' ? (
+                <>
+                  <h3 className="text-xl font-bold text-white mb-2">¿Eliminar tu cuenta?</h3>
+                  <p className="text-codeflow-muted text-sm mb-6">
+                    Se eliminarán todos tus datos permanentemente. No hay vuelta atrás.
+                  </p>
+                  <div className="flex gap-3">
+                    <button onClick={() => setShowDeleteModal(false)} className="flex-1 py-2.5 rounded-xl bg-white/5 text-white font-bold hover:bg-white/10 transition-colors text-sm">Cancelar</button>
+                    <button onClick={() => setDeleteStep('password')} className="flex-1 py-2.5 rounded-xl bg-red-500/20 border border-red-500/40 text-red-400 font-bold hover:bg-red-500/30 transition-colors text-sm">Continuar</button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-xl font-bold text-white mb-2">Confirma tu contraseña</h3>
+                  <p className="text-codeflow-muted text-sm mb-5">Ingresá tu contraseña para confirmar que querés eliminar la cuenta de <span className="text-white font-bold">{username}</span>.</p>
+                  <div className="space-y-3">
+                    <input
+                      type="password"
+                      autoComplete="current-password"
+                      placeholder="Tu contraseña actual"
+                      autoFocus
+                      className={`w-full bg-white/5 border rounded-xl px-4 py-3 text-white focus:outline-none transition-all ${deleteError ? 'border-red-500/60' : 'border-white/10 focus:border-red-500/50'}`}
+                      value={deletePassword}
+                      onChange={e => { setDeletePassword(e.target.value); setDeleteError(''); }}
+                      onKeyDown={e => { if (e.key === 'Enter' && deletePassword) handleDeleteAccount(); }}
+                    />
+                    {deleteError && <p className="text-red-400 text-xs px-1">{deleteError}</p>}
+                    <div className="flex gap-3 pt-1">
+                      <button onClick={() => setDeleteStep('confirm')} disabled={loadingDelete} className="flex-1 py-2.5 rounded-xl bg-white/5 text-white font-bold hover:bg-white/10 transition-colors text-sm disabled:opacity-40">Atrás</button>
+                      <button
+                        onClick={handleDeleteAccount}
+                        disabled={loadingDelete || !deletePassword}
+                        className="flex-1 py-2.5 rounded-xl bg-red-600 text-white font-bold hover:bg-red-500 transition-colors text-sm disabled:opacity-40"
+                      >
+                        {loadingDelete ? 'Eliminando...' : 'Eliminar'}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
