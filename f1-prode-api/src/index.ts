@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import cron from 'node-cron';
+import crypto from 'crypto';
 import { generateOracleRoast, RaceContext } from './groqOracle';
 import { sendWhatsAppMessage, startWhatsAppCron } from './whatsappAlerts';
 
@@ -40,9 +41,25 @@ const authLimiter = rateLimit({
     message: { error: 'Demasiados intentos. Esperá 15 minutos.' },
 });
 
-// Oracle in-memory cache: race_id -> { result, timestamp }
-const oracleCache = new Map<string, { result: string; ts: number }>();
-const ORACLE_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+// Oracle cache constants
+const ORACLE_NEAR_RACE_WINDOW = 3 * 60 * 60 * 1000;   // 3h before session → refresh by time
+const ORACLE_NEAR_RACE_REFRESH = 30 * 60 * 1000;       // refresh every 30min when near race
+const ORACLE_MAX_DAILY_CALLS = 80;                      // ~100k TPD / ~1250 tokens per call
+
+function hashStr(s: string): string {
+    return crypto.createHash('md5').update(s).digest('hex');
+}
+
+function isNearRace(nextRace: any, races2026: any[]): boolean {
+    const race = races2026.find(r => r.round === nextRace.round);
+    if (!race) return false;
+    const now = Date.now();
+    const dates = [race.qualy_date, race.date, race.sprint_date].filter(Boolean) as string[];
+    return dates.some(d => {
+        const t = new Date(d).getTime();
+        return t > now && (t - now) < ORACLE_NEAR_RACE_WINDOW;
+    });
+}
 
 // --- Simple Auth Middleware ---
 const requireAuth = (req: Request, res: Response, next: any) => {
@@ -187,6 +204,19 @@ const initDb = async () => {
             -- Ensure media_boardgames has rating and recommender
             ALTER TABLE media_boardgames ADD COLUMN IF NOT EXISTS rating VARCHAR(50);
             ALTER TABLE media_boardgames ADD COLUMN IF NOT EXISTS recommender VARCHAR(100);
+
+            CREATE TABLE IF NOT EXISTS oracle_cache (
+                race_id TEXT PRIMARY KEY,
+                analysis TEXT NOT NULL,
+                generated_at TIMESTAMPTZ DEFAULT NOW(),
+                predictions_hash TEXT,
+                jolpica_hash TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS oracle_usage (
+                day DATE PRIMARY KEY DEFAULT CURRENT_DATE,
+                call_count INTEGER DEFAULT 0
+            );
         `);
 
         // --- Non-destructive migrations ---
@@ -1361,82 +1391,190 @@ app.get('/api/leaderboard/history', requireAuth, async (req: Request, res: Respo
 });
 
 // --- The Oracle (Groq AI) ---
+// Shared function to build oracle context and generate analysis
+async function buildOracleAnalysis(nextRace: any): Promise<{ analysis: string; predsHash: string; jolpicaHash: string }> {
+    const raceId = `round_${nextRace.round}`;
+
+    const [predsRes, lbRes] = await Promise.all([
+        pool.query('SELECT * FROM predictions WHERE race_id = $1', [raceId]),
+        pool.query('SELECT * FROM leaderboard ORDER BY pts DESC'),
+    ]);
+
+    const sessionResults: string[] = [];
+
+    const fetchJolpica = async (round: number, endpoint: string): Promise<any> => {
+        try {
+            const r = await fetch(`https://api.jolpi.ca/ergast/f1/2026/${round}/${endpoint}.json`);
+            return r.ok ? await r.json() : null;
+        } catch { return null; }
+    };
+
+    const formatTop5 = (results: any[]): string =>
+        results.slice(0, 5).map((r: any, i: number) =>
+            `P${i + 1}: ${r.Driver?.givenName} ${r.Driver?.familyName}`
+        ).join(', ');
+
+    // DB race results
+    try {
+        const dbResults = await pool.query(
+            'SELECT * FROM race_results ORDER BY race_id DESC, session_type ASC LIMIT 10'
+        );
+        for (const row of dbResults.rows) {
+            const race = races2026.find(r => `round_${r.round}` === row.race_id);
+            const raceName = race?.name || row.race_id;
+            const positions = [row.p1, row.p2, row.p3, row.p4, row.p5].filter(Boolean)
+                .map((d: string, i: number) => `P${i + 1}: ${d}`).join(', ');
+            if (positions) sessionResults.push(`[Oficial] ${raceName} — ${row.session_type}: ${positions}`);
+        }
+    } catch { /* no race_results yet */ }
+
+    // Jolpica previous round
+    const prevRound = nextRace.round - 1;
+    if (prevRound >= 1) {
+        const [prevQualy, prevRaceData] = await Promise.all([
+            fetchJolpica(prevRound, 'qualifying'),
+            fetchJolpica(prevRound, 'results'),
+        ]);
+        const prevQual = prevQualy?.MRData?.RaceTable?.Races?.[0];
+        if (prevQual?.QualifyingResults?.length) {
+            sessionResults.push(`Clasificación ${prevQual.raceName || `Round ${prevRound}`}: ${formatTop5(prevQual.QualifyingResults)}`);
+        }
+        const prevR = prevRaceData?.MRData?.RaceTable?.Races?.[0];
+        if (prevR?.Results?.length) {
+            sessionResults.push(`Carrera ${prevR.raceName || `Round ${prevRound}`}: ${formatTop5(prevR.Results)}`);
+        }
+    }
+
+    // Jolpica current round qualifying
+    const currentQualy = await fetchJolpica(nextRace.round, 'qualifying');
+    const currentQualData = currentQualy?.MRData?.RaceTable?.Races?.[0];
+    if (currentQualData?.QualifyingResults?.length) {
+        sessionResults.push(`Clasificación ${nextRace.name}: ${formatTop5(currentQualData.QualifyingResults)}`);
+    }
+
+    const predsHash = hashStr(JSON.stringify(predsRes.rows.map((r: any) => ({
+        player: r.player, p1: r.p1, p2: r.p2, p3: r.p3, p4: r.p4, p5: r.p5, session_type: r.session_type
+    }))));
+    const jolpicaHash = hashStr(JSON.stringify(sessionResults));
+
+    const raceCtx: RaceContext = {
+        circuitName: `${nextRace.name} — ${nextRace.circuit || ''}`,
+        lastResults: sessionResults.length > 0 ? sessionResults.join(' | ') : undefined,
+    };
+
+    const analysis = await generateOracleRoast(predsRes.rows, raceCtx, lbRes.rows);
+    return { analysis, predsHash, jolpicaHash };
+}
+
 app.get('/api/oracle/roast', async (req: Request, res: Response) => {
     try {
         const nextRace = getNextRace();
         const raceId = `round_${nextRace.round}`;
+        const nearRace = isNearRace(nextRace, races2026);
 
-        const [predsRes, lbRes] = await Promise.all([
-            pool.query('SELECT * FROM predictions WHERE race_id = $1 OR race_id = \'current\'', [raceId]),
-            pool.query('SELECT * FROM leaderboard ORDER BY pts DESC'),
-        ]);
+        // Check existing cache
+        const cached = await pool.query('SELECT * FROM oracle_cache WHERE race_id = $1', [raceId]);
 
-        // Build rich context from Jolpica + our own race_results table
-        const sessionResults: string[] = [];
+        if (cached.rows.length > 0) {
+            const c = cached.rows[0];
+            const age = Date.now() - new Date(c.generated_at).getTime();
 
-        const fetchJolpica = async (round: number, endpoint: string): Promise<any> => {
-            try {
-                const r = await fetch(`https://api.jolpi.ca/ergast/f1/2026/${round}/${endpoint}.json`);
-                return r.ok ? await r.json() : null;
-            } catch { return null; }
-        };
+            if (nearRace) {
+                // Near race: use cache only if <30min old AND jolpica data unchanged
+                // We need jolpica hash to compare — fetch it quickly
+                const sessionResults: string[] = [];
+                try {
+                    const dbResults = await pool.query('SELECT * FROM race_results ORDER BY race_id DESC LIMIT 10');
+                    for (const row of dbResults.rows) {
+                        const race = races2026.find(r => `round_${r.round}` === row.race_id);
+                        const positions = [row.p1, row.p2, row.p3, row.p4, row.p5].filter(Boolean).join(',');
+                        if (positions) sessionResults.push(`${race?.name || row.race_id}-${row.session_type}:${positions}`);
+                    }
+                } catch { /* ok */ }
+                const quickHash = hashStr(JSON.stringify(sessionResults));
 
-        const formatTop5 = (results: any[], nameKey = 'Driver'): string =>
-            results.slice(0, 5).map((r: any, i: number) =>
-                `P${i + 1}: ${r[nameKey]?.givenName} ${r[nameKey]?.familyName}`
-            ).join(', ');
-
-        // Check our own race_results table for any loaded results
-        try {
-            const dbResults = await pool.query(
-                'SELECT * FROM race_results ORDER BY race_id DESC, session_type ASC LIMIT 10'
-            );
-            for (const row of dbResults.rows) {
-                const race = races2026.find(r => `round_${r.round}` === row.race_id);
-                const raceName = race?.name || row.race_id;
-                const positions = [row.p1, row.p2, row.p3, row.p4, row.p5].filter(Boolean)
-                    .map((d: string, i: number) => `P${i + 1}: ${d}`).join(', ');
-                if (positions) sessionResults.push(`[Resultado oficial] ${raceName} — ${row.session_type}: ${positions}`);
-            }
-        } catch { /* no race_results yet */ }
-
-        // Fetch previous round results from Jolpica
-        const prevRound = nextRace.round - 1;
-        if (prevRound >= 1) {
-            const [prevQualy, prevRace] = await Promise.all([
-                fetchJolpica(prevRound, 'qualifying'),
-                fetchJolpica(prevRound, 'results'),
-            ]);
-
-            const prevQual = prevQualy?.MRData?.RaceTable?.Races?.[0];
-            if (prevQual?.QualifyingResults?.length) {
-                const raceName = prevQual.raceName || `Round ${prevRound}`;
-                sessionResults.push(`Clasificación ${raceName}: ${formatTop5(prevQual.QualifyingResults)}`);
-            }
-
-            const prevRaceData = prevRace?.MRData?.RaceTable?.Races?.[0];
-            if (prevRaceData?.Results?.length) {
-                const raceName = prevRaceData.raceName || `Round ${prevRound}`;
-                sessionResults.push(`Carrera ${raceName}: ${formatTop5(prevRaceData.Results)}`);
+                if (age < ORACLE_NEAR_RACE_REFRESH && c.jolpica_hash === quickHash) {
+                    const u = await pool.query('SELECT call_count FROM oracle_usage WHERE day = CURRENT_DATE');
+                    const dc = u.rows[0]?.call_count || 0;
+                    return res.json({ analysis: c.analysis, cached: true, generated_at: c.generated_at, daily_calls: dc, remaining: Math.max(0, ORACLE_MAX_DAILY_CALLS - dc) });
+                }
+            } else {
+                // Far from race: use cache if predictions unchanged
+                const predsRes = await pool.query('SELECT player,p1,p2,p3,p4,p5,session_type FROM predictions WHERE race_id = $1', [raceId]);
+                const predsHash = hashStr(JSON.stringify(predsRes.rows));
+                if (c.predictions_hash === predsHash) {
+                    const u = await pool.query('SELECT call_count FROM oracle_usage WHERE day = CURRENT_DATE');
+                    const dc = u.rows[0]?.call_count || 0;
+                    return res.json({ analysis: c.analysis, cached: true, generated_at: c.generated_at, daily_calls: dc, remaining: Math.max(0, ORACLE_MAX_DAILY_CALLS - dc) });
+                }
             }
         }
 
-        // Fetch current round qualifying if it already happened
-        const currentQualy = await fetchJolpica(nextRace.round, 'qualifying');
-        const currentQualData = currentQualy?.MRData?.RaceTable?.Races?.[0];
-        if (currentQualData?.QualifyingResults?.length) {
-            sessionResults.push(`Clasificación ${nextRace.name}: ${formatTop5(currentQualData.QualifyingResults)}`);
-        }
+        // Generate fresh analysis
+        const { analysis, predsHash, jolpicaHash } = await buildOracleAnalysis(nextRace);
 
-        const raceCtx: RaceContext = {
-            circuitName: `${nextRace.name} — ${nextRace.circuit || ''}`,
-            lastResults: sessionResults.length > 0 ? sessionResults.join(' | ') : undefined,
-        };
+        await pool.query(
+            `INSERT INTO oracle_cache (race_id, analysis, generated_at, predictions_hash, jolpica_hash)
+             VALUES ($1, $2, NOW(), $3, $4)
+             ON CONFLICT (race_id) DO UPDATE SET analysis=$2, generated_at=NOW(), predictions_hash=$3, jolpica_hash=$4`,
+            [raceId, analysis, predsHash, jolpicaHash]
+        );
 
-        const roast = await generateOracleRoast(predsRes.rows, raceCtx, lbRes.rows);
-        res.json({ analysis: roast });
+        // Increment daily usage counter
+        const usageRes = await pool.query(
+            `INSERT INTO oracle_usage (day, call_count) VALUES (CURRENT_DATE, 1)
+             ON CONFLICT (day) DO UPDATE SET call_count = oracle_usage.call_count + 1
+             RETURNING call_count`
+        );
+        const dailyCalls = usageRes.rows[0]?.call_count || 1;
+        const remaining = Math.max(0, ORACLE_MAX_DAILY_CALLS - dailyCalls);
+
+        res.json({ analysis, cached: false, generated_at: new Date().toISOString(), daily_calls: dailyCalls, remaining });
     } catch (err) {
         console.error('Oracle error:', err);
+        res.status(500).json({ error: 'El oráculo se quedó sin nafta.' });
+    }
+});
+
+// Force refresh oracle (manual "Actualizar contexto" button)
+app.post('/api/oracle/roast/refresh', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const nextRace = getNextRace();
+        const raceId = `round_${nextRace.round}`;
+
+        // Check daily limit before calling Groq
+        const usageCheck = await pool.query(
+            `SELECT call_count FROM oracle_usage WHERE day = CURRENT_DATE`
+        );
+        const todayCalls = usageCheck.rows[0]?.call_count || 0;
+        if (todayCalls >= ORACLE_MAX_DAILY_CALLS) {
+            return res.status(429).json({
+                error: 'Límite diario de tokens alcanzado. El Oráculo descansa hasta mañana.',
+                daily_calls: todayCalls,
+                remaining: 0
+            });
+        }
+
+        const { analysis, predsHash, jolpicaHash } = await buildOracleAnalysis(nextRace);
+
+        await pool.query(
+            `INSERT INTO oracle_cache (race_id, analysis, generated_at, predictions_hash, jolpica_hash)
+             VALUES ($1, $2, NOW(), $3, $4)
+             ON CONFLICT (race_id) DO UPDATE SET analysis=$2, generated_at=NOW(), predictions_hash=$3, jolpica_hash=$4`,
+            [raceId, analysis, predsHash, jolpicaHash]
+        );
+
+        const usageRes = await pool.query(
+            `INSERT INTO oracle_usage (day, call_count) VALUES (CURRENT_DATE, 1)
+             ON CONFLICT (day) DO UPDATE SET call_count = oracle_usage.call_count + 1
+             RETURNING call_count`
+        );
+        const dailyCalls = usageRes.rows[0]?.call_count || 1;
+        const remaining = Math.max(0, ORACLE_MAX_DAILY_CALLS - dailyCalls);
+
+        res.json({ analysis, cached: false, generated_at: new Date().toISOString(), daily_calls: dailyCalls, remaining });
+    } catch (err) {
+        console.error('Oracle refresh error:', err);
         res.status(500).json({ error: 'El oráculo se quedó sin nafta.' });
     }
 });

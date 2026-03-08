@@ -1527,6 +1527,9 @@ function F1ProdeView() {
 
   const [oracleInsight, setOracleInsight] = React.useState<string | null>(null);
   const [loadingOracle, setLoadingOracle] = React.useState(false);
+  const [oracleRemaining, setOracleRemaining] = React.useState<number | null>(null);
+  const [oracleGeneratedAt, setOracleGeneratedAt] = React.useState<string | null>(null);
+  const [oracleCached, setOracleCached] = React.useState(false);
   const [nextRace, setNextRace] = React.useState<any>(null);
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -1592,9 +1595,43 @@ function F1ProdeView() {
         if (!res.ok) throw new Error(data.error || "Falla en el backend del oráculo");
         return data;
       })
-      .then(data => { setOracleInsight(data.analysis || "No tengo palabras..."); setLoadingOracle(false); })
+      .then(data => {
+        setOracleInsight(data.analysis || "No tengo palabras...");
+        setOracleRemaining(data.remaining ?? null);
+        setOracleGeneratedAt(data.generated_at ?? null);
+        setOracleCached(!!data.cached);
+        setLoadingOracle(false);
+      })
       .catch(() => { setOracleInsight("El oráculo tuvo una falla en su motor lógico."); setLoadingOracle(false); });
   }, []);
+
+  const handleOracleRefresh = async () => {
+    if (loadingOracle) return;
+    if (oracleRemaining !== null && oracleRemaining <= 0) {
+      addToast('El Oráculo agotó sus tokens por hoy. Volvé mañana.', 'error');
+      return;
+    }
+    setLoadingOracle(true);
+    try {
+      const res = await fetchWithAuth('/api/oracle/roast/refresh', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) {
+        addToast(data.error || 'Error al actualizar el Oráculo', 'error');
+        setLoadingOracle(false);
+        return;
+      }
+      setOracleInsight(data.analysis || "No tengo palabras...");
+      setOracleRemaining(data.remaining ?? null);
+      setOracleGeneratedAt(data.generated_at ?? null);
+      setOracleCached(false);
+      if (data.remaining !== null && data.remaining <= 3 && data.remaining > 0) {
+        addToast(`⚠️ Al Oráculo le quedan solo ${data.remaining} análisis disponibles hoy`, 'warning');
+      }
+    } catch {
+      addToast('Error de conexión con el Oráculo', 'error');
+    }
+    setLoadingOracle(false);
+  };
 
   // Poll for new race results every 3 minutes and notify
   React.useEffect(() => {
@@ -1838,10 +1875,26 @@ function F1ProdeView() {
                       </div>
                     </div>
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <h3 className="font-bold text-lg text-white">El Oráculo (Groq)</h3>
-                        <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 text-xs font-semibold mr-auto">Análisis Sensorial</span>
+                        <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 text-xs font-semibold">Análisis Sensorial</span>
+                        {oracleCached && oracleGeneratedAt && (
+                          <span className="text-xs text-codeflow-muted ml-auto">
+                            Actualizado {new Date(oracleGeneratedAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        )}
                       </div>
+
+                      {oracleRemaining !== null && oracleRemaining <= 3 && oracleRemaining > 0 && (
+                        <div className="mb-2 flex items-center gap-2 text-amber-400 text-xs bg-amber-400/10 border border-amber-400/20 rounded-lg px-3 py-2">
+                          ⚠️ Al Oráculo le quedan solo <strong>{oracleRemaining}</strong> análisis disponibles hoy
+                        </div>
+                      )}
+                      {oracleRemaining === 0 && (
+                        <div className="mb-2 flex items-center gap-2 text-red-400 text-xs bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
+                          🔴 Sin tokens disponibles hoy. El Oráculo vuelve mañana.
+                        </div>
+                      )}
 
                       {loadingOracle ? (
                         <div className="text-codeflow-muted text-sm animate-pulse flex items-center gap-3 py-2">
@@ -1853,6 +1906,18 @@ function F1ProdeView() {
                           "{oracleInsight}"
                         </p>
                       )}
+
+                      <button
+                        onClick={handleOracleRefresh}
+                        disabled={loadingOracle || oracleRemaining === 0}
+                        className="mt-3 flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border border-codeflow-accent/30 text-codeflow-accent hover:bg-codeflow-accent/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                      >
+                        {loadingOracle ? (
+                          <div className="w-3 h-3 border border-codeflow-accent border-t-transparent rounded-full animate-spin" />
+                        ) : '🔄'}
+                        Actualizar contexto
+                        {oracleRemaining !== null && <span className="ml-1 opacity-60">({oracleRemaining} restantes hoy)</span>}
+                      </button>
                     </div>
                   </div>
                 </div>
