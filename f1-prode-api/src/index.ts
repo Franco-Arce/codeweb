@@ -726,7 +726,10 @@ const races2026 = [
 
 function getNextRace() {
     const now = new Date();
-    return races2026.find(r => new Date(r.date) > now) || races2026[races2026.length - 1];
+    const RACE_DURATION_MS = 4 * 60 * 60 * 1000; // 4h window after race start
+    // A race is "current or upcoming" if its start time + 4h is still in the future
+    return races2026.find(r => new Date(r.date).getTime() + RACE_DURATION_MS > now.getTime())
+        || races2026[races2026.length - 1];
 }
 
 // --- API Routes (Protected) ---
