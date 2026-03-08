@@ -1697,6 +1697,22 @@ app.get('/api/media/:type/:id/status', requireAuth, async (req: Request, res: Re
     } catch (err) { res.status(500).json({ error: 'DB error' }); }
 });
 
+// All users' statuses for a single media item
+app.get('/api/media/:type/:id/all-statuses', requireAuth, async (req: Request, res: Response) => {
+    const { type, id } = req.params;
+    try {
+        const result = await pool.query(
+            `SELECT u.username, s.status
+             FROM media_user_status s
+             JOIN users u ON u.id = s.user_id
+             WHERE s.media_type = $1 AND s.media_id = $2
+             ORDER BY s.status ASC, u.username ASC`,
+            [type, id]
+        );
+        res.json(result.rows);
+    } catch (err) { res.status(500).json({ error: 'DB error' }); }
+});
+
 app.post('/api/media/:type/:id/status', requireAuth, async (req: Request, res: Response) => {
     const { type, id } = req.params;
     const { status } = req.body;

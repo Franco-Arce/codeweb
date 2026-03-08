@@ -2480,6 +2480,7 @@ function MediaDetailModal({ item, tab, isGame, getGenreColor, poster, onClose, o
   const [comments, setComments] = React.useState<any[]>([]);
   const [newComment, setNewComment] = React.useState('');
   const [submittingComment, setSubmittingComment] = React.useState(false);
+  const [allStatuses, setAllStatuses] = React.useState<{ username: string; status: string }[]>([]);
   const currentUser = localStorage.getItem('prode_username') || '';
   const { profiles } = useProfiles();
   const endpointTab = tab === 'games' ? 'boardgames' : tab;
@@ -2502,6 +2503,10 @@ function MediaDetailModal({ item, tab, isGame, getGenreColor, poster, onClose, o
     fetchWithAuth(`/api/media/${endpointTab}/${item.id}/ratings`)
       .then(r => r.json())
       .then(data => setUserRatings(Array.isArray(data) ? data : []))
+      .catch(() => { });
+    fetchWithAuth(`/api/media/${endpointTab}/${item.id}/all-statuses`)
+      .then(r => r.json())
+      .then(data => setAllStatuses(Array.isArray(data) ? data : []))
       .catch(() => { });
     fetchComments();
   }, [item.id]);
@@ -2603,6 +2608,33 @@ function MediaDetailModal({ item, tab, isGame, getGenreColor, poster, onClose, o
               </p>
             </div>
           </div>
+
+          {/* Group watch status */}
+          {allStatuses.length > 0 && (
+            <div className="px-5 pb-3 border-t border-white/5 pt-4">
+              <h4 className="text-xs font-bold text-codeflow-muted uppercase tracking-wider mb-3">Estado del grupo</h4>
+              <div className="flex flex-wrap gap-2">
+                {allStatuses.map(s => {
+                  const seed = profiles[s.username] || s.username;
+                  const av = seed.includes(':')
+                    ? `https://api.dicebear.com/7.x/${seed.split(':')[0]}/svg?seed=${seed.split(':')[1]}`
+                    : `https://api.dicebear.com/7.x/notionists/svg?seed=${seed}&backgroundColor=transparent`;
+                  const badge = s.status === 'watched'
+                    ? { label: 'Vista ✓', cls: 'border-green-500/40 text-green-400 bg-green-500/10' }
+                    : s.status === 'in_progress'
+                    ? { label: 'En progreso', cls: 'border-yellow-500/40 text-yellow-400 bg-yellow-500/10' }
+                    : { label: 'Pendiente', cls: 'border-blue-500/40 text-blue-400 bg-blue-500/10' };
+                  return (
+                    <div key={s.username} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold ${badge.cls}`}>
+                      <img src={av} alt={s.username} className="w-5 h-5 rounded-full bg-codeflow-base border border-white/10" />
+                      <span className="text-white/80">{s.username}</span>
+                      <span className="opacity-70">{badge.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Comments section */}
           <div className="px-5 pb-4 border-t border-white/5 pt-4 space-y-3">
@@ -2817,11 +2849,13 @@ function MediaCard({ item, i, isGame, getGenreColor, tab, onEdit, onDelete, onUp
             value={myStatus || ''}
             onChange={handleStatusChange}
             onClick={e => e.stopPropagation()}
-            className={`mt-1 w-full text-[10px] font-semibold rounded-lg px-2 py-1 border outline-none cursor-pointer appearance-none text-center ${
-              myStatus && STATUS_LABELS[myStatus] ? STATUS_LABELS[myStatus].color : 'bg-white/5 text-codeflow-muted/60 border-white/10'
-            }`}
+            className="mt-1 w-full text-[10px] font-semibold rounded-lg px-2 py-1 outline-none cursor-pointer appearance-none text-center bg-codeflow-base text-white border border-white/10"
+            style={{
+              borderColor: myStatus === 'watched' ? 'rgba(74,222,128,0.5)' : myStatus === 'in_progress' ? 'rgba(250,204,21,0.5)' : myStatus === 'pending' ? 'rgba(96,165,250,0.5)' : undefined,
+              color: myStatus === 'watched' ? '#4ade80' : myStatus === 'in_progress' ? '#facc15' : myStatus === 'pending' ? '#60a5fa' : undefined,
+            }}
           >
-            <option value="">Sin estado</option>
+            <option value="">— Mi estado —</option>
             <option value="watched">Vista ✓</option>
             <option value="in_progress">En progreso</option>
             <option value="pending">Pendiente</option>
