@@ -1182,7 +1182,7 @@ function DashboardView() {
               <p className="text-codeflow-muted text-sm">Nadie tiene puntos todavía. Cargá tu primer pronóstico.</p>
             </div>
           ) : (
-            {(() => {
+            <>{(() => {
               // Compute previous ranking (all races except last) to show position changes
               const prevRanking: Record<string, number> = {};
               if (history && history.length >= 2) {
@@ -1301,7 +1301,7 @@ function DashboardView() {
                   })}
                 </div>
               );
-            })()}
+            })()}</>
           )}
         </div>
 
