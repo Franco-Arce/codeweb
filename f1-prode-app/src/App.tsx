@@ -1158,7 +1158,7 @@ function DashboardView() {
               <Trophy size={20} className="text-yellow-500" /> Tabla de Analistas
             </h3>
             <span className="text-xs text-codeflow-muted italic">
-              {nextRace ? `Se actualiza tras cada sesión de ${nextRace.name}` : ''}
+              Se actualiza automáticamente tras cada sesión
             </span>
           </div>
 
@@ -1343,6 +1343,42 @@ function DashboardView() {
           )}
         </div>
       </div>
+
+      {/* ===== LAST GP OFFICIAL RESULTS ===== */}
+      {!loading && history && history.length > 0 && (() => {
+        const lastGP = history[history.length - 1];
+        return (
+          <div className="glass-card p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-lg">🏁</span>
+              <h3 className="text-base font-bold text-white">Último GP — {lastGP.race_name}</h3>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              {(lastGP.sessions || []).map((s: any) => (
+                <div key={s.type} className="bg-white/5 border border-white/8 rounded-xl p-3">
+                  <p className="text-[10px] font-bold text-codeflow-accent uppercase tracking-wider mb-2">{s.label}</p>
+                  {s.official?.winning_team && (
+                    <p className="text-[10px] text-yellow-400/80 mb-1.5 flex items-center gap-1">
+                      <span>🏆</span> {s.official.winning_team}
+                    </p>
+                  )}
+                  <ol className="space-y-1">
+                    {[s.official?.p1, s.official?.p2, s.official?.p3, s.official?.p4, s.official?.p5]
+                      .filter(Boolean).map((driver: string, i: number) => (
+                        <li key={i} className="flex items-center gap-2 text-xs">
+                          <span className={`w-4 text-center font-bold shrink-0 ${i === 0 ? 'text-yellow-400' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-orange-400' : 'text-codeflow-muted'}`}>
+                            {i + 1}
+                          </span>
+                          <span className="text-white/80">{driver}</span>
+                        </li>
+                      ))}
+                  </ol>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ===== SCORE HISTORY CHART ===== */}
       <ScoreHistoryChart history={history} loading={loading} />
@@ -2393,6 +2429,33 @@ function F1LeaderboardTab() {
                   </tr>
                 </thead>
                 <tbody>
+                  {/* Official results reference rows */}
+                  {[1, 2, 3, 4, 5].map(pos => (
+                    <tr key={`official-p${pos}`} className="border-b border-white/5 bg-yellow-500/[0.03]">
+                      <td className="py-1.5 px-4 whitespace-nowrap sticky left-0 bg-codeflow-card">
+                        <span className={`text-[10px] font-bold ${pos === 1 ? 'text-yellow-400' : pos === 2 ? 'text-gray-300' : pos === 3 ? 'text-orange-400' : 'text-codeflow-muted/60'}`}>
+                          P{pos}
+                        </span>
+                      </td>
+                      {history.map((race: any) => (
+                        <React.Fragment key={race.race_id}>
+                          {(race.sessions || []).map((s: any) => (
+                            <td key={s.type} className="text-center py-1.5 px-2 border-l border-white/5">
+                              <span className="text-[10px] text-codeflow-muted/70 whitespace-nowrap">
+                                {(s.official as any)?.[`p${pos}`]?.split(' ').slice(-1)[0] || '—'}
+                              </span>
+                            </td>
+                          ))}
+                          <td className="border-l border-white/10" />
+                        </React.Fragment>
+                      ))}
+                    </tr>
+                  ))}
+                  {/* Separator */}
+                  <tr className="border-b-2 border-white/10">
+                    <td colSpan={999} className="py-0" />
+                  </tr>
+                  {/* Player scores */}
                   {leaderboard.map((user, i) => (
                     <tr key={user.name} className={`border-b border-white/5 ${i % 2 === 0 ? 'bg-white/[0.01]' : ''}`}>
                       <td className="py-2 px-4 font-semibold text-white whitespace-nowrap sticky left-0 bg-codeflow-card">{user.name}</td>

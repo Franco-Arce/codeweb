@@ -1388,7 +1388,7 @@ app.get('/api/leaderboard/history', requireAuth, async (req: Request, res: Respo
             if (rr.rows.length === 0) continue;
 
             const raceScores: Record<string, number> = {};
-            const sessions: { type: string; label: string; scores: Record<string, number> }[] = [];
+            const sessions: { type: string; label: string; scores: Record<string, number>; official: any }[] = [];
 
             for (const official of rr.rows) {
                 const preds = await pool.query(
@@ -1405,6 +1405,11 @@ app.get('/api/leaderboard/history', requireAuth, async (req: Request, res: Respo
                     type: official.session_type,
                     label: SESSION_LABEL_MAP[official.session_type] || official.session_type,
                     scores: sessionScores,
+                    official: {
+                        p1: official.p1, p2: official.p2, p3: official.p3,
+                        p4: official.p4, p5: official.p5,
+                        winning_team: official.winning_team,
+                    },
                 });
             }
 
