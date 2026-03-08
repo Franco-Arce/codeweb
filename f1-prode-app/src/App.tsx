@@ -1435,6 +1435,8 @@ const PLAYER_COLORS = [
 ];
 
 function ScoreHistoryChart({ history, loading }: { history: any[], loading: boolean }) {
+  const [mode, setMode] = React.useState<'session' | 'cumulative'>('session');
+
   if (loading) {
     return (
       <div className="glass-card p-6">
@@ -1452,23 +1454,42 @@ function ScoreHistoryChart({ history, loading }: { history: any[], loading: bool
     );
   }
 
-  // Build dataset: collect all players
-  const allPlayers = Array.from(new Set(history.flatMap(r => Object.keys(r.scores))));
-  const labels = history.map(r => r.race_name);
+  const allPlayers = Array.from(new Set(history.flatMap((r: any) => Object.keys(r.scores))));
 
-  const datasets = allPlayers.map((player, i) => ({
-    label: player,
-    data: history.map(r => r.scores[player] ?? 0),
-    borderColor: PLAYER_COLORS[i % PLAYER_COLORS.length],
-    backgroundColor: PLAYER_COLORS[i % PLAYER_COLORS.length] + '20',
-    pointBackgroundColor: PLAYER_COLORS[i % PLAYER_COLORS.length],
-    pointRadius: 5,
-    pointHoverRadius: 8,
-    tension: 0.3,
-    fill: false,
-  }));
+  // Flatten all sessions across all GPs into individual X-axis points
+  const flatSessions: { label: string; gpName: string; scores: Record<string, number> }[] = [];
+  history.forEach((race: any) => {
+    const gpShort = race.race_name?.split(' ').slice(-1)[0] || race.race_id;
+    (race.sessions || []).forEach((s: any) => {
+      flatSessions.push({ label: `${gpShort} · ${s.label}`, gpName: gpShort, scores: s.scores || {} });
+    });
+  });
+
+  const labels = flatSessions.map(s => s.label);
+
+  const datasets = allPlayers.map((player, i) => {
+    const color = PLAYER_COLORS[i % PLAYER_COLORS.length];
+    let cumulative = 0;
+    const data = flatSessions.map(s => {
+      const pts = s.scores[player] ?? 0;
+      if (mode === 'cumulative') { cumulative += pts; return cumulative; }
+      return pts;
+    });
+    return {
+      label: player,
+      data,
+      borderColor: color,
+      backgroundColor: color + '25',
+      pointBackgroundColor: color,
+      pointRadius: 5,
+      pointHoverRadius: 8,
+      tension: 0.3,
+      fill: mode === 'cumulative',
+    };
+  });
 
   const chartData = { labels, datasets };
+  const totalSessions = flatSessions.length;
 
   const options = {
     responsive: true,
@@ -1476,12 +1497,7 @@ function ScoreHistoryChart({ history, loading }: { history: any[], loading: bool
     plugins: {
       legend: {
         position: 'top' as const,
-        labels: {
-          color: 'rgba(255,255,255,0.7)',
-          font: { size: 12, family: 'Inter' },
-          boxWidth: 12,
-          padding: 16,
-        },
+        labels: { color: 'rgba(255,255,255,0.7)', font: { size: 12, family: 'Inter' }, boxWidth: 12, padding: 16 },
       },
       tooltip: {
         backgroundColor: 'rgba(15,10,30,0.95)',
@@ -1490,31 +1506,47 @@ function ScoreHistoryChart({ history, loading }: { history: any[], loading: bool
         titleColor: '#fff',
         bodyColor: 'rgba(255,255,255,0.8)',
         callbacks: {
-          label: (ctx: any) => `  ${ctx.dataset.label}: ${ctx.raw} pts`,
+          label: (ctx: any) => `  ${ctx.dataset.label}: ${ctx.raw} pts${mode === 'cumulative' ? ' (acum.)' : ''}`,
         },
       },
     },
     scales: {
       x: {
         grid: { color: 'rgba(255,255,255,0.04)' },
-        ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 11 } },
+        ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 10 }, maxRotation: 35 },
       },
       y: {
         grid: { color: 'rgba(255,255,255,0.04)' },
         ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 11 } },
         beginAtZero: true,
-        title: { display: true, text: 'Puntos obtenidos', color: 'rgba(255,255,255,0.4)', font: { size: 11 } },
+        title: {
+          display: true,
+          text: mode === 'cumulative' ? 'Puntos acumulados' : 'Puntos por sesión',
+          color: 'rgba(255,255,255,0.4)', font: { size: 11 }
+        },
       },
     },
   };
 
   return (
     <div className="glass-card p-6">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <h3 className="text-xl font-bold text-white flex items-center gap-2">
-          📊 Historial de Puntos por Carrera
+          📊 Historial de Puntos
         </h3>
-        <span className="text-xs text-codeflow-muted italic">{history.length} {history.length === 1 ? 'carrera procesada' : 'carreras procesadas'}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-codeflow-muted italic mr-2">{totalSessions} sesiones</span>
+          <div className="flex rounded-lg border border-white/10 overflow-hidden text-xs font-semibold">
+            <button
+              onClick={() => setMode('session')}
+              className={`px-3 py-1.5 transition-colors ${mode === 'session' ? 'bg-codeflow-accent text-white' : 'text-codeflow-muted hover:text-white'}`}
+            >Por sesión</button>
+            <button
+              onClick={() => setMode('cumulative')}
+              className={`px-3 py-1.5 transition-colors ${mode === 'cumulative' ? 'bg-codeflow-accent text-white' : 'text-codeflow-muted hover:text-white'}`}
+            >Acumulado</button>
+          </div>
+        </div>
       </div>
       <div className="h-72">
         <Line data={chartData} options={options} />
