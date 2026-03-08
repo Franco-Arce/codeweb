@@ -1514,7 +1514,18 @@ app.get('/api/oracle/roast', async (req: Request, res: Response) => {
         }
 
         // Generate fresh analysis
-        const { analysis, predsHash, jolpicaHash } = await buildOracleAnalysis(nextRace);
+        let analysis: string, predsHash: string, jolpicaHash: string;
+        try {
+            ({ analysis, predsHash, jolpicaHash } = await buildOracleAnalysis(nextRace));
+        } catch (groqErr: any) {
+            // If Groq fails (429 rate limit etc), serve stale cache if available
+            if (cached.rows.length > 0) {
+                const u = await pool.query('SELECT call_count FROM oracle_usage WHERE day = CURRENT_DATE');
+                const dc = u.rows[0]?.call_count || 0;
+                return res.json({ analysis: cached.rows[0].analysis, cached: true, stale: true, generated_at: cached.rows[0].generated_at, daily_calls: dc, remaining: 0 });
+            }
+            throw groqErr;
+        }
 
         await pool.query(
             `INSERT INTO oracle_cache (race_id, analysis, generated_at, predictions_hash, jolpica_hash)
@@ -1558,7 +1569,24 @@ app.post('/api/oracle/roast/refresh', requireAuth, async (req: Request, res: Res
             });
         }
 
-        const { analysis, predsHash, jolpicaHash } = await buildOracleAnalysis(nextRace);
+        let analysis: string, predsHash: string, jolpicaHash: string;
+        try {
+            ({ analysis, predsHash, jolpicaHash } = await buildOracleAnalysis(nextRace));
+        } catch (groqErr: any) {
+            // On Groq failure, serve stale cache if available
+            const staleCache = await pool.query('SELECT * FROM oracle_cache WHERE race_id = $1', [raceId]);
+            if (staleCache.rows.length > 0) {
+                return res.status(429).json({
+                    error: 'Groq sin tokens por ahora. Mostrando análisis anterior.',
+                    analysis: staleCache.rows[0].analysis,
+                    cached: true,
+                    stale: true,
+                    generated_at: staleCache.rows[0].generated_at,
+                    remaining: 0
+                });
+            }
+            return res.status(429).json({ error: 'Límite de tokens alcanzado. Reintentá en unos minutos.', remaining: 0 });
+        }
 
         await pool.query(
             `INSERT INTO oracle_cache (race_id, analysis, generated_at, predictions_hash, jolpica_hash)

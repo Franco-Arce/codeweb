@@ -1617,6 +1617,13 @@ function F1ProdeView() {
       const data = await res.json();
       if (!res.ok) {
         addToast('error', data.error || 'Error al actualizar el Oráculo');
+        // If stale analysis came back with the error, still show it
+        if (data.analysis) {
+          setOracleInsight(data.analysis);
+          setOracleRemaining(0);
+          setOracleGeneratedAt(data.generated_at ?? null);
+          setOracleCached(true);
+        }
         setLoadingOracle(false);
         return;
       }
