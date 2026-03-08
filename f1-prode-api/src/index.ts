@@ -288,6 +288,31 @@ const initDb = async () => {
             END $$;
         `);
 
+        // Media user status table
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS media_user_status (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                media_type VARCHAR(30) NOT NULL,
+                media_id TEXT NOT NULL,
+                status VARCHAR(20) NOT NULL CHECK (status IN ('watched','in_progress','pending')),
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, media_type, media_id)
+            )
+        `);
+
+        // Media comments table
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS media_comments (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                media_type VARCHAR(30) NOT NULL,
+                media_id TEXT NOT NULL,
+                comment TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
         // Grant admin to kazter and mrforii
         await pool.query(`UPDATE users SET is_admin = true WHERE username IN ('kazter', 'mrforii')`);
 
@@ -1558,6 +1583,177 @@ app.use((err: any, req: Request, res: Response, next: any) => {
         error: 'Critical server error',
         message: err.message || 'Unknown error'
     });
+});
+
+// --- Public: Official results for a round (for grid comparison) ---
+app.get('/api/races/:round/results', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const raceId = `round_${req.params.round}`;
+        const sessionType = req.query.session_type as string | undefined;
+        let result;
+        if (sessionType) {
+            result = await pool.query('SELECT * FROM race_results WHERE race_id = $1 AND session_type = $2', [raceId, sessionType]);
+        } else {
+            result = await pool.query('SELECT * FROM race_results WHERE race_id = $1', [raceId]);
+        }
+        res.json(result.rows);
+    } catch (err) { res.status(500).json({ error: 'DB error' }); }
+});
+
+// --- Public: Personal prediction history ---
+app.get('/api/predictions/history/:username', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const username = req.params.username.toLowerCase();
+        const preds = await pool.query(
+            'SELECT * FROM predictions WHERE player = $1 ORDER BY race_id ASC, session_type ASC',
+            [username]
+        );
+        const raceIds = [...new Set(preds.rows.map((r: any) => r.race_id))];
+        const results: any[] = [];
+        for (const raceId of raceIds) {
+            const rr = await pool.query('SELECT * FROM race_results WHERE race_id = $1', [raceId]);
+            const roundNum = parseInt(raceId.replace('round_', ''));
+            const raceInfo = races2026.find(r => r.round === roundNum);
+            results.push({
+                race_id: raceId,
+                race_name: raceInfo?.name || raceId,
+                round: roundNum,
+                predictions: preds.rows.filter((p: any) => p.race_id === raceId),
+                official_results: rr.rows,
+            });
+        }
+        res.json(results);
+    } catch (err) { res.status(500).json({ error: 'DB error' }); }
+});
+
+// --- Media User Status ---
+app.get('/api/media/:type/:id/status', requireAuth, async (req: Request, res: Response) => {
+    const { type, id } = req.params;
+    const userId = (req as any).user.userId;
+    try {
+        const result = await pool.query(
+            'SELECT status FROM media_user_status WHERE user_id = $1 AND media_type = $2 AND media_id = $3',
+            [userId, type, id]
+        );
+        res.json({ status: result.rows[0]?.status || null });
+    } catch (err) { res.status(500).json({ error: 'DB error' }); }
+});
+
+app.post('/api/media/:type/:id/status', requireAuth, async (req: Request, res: Response) => {
+    const { type, id } = req.params;
+    const { status } = req.body;
+    const userId = (req as any).user.userId;
+    if (!['watched', 'in_progress', 'pending'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
+    try {
+        await pool.query(`
+            INSERT INTO media_user_status (user_id, media_type, media_id, status)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (user_id, media_type, media_id) DO UPDATE SET status = $4, updated_at = NOW()
+        `, [userId, type, id, status]);
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: 'DB error' }); }
+});
+
+// --- Media Comments ---
+app.get('/api/media/:type/:id/comments', requireAuth, async (req: Request, res: Response) => {
+    const { type, id } = req.params;
+    try {
+        const result = await pool.query(`
+            SELECT c.id, u.username, c.comment, c.created_at
+            FROM media_comments c
+            JOIN users u ON u.id = c.user_id
+            WHERE c.media_type = $1 AND c.media_id = $2
+            ORDER BY c.created_at ASC
+        `, [type, id]);
+        res.json(result.rows);
+    } catch (err) { res.status(500).json({ error: 'DB error' }); }
+});
+
+app.post('/api/media/:type/:id/comments', requireAuth, async (req: Request, res: Response) => {
+    const { type, id } = req.params;
+    const { comment } = req.body;
+    const userId = (req as any).user.userId;
+    if (!comment?.trim()) return res.status(400).json({ error: 'Comment required' });
+    try {
+        const result = await pool.query(`
+            INSERT INTO media_comments (user_id, media_type, media_id, comment)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id, comment, created_at
+        `, [userId, type, id, comment.trim()]);
+        const username = (req as any).user.username;
+        res.json({ ...result.rows[0], username });
+    } catch (err) { res.status(500).json({ error: 'DB error' }); }
+});
+
+app.delete('/api/media/comments/:commentId', requireAuth, async (req: Request, res: Response) => {
+    const userId = (req as any).user.userId;
+    const { commentId } = req.params;
+    try {
+        const result = await pool.query('DELETE FROM media_comments WHERE id = $1 AND user_id = $2 RETURNING id', [commentId, userId]);
+        if (result.rows.length === 0) return res.status(403).json({ error: 'Not your comment' });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: 'DB error' }); }
+});
+
+// --- Personal Stats ---
+app.get('/api/stats/:username', requireAuth, async (req: Request, res: Response) => {
+    const { username } = req.params;
+    try {
+        const resultsQuery = await pool.query('SELECT * FROM race_results ORDER BY created_at ASC');
+        const allResults = resultsQuery.rows;
+
+        const predsQuery = await pool.query('SELECT * FROM predictions WHERE player = $1', [username.toLowerCase()]);
+        const allPreds = predsQuery.rows;
+
+        const SESSION_PTS: Record<string, number> = { race: 10, qualifying: 10, sprint: 8, sprint_qualifying: 5 };
+        const posFields = ['p1', 'p2', 'p3', 'p4', 'p5'] as const;
+
+        let totalHits = 0, totalPossible = 0, totalPts = 0;
+        const statsBySession: Record<string, { hits: number; possible: number }> = {};
+        const driverFreq: Record<string, number> = {};
+
+        for (const result of allResults) {
+            const pred = allPreds.find(p => p.race_id === result.race_id && p.session_type === result.session_type);
+            if (!pred) continue;
+
+            const pts = SESSION_PTS[result.session_type] || 10;
+            const sess = result.session_type;
+            if (!statsBySession[sess]) statsBySession[sess] = { hits: 0, possible: 0 };
+
+            for (const pos of posFields) {
+                if (pred[pos]) {
+                    driverFreq[pred[pos]] = (driverFreq[pred[pos]] || 0) + 1;
+                    totalPossible++;
+                    statsBySession[sess].possible++;
+                    if (pred[pos] === result[pos]) {
+                        totalHits++;
+                        totalPts += pts;
+                        statsBySession[sess].hits++;
+                    }
+                }
+            }
+        }
+
+        const favoriteDriver = Object.entries(driverFreq).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+        const accuracy = totalPossible > 0 ? Math.round((totalHits / totalPossible) * 100) : 0;
+
+        res.json({ totalHits, totalPossible, totalPts, accuracy, statsBySession, favoriteDriver, totalRaces: allResults.length, totalPredictions: allPreds.length });
+    } catch (err) { res.status(500).json({ error: 'DB error' }); }
+});
+
+// --- Media Status bulk fetch (for card badges) ---
+app.get('/api/media/:type/my-statuses', requireAuth, async (req: Request, res: Response) => {
+    const { type } = req.params;
+    const userId = (req as any).user.userId;
+    try {
+        const result = await pool.query(
+            'SELECT media_id, status FROM media_user_status WHERE user_id = $1 AND media_type = $2',
+            [userId, type]
+        );
+        const map: Record<string, string> = {};
+        result.rows.forEach((r: any) => { map[r.media_id] = r.status; });
+        res.json(map);
+    } catch (err) { res.status(500).json({ error: 'DB error' }); }
 });
 
 // Start Server

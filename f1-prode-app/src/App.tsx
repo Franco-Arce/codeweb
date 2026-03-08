@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Trophy, Film, Gamepad2, Tv, LayoutDashboard, Settings,
   RefreshCw, AlertCircle, CheckCircle, XCircle, Edit2, Trash2,
-  Star, Info, Dices, Sparkles, Lock, ShieldAlert, Ghost
+  Star, Info, Dices, Sparkles, Lock, ShieldAlert, Ghost, ChevronDown
 } from 'lucide-react';
 const Diced = Gamepad2; // Fallback or Alias if needed
 import {
@@ -17,6 +17,26 @@ import logoCodeflow from './assets/LogoOnly.png';
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+// --- Countdown Hook ---
+function useCountdown(targetUtc: string | null): string {
+  const [display, setDisplay] = React.useState('');
+  React.useEffect(() => {
+    if (!targetUtc) { setDisplay(''); return; }
+    const update = () => {
+      const diff = new Date(targetUtc).getTime() - Date.now();
+      if (diff <= 0) { setDisplay('CERRADO'); return; }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setDisplay(`${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`);
+    };
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [targetUtc]);
+  return display;
+}
 
 // --- Toast System ---
 type Toast = { id: number; type: 'success' | 'error' | 'warning'; message: string };
@@ -536,6 +556,15 @@ function SettingsView({ username, onUsernameChange, onDeleted }: { username: str
   const [deleteError, setDeleteError] = useState('');
   const [loadingDelete, setLoadingDelete] = useState(false);
   const [deleteStep, setDeleteStep] = useState<'confirm' | 'password'>('confirm');
+  const [stats, setStats] = useState<any>(null);
+
+  React.useEffect(() => {
+    if (!username) return;
+    fetchWithAuth(`/api/stats/${username}`)
+      .then(r => r.json())
+      .then(data => setStats(data))
+      .catch(() => {});
+  }, [username]);
 
   const currentSeed = profiles[username] || username || '';
   const avatarUrl = (currentSeed && typeof currentSeed === 'string' && currentSeed.includes(':'))
@@ -697,6 +726,34 @@ function SettingsView({ username, onUsernameChange, onDeleted }: { username: str
           </button>
         </form>
       </section>
+
+      {/* Personal Stats */}
+      {stats && (
+        <section className="glass-card p-5 md:p-8">
+          <h3 className="text-xl font-bold text-white mb-5 flex items-center gap-2"><Trophy size={20} className="text-yellow-400" /> Tus Estadísticas</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="flat-card p-4 text-center">
+              <div className="text-2xl font-display font-bold text-codeflow-accent">{stats.total_pts ?? 0}</div>
+              <div className="text-xs text-codeflow-muted mt-1">Puntos totales</div>
+            </div>
+            <div className="flat-card p-4 text-center">
+              <div className="text-2xl font-display font-bold text-green-400">{stats.total_hits ?? 0}</div>
+              <div className="text-xs text-codeflow-muted mt-1">Aciertos</div>
+            </div>
+            <div className="flat-card p-4 text-center">
+              <div className="text-2xl font-display font-bold text-white">{stats.accuracy != null ? `${Math.round(stats.accuracy)}%` : '—'}</div>
+              <div className="text-xs text-codeflow-muted mt-1">Precisión</div>
+            </div>
+            <div className="flat-card p-4 text-center">
+              <div className="text-2xl font-display font-bold text-yellow-400">{stats.predictions_made ?? 0}</div>
+              <div className="text-xs text-codeflow-muted mt-1">Predicciones</div>
+            </div>
+          </div>
+          {stats.favorite_driver && (
+            <p className="text-sm text-codeflow-muted mt-4 text-center">Piloto más elegido: <strong className="text-white">{stats.favorite_driver}</strong></p>
+          )}
+        </section>
+      )}
 
       {/* Danger Zone */}
       <section className="border border-red-500/20 rounded-2xl p-5 md:p-8 bg-red-500/[0.03]">
@@ -1516,6 +1573,35 @@ function F1ProdeView() {
       .catch(() => { setOracleInsight("El oráculo tuvo una falla en su motor lógico."); setLoadingOracle(false); });
   }, []);
 
+  // Poll for new race results every 3 minutes and notify
+  React.useEffect(() => {
+    if (!nextRace?.round) return;
+    const knownResultsKey = `known_results_${nextRace.round}`;
+    const knownSessions = new Set<string>(JSON.parse(localStorage.getItem(knownResultsKey) || '[]'));
+
+    const checkResults = async () => {
+      try {
+        const sessions = ['qualifying', 'sprint_qualifying', 'sprint', 'race'];
+        for (const sType of sessions) {
+          if (knownSessions.has(sType)) continue;
+          const res = await fetchWithAuth(`/api/races/${nextRace.round}/results?session_type=${sType}`);
+          if (!res.ok) continue;
+          const data = await res.json();
+          if (data && data.p1) {
+            knownSessions.add(sType);
+            localStorage.setItem(knownResultsKey, JSON.stringify([...knownSessions]));
+            const label = sType === 'qualifying' ? 'Clasificación' : sType === 'race' ? 'Carrera' : sType === 'sprint' ? 'Sprint' : 'Sprint Qualy';
+            addToast('success', `Resultados oficiales de ${label} disponibles`);
+          }
+        }
+      } catch {}
+    };
+
+    checkResults();
+    const interval = setInterval(checkResults, 3 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [nextRace?.round]);
+
   // When player or session changes, pre-fill existing prediction
   React.useEffect(() => {
     if (!pName) return;
@@ -1689,6 +1775,11 @@ function F1ProdeView() {
             Grilla
           </button>
           <button
+            onClick={() => setF1Tab('historial')}
+            className={`flex-1 flex justify-center items-center px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${f1Tab === 'historial' ? 'text-white bg-white/10 border border-white/10 shadow-lg' : 'text-codeflow-muted hover:text-white hover:bg-white/5'}`}>
+            Historial
+          </button>
+          <button
             onClick={() => setF1Tab('rules')}
             className={`flex-1 flex justify-center items-center px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${f1Tab === 'rules' ? 'text-white bg-white/10 border border-white/10 shadow-lg' : 'text-codeflow-muted hover:text-white hover:bg-white/5'}`}>
             Reglas
@@ -1773,10 +1864,7 @@ function F1ProdeView() {
                           <span className="text-sm font-bold text-white">{s.label}</span>
                           <span className="text-[10px] text-codeflow-muted">{dayStr}</span>
                           <span className="text-[10px] font-mono text-codeflow-muted">{timeStr}</span>
-                          <div className={`flex items-center gap-1 text-[9px] font-bold mt-1 ${s.isOpen ? 'text-green-400' : 'text-red-400'}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${s.isOpen ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
-                            {s.isOpen ? 'ABIERTO' : 'CERRADO'}
-                          </div>
+                          <SessionCountdownBadge dateUtc={s.date_utc} isOpen={s.isOpen} />
                         </button>
                       );
                     })}
@@ -1904,9 +1992,116 @@ function F1ProdeView() {
             <PredictionsGridTab nextRace={nextRace} />
           )}
 
+          {f1Tab === 'historial' && (
+            <PredictionHistoryTab username={localStorage.getItem('prode_username') || ''} />
+          )}
+
         </motion.div>
       </AnimatePresence>
     </div >
+  );
+}
+
+// --- Session Countdown Badge ---
+function SessionCountdownBadge({ dateUtc, isOpen }: { dateUtc: string | null; isOpen: boolean }) {
+  const countdown = useCountdown(isOpen ? dateUtc : null);
+  if (!isOpen) return (
+    <div className="flex items-center gap-1 text-[9px] font-bold mt-1 text-red-400">
+      <span className="w-1.5 h-1.5 rounded-full bg-red-400" /> CERRADO
+    </div>
+  );
+  return (
+    <div className="flex flex-col gap-0.5 mt-1">
+      <div className="flex items-center gap-1 text-[9px] font-bold text-green-400">
+        <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" /> ABIERTO
+      </div>
+      {countdown && <span className="text-[9px] font-mono text-codeflow-accent">⏱ {countdown}</span>}
+    </div>
+  );
+}
+
+// --- Prediction History Tab ---
+function PredictionHistoryTab({ username }: { username: string }) {
+  const [history, setHistory] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [expandedRace, setExpandedRace] = React.useState<string | null>(null);
+  const SESSION_LABELS: Record<string, string> = { race: '🏁 Carrera', qualifying: '🏎️ Clasificación', sprint: '🏃 Sprint', sprint_qualifying: '⚡ Sprint Q' };
+  const SESSION_PTS: Record<string, number> = { race: 10, qualifying: 10, sprint: 8, sprint_qualifying: 5 };
+
+  React.useEffect(() => {
+    if (!username) return;
+    fetchWithAuth(`/api/predictions/history/${username}`)
+      .then(r => r.json())
+      .then(data => { setHistory(Array.isArray(data) ? data.reverse() : []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [username]);
+
+  if (loading) return <div className="flex justify-center py-20"><div className="w-8 h-8 border-2 border-codeflow-accent border-t-transparent rounded-full animate-spin" /></div>;
+  if (history.length === 0) return (
+    <div className="glass-card p-10 text-center">
+      <p className="text-codeflow-muted">No hay predicciones anteriores aún.</p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      <p className="text-codeflow-muted text-sm px-1">Tu historial de pronósticos — <span className="text-white font-semibold">{username}</span></p>
+      {history.map(race => {
+        const isExpanded = expandedRace === race.race_id;
+        return (
+          <div key={race.race_id} className="glass-card overflow-hidden">
+            <button onClick={() => setExpandedRace(isExpanded ? null : race.race_id)}
+              className="w-full flex items-center justify-between p-4 hover:bg-white/[0.02] transition-colors text-left">
+              <div>
+                <p className="text-white font-bold text-sm">{race.race_name}</p>
+                <p className="text-codeflow-muted text-xs mt-0.5">{race.predictions.length} sesión{race.predictions.length !== 1 ? 'es' : ''} predichas</p>
+              </div>
+              <div className="flex items-center gap-3">
+                {race.official_results.length > 0 && (() => {
+                  let pts = 0;
+                  for (const pred of race.predictions) {
+                    const official = race.official_results.find((r: any) => r.session_type === pred.session_type);
+                    if (!official) continue;
+                    const ptsPerPick = SESSION_PTS[pred.session_type] || 10;
+                    for (const pos of ['p1', 'p2', 'p3', 'p4', 'p5']) {
+                      if (pred[pos] && pred[pos] === official[pos]) pts += ptsPerPick;
+                    }
+                  }
+                  return <span className="text-green-400 font-bold text-sm bg-green-500/10 px-2 py-1 rounded-lg border border-green-500/20">+{pts} pts</span>;
+                })()}
+                <span className={`text-codeflow-muted transition-transform ${isExpanded ? 'rotate-180' : ''}`}>▾</span>
+              </div>
+            </button>
+            {isExpanded && (
+              <div className="border-t border-white/5 divide-y divide-white/5">
+                {race.predictions.map((pred: any) => {
+                  const official = race.official_results.find((r: any) => r.session_type === pred.session_type);
+                  return (
+                    <div key={pred.session_type} className="p-4">
+                      <p className="text-xs font-bold text-codeflow-accent mb-3">{SESSION_LABELS[pred.session_type] || pred.session_type}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {['p1', 'p2', 'p3', 'p4', 'p5'].filter(pos => pred[pos]).map((pos, i) => {
+                          const isCorrect = official && pred[pos] === official[pos];
+                          const isWrong = official && pred[pos] !== official[pos];
+                          return (
+                            <div key={pos} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium ${isCorrect ? 'bg-green-500/15 border-green-500/30 text-green-300' : isWrong ? 'bg-red-500/10 border-red-500/20 text-red-300/70' : 'bg-white/5 border-white/10 text-white/70'}`}>
+                              <span className="text-[10px] text-codeflow-muted font-bold">P{i + 1}</span>
+                              {pred[pos].split(' ').slice(-1)[0]}
+                              {isCorrect && <CheckCircle size={10} className="text-green-400" />}
+                            </div>
+                          );
+                        })}
+                        {!official && <span className="text-[10px] text-codeflow-muted italic self-center">Sin resultados oficiales aún</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -1916,6 +2111,7 @@ function F1LeaderboardTab() {
   const [leaderboard, setLeaderboard] = React.useState<any[]>([]);
   const [history, setHistory] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [showBreakdown, setShowBreakdown] = React.useState(false);
 
   React.useEffect(() => {
     Promise.all([
@@ -2032,6 +2228,57 @@ function F1LeaderboardTab() {
           })}
         </div>
       )}
+
+      {/* GP Breakdown Toggle */}
+      {!loading && history && history.length > 0 && (
+        <div className="mt-8">
+          <button
+            onClick={() => setShowBreakdown(v => !v)}
+            className="flex items-center gap-2 text-sm font-semibold text-codeflow-muted hover:text-white transition-colors mb-4"
+          >
+            <ChevronDown size={16} className={`transition-transform ${showBreakdown ? 'rotate-180' : ''}`} />
+            {showBreakdown ? 'Ocultar' : 'Ver'} desglose por GP
+          </button>
+
+          {showBreakdown && (
+            <div className="overflow-x-auto rounded-xl border border-white/8">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="text-left py-3 px-4 text-codeflow-muted font-semibold whitespace-nowrap sticky left-0 bg-codeflow-card">Piloto</th>
+                    {history.map((race: any) => (
+                      <th key={race.race_id} className="text-center py-3 px-3 text-codeflow-muted font-semibold whitespace-nowrap">
+                        {race.race_name?.split(' ').slice(-1)[0] || race.race_id}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {leaderboard.map((user, i) => (
+                    <tr key={user.name} className={`border-b border-white/5 ${i % 2 === 0 ? 'bg-white/[0.01]' : ''}`}>
+                      <td className="py-3 px-4 font-semibold text-white whitespace-nowrap sticky left-0 bg-codeflow-card">{user.name}</td>
+                      {history.map((race: any) => {
+                        const pts = race.scores?.[user.name] ?? null;
+                        return (
+                          <td key={race.race_id} className="text-center py-3 px-3">
+                            {pts !== null ? (
+                              <span className={`inline-block px-2 py-0.5 rounded-full font-bold ${pts > 0 ? 'bg-codeflow-accent/15 text-codeflow-accent' : 'text-codeflow-muted/50'}`}>
+                                {pts > 0 ? `+${pts}` : '0'}
+                              </span>
+                            ) : (
+                              <span className="text-codeflow-muted/30">—</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -2041,7 +2288,8 @@ function PredictionsGridTab({ nextRace }: { nextRace: any }) {
   const [predictions, setPredictions] = React.useState<any[]>([]);
   const [activePlayers, setActivePlayers] = React.useState<string[]>([]);
   const [loading, setLoading] = React.useState(true);
-  const [sessionFilter, setSessionFilter] = React.useState('race');
+  const [sessionFilter, setSessionFilter] = React.useState('qualifying');
+  const [officialResult, setOfficialResult] = React.useState<any>(null);
 
   // Load active players once: union of all players who predicted for any session of this race
   React.useEffect(() => {
@@ -2062,7 +2310,14 @@ function PredictionsGridTab({ nextRace }: { nextRace: any }) {
       .then(r => r.json())
       .then(data => { setPredictions(data); setLoading(false); })
       .catch(() => setLoading(false));
-  }, [sessionFilter]);
+    // Fetch official results for this session to show comparison
+    if (nextRace?.round) {
+      fetchWithAuth(`/api/races/${nextRace.round}/results?session_type=${sessionFilter}`)
+        .then(r => r.json())
+        .then(data => setOfficialResult(Array.isArray(data) && data.length > 0 ? data[0] : null))
+        .catch(() => setOfficialResult(null));
+    }
+  }, [sessionFilter, nextRace?.round]);
 
   const SESSION_LABELS: Record<string, string> = {
     race: '🏁 Carrera', qualifying: '🏎️ Clasificación',
@@ -2103,7 +2358,10 @@ function PredictionsGridTab({ nextRace }: { nextRace: any }) {
           </div>
         </div>
         <p className="text-xs text-codeflow-muted mb-4">
-          {nextRace ? nextRace.name : ''} · Celdas en <span className="text-green-400 font-semibold">verde</span> = consenso del grupo.
+          {nextRace ? nextRace.name : ''} ·{' '}
+          {officialResult
+            ? <><span className="text-green-400 font-semibold">Verde</span> = acertó · <span className="text-red-400 font-semibold">Rojo</span> = falló</>
+            : <><span className="text-green-400 font-semibold">Verde</span> = consenso del grupo</>}
         </p>
         {loading ? (
           <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-10 w-full bg-white/5 rounded-xl animate-pulse" />)}</div>
@@ -2126,10 +2384,18 @@ function PredictionsGridTab({ nextRace }: { nextRace: any }) {
                     <td className="text-codeflow-muted text-xs font-semibold py-3 pr-4 whitespace-nowrap">{POS_LABELS[pos]}</td>
                     {predictions.map((pred: any) => {
                       const val = pred[pos];
-                      const isConsensus = val && (consensus[pos][val] || 0) > 1;
+                      const isCorrect = officialResult && val && val === officialResult[pos];
+                      const isWrong = officialResult && val && val !== officialResult[pos];
+                      const isConsensus = !officialResult && val && (consensus[pos][val] || 0) > 1;
                       return (
                         <td key={pred.player} className="text-center py-2 px-3">
-                          <span className={`inline-block px-2 py-1 rounded-lg text-xs font-medium whitespace-nowrap ${!val ? 'text-codeflow-muted/50 italic' : isConsensus ? 'bg-green-500/15 text-green-300 border border-green-500/30' : 'bg-white/5 text-white/80 border border-white/10'}`}>
+                          <span className={`inline-block px-2 py-1 rounded-lg text-xs font-medium whitespace-nowrap ${
+                            !val ? 'text-codeflow-muted/50 italic' :
+                            isCorrect ? 'bg-green-500/15 text-green-300 border border-green-500/30' :
+                            isWrong ? 'bg-red-500/10 text-red-300/70 border border-red-500/20' :
+                            isConsensus ? 'bg-green-500/10 text-green-400/70 border border-green-500/20' :
+                            'bg-white/5 text-white/80 border border-white/10'
+                          }`}>
                             {val ? val.split(' ').slice(-1)[0] : '—'}
                           </span>
                         </td>
@@ -2188,9 +2454,19 @@ function MediaDetailModal({ item, tab, isGame, getGenreColor, poster, onClose, o
   const [userRatings, setUserRatings] = React.useState<{ username: string; rating: number }[]>([]);
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [localRating, setLocalRating] = React.useState(Number(item.user_rating) || 0);
+  const [comments, setComments] = React.useState<any[]>([]);
+  const [newComment, setNewComment] = React.useState('');
+  const [submittingComment, setSubmittingComment] = React.useState(false);
   const currentUser = localStorage.getItem('prode_username') || '';
   const { profiles } = useProfiles();
   const endpointTab = tab === 'games' ? 'boardgames' : tab;
+
+  const fetchComments = () => {
+    fetchWithAuth(`/api/media/${endpointTab}/${item.id}/comments`)
+      .then(r => r.json())
+      .then(data => setComments(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  };
 
   React.useEffect(() => {
     if (!isGame) {
@@ -2204,7 +2480,29 @@ function MediaDetailModal({ item, tab, isGame, getGenreColor, poster, onClose, o
       .then(r => r.json())
       .then(data => setUserRatings(Array.isArray(data) ? data : []))
       .catch(() => { });
+    fetchComments();
   }, [item.id]);
+
+  const handleSubmitComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newComment.trim()) return;
+    setSubmittingComment(true);
+    try {
+      await fetchWithAuth(`/api/media/${endpointTab}/${item.id}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({ text: newComment.trim() })
+      });
+      setNewComment('');
+      fetchComments();
+    } catch {} finally {
+      setSubmittingComment(false);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    await fetchWithAuth(`/api/media/comments/${commentId}`, { method: 'DELETE' });
+    setComments(prev => prev.filter(c => c.id !== commentId));
+  };
 
   const handleRate = (r: number) => {
     setLocalRating(r);
@@ -2283,6 +2581,53 @@ function MediaDetailModal({ item, tab, isGame, getGenreColor, poster, onClose, o
             </div>
           </div>
 
+          {/* Comments section */}
+          <div className="px-5 pb-4 border-t border-white/5 pt-4 space-y-3">
+            <h4 className="text-xs font-bold text-codeflow-muted uppercase tracking-wider">Comentarios</h4>
+            <form onSubmit={handleSubmitComment} className="flex gap-2">
+              <input
+                type="text"
+                value={newComment}
+                onChange={e => setNewComment(e.target.value)}
+                placeholder="Escribí un comentario..."
+                className="input-base text-sm py-2 flex-1"
+                maxLength={500}
+              />
+              <button type="submit" disabled={submittingComment || !newComment.trim()} className="btn-primary px-4 py-2 text-sm">
+                {submittingComment ? '...' : 'Enviar'}
+              </button>
+            </form>
+            {comments.length === 0 ? (
+              <p className="text-codeflow-muted/50 text-xs italic text-center py-2">Nadie comentó todavía.</p>
+            ) : (
+              <div className="space-y-2 max-h-48 overflow-y-auto no-scrollbar">
+                {comments.map((c: any) => {
+                  const seed = profiles[c.username] || c.username;
+                  const av = seed.includes(':')
+                    ? `https://api.dicebear.com/7.x/${seed.split(':')[0]}/svg?seed=${seed.split(':')[1]}`
+                    : `https://api.dicebear.com/7.x/notionists/svg?seed=${seed}&backgroundColor=transparent`;
+                  return (
+                    <div key={c.id} className="flex gap-2 items-start bg-white/[0.02] rounded-xl px-3 py-2 border border-white/5">
+                      <img src={av} alt={c.username} className="w-6 h-6 rounded-full bg-codeflow-base border border-white/10 shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <span className="text-[11px] font-bold text-white">{c.username}</span>
+                          <span className="text-[10px] text-codeflow-muted/50">{new Date(c.created_at).toLocaleDateString('es-AR')}</span>
+                        </div>
+                        <p className="text-xs text-white/70 leading-relaxed">{c.text}</p>
+                      </div>
+                      {c.username === currentUser && (
+                        <button onClick={() => handleDeleteComment(c.id)} className="text-white/20 hover:text-red-400 transition-colors shrink-0 mt-0.5">
+                          <Trash2 size={12} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* Ratings section */}
           {!isGame && (
             <div className="px-5 pb-6 space-y-4 border-t border-white/5 pt-4">
@@ -2344,14 +2689,34 @@ function MediaDetailModal({ item, tab, isGame, getGenreColor, poster, onClose, o
 }
 
 // MediaCard: poster-centric, opens detail modal on click
-function MediaCard({ item, i, isGame, getGenreColor, tab, onEdit, onDelete, onUpdateRating }: {
+const STATUS_LABELS: Record<string, { label: string; color: string }> = {
+  watched: { label: 'Vista ✓', color: 'bg-green-500/20 text-green-400 border-green-500/30' },
+  in_progress: { label: 'En progreso', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
+  pending: { label: 'Pendiente', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+};
+
+function MediaCard({ item, i, isGame, getGenreColor, tab, onEdit, onDelete, onUpdateRating, myStatus, onStatusChange }: {
   item: any; i: number; isGame: boolean; getGenreColor: (g: string) => string; tab: string;
   onEdit: (item: any) => void; onDelete: (id: string) => void; onUpdateRating: (id: string, r: number) => void;
+  myStatus?: string; onStatusChange?: (id: string, status: string) => void;
 }) {
   const [poster, setPoster] = React.useState<string | null>(null);
   const [showDetail, setShowDetail] = React.useState(false);
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const avgRating = Number(item.avg_rating) || 0;
+
+  const handleStatusChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    e.stopPropagation();
+    const newStatus = e.target.value;
+    const endpointTab2 = tab === 'games' ? 'boardgames' : tab;
+    try {
+      await fetchWithAuth(`/api/media/${endpointTab2}/${item.id}/status`, {
+        method: 'POST',
+        body: JSON.stringify({ status: newStatus || null })
+      });
+      onStatusChange?.(item.id, newStatus);
+    } catch {}
+  };
 
   React.useEffect(() => {
     if (isGame) return;
@@ -2424,6 +2789,20 @@ function MediaCard({ item, i, isGame, getGenreColor, tab, onEdit, onDelete, onUp
               <span className="text-[9px] text-codeflow-muted">{item.total_votes}★</span>
             )}
           </div>
+          {/* Status selector */}
+          <select
+            value={myStatus || ''}
+            onChange={handleStatusChange}
+            onClick={e => e.stopPropagation()}
+            className={`mt-1 w-full text-[10px] font-semibold rounded-lg px-2 py-1 border outline-none cursor-pointer appearance-none text-center ${
+              myStatus && STATUS_LABELS[myStatus] ? STATUS_LABELS[myStatus].color : 'bg-white/5 text-codeflow-muted/60 border-white/10'
+            }`}
+          >
+            <option value="">Sin estado</option>
+            <option value="watched">Vista ✓</option>
+            <option value="in_progress">En progreso</option>
+            <option value="pending">Pendiente</option>
+          </select>
         </div>
 
         {/* Edit / Delete on hover */}
@@ -2476,16 +2855,25 @@ function MediaVaultView({ tab }: { tab: string }) {
   const [showCustomGenre, setShowCustomGenre] = React.useState(false);
   const [tempGenre, setTempGenre] = React.useState('');
   const [initialStarRating, setInitialStarRating] = React.useState(0);
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [statusFilter, setStatusFilter] = React.useState<string>('all');
+  const [myStatuses, setMyStatuses] = React.useState<Record<string, string>>({});
 
   const endpointTab = tab === 'games' ? 'boardgames' : tab;
 
   const fetchMedia = () => {
     setLoading(true);
-    fetchWithAuth(`/api/media/${endpointTab}`)
-      .then(res => res.json())
-      .then(data => {
-        // Defensive check: ensure data is an array
+    Promise.all([
+      fetchWithAuth(`/api/media/${endpointTab}`).then(r => r.json()),
+      fetchWithAuth(`/api/media/${endpointTab}/my-statuses`).then(r => r.json()).catch(() => []),
+    ])
+      .then(([data, statuses]) => {
         setItems(Array.isArray(data) ? data : []);
+        if (Array.isArray(statuses)) {
+          const map: Record<string, string> = {};
+          statuses.forEach((s: any) => { map[s.media_id] = s.status; });
+          setMyStatuses(map);
+        }
         setLoading(false);
       })
       .catch(err => {
@@ -2553,6 +2941,8 @@ function MediaVaultView({ tab }: { tab: string }) {
     setIsEditing(false);
     setEditingId(null);
     setSelectedGenre('All');
+    setSearchQuery('');
+    setStatusFilter('all');
   }, [tab]);
 
   const genres = React.useMemo(() => {
@@ -2561,12 +2951,21 @@ function MediaVaultView({ tab }: { tab: string }) {
   }, [items, isGame]);
 
   const filteredItems = React.useMemo(() => {
-    if (selectedGenre === 'All') return items;
     return items.filter(i => {
-      const val = isGame ? i.game_type : i.genre;
-      return val && val.includes(selectedGenre);
+      const genreVal = isGame ? i.game_type : i.genre;
+      if (selectedGenre !== 'All' && !(genreVal && genreVal.includes(selectedGenre))) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        if (!(i.name?.toLowerCase().includes(q) || i.description?.toLowerCase().includes(q) || i.recommender?.toLowerCase().includes(q))) return false;
+      }
+      if (statusFilter !== 'all') {
+        const s = myStatuses[i.id];
+        if (statusFilter === 'none' && s) return false;
+        if (statusFilter !== 'none' && s !== statusFilter) return false;
+      }
+      return true;
     });
-  }, [items, selectedGenre, isGame]);
+  }, [items, selectedGenre, isGame, searchQuery, statusFilter, myStatuses]);
 
   const getGenreColor = (genre: string) => {
     if (!genre) return 'text-codeflow-accent bg-codeflow-accent/10';
@@ -2634,12 +3033,19 @@ function MediaVaultView({ tab }: { tab: string }) {
           <h1 className="text-2xl md:text-4xl font-display font-bold text-white mb-2">{translations[tab]}</h1>
           <p className="text-codeflow-muted text-sm md:text-lg">Bóveda de recomendaciones grupales.</p>
         </div>
-        <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+          <input
+            type="text"
+            placeholder="Buscar..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="input-base w-full sm:w-48 py-2.5 text-sm"
+          />
           {items.length > 0 && (
             <select
               value={selectedGenre}
               onChange={(e) => setSelectedGenre(e.target.value)}
-              className="bg-codeflow-card border border-white/10 text-white text-sm rounded-xl focus:ring-codeflow-accent focus:border-codeflow-accent block px-4 py-3 outline-none cursor-pointer appearance-none pr-10 relative w-full sm:w-auto"
+              className="bg-codeflow-card border border-white/10 text-white text-sm rounded-xl focus:ring-codeflow-accent focus:border-codeflow-accent block px-4 py-2.5 outline-none cursor-pointer appearance-none pr-10 relative w-full sm:w-auto"
               style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239CA3AF' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`, backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.5em 1.5em' }}
             >
               {genres.map(g => (
@@ -2647,6 +3053,18 @@ function MediaVaultView({ tab }: { tab: string }) {
               ))}
             </select>
           )}
+          <select
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            className="bg-codeflow-card border border-white/10 text-white text-sm rounded-xl px-4 py-2.5 outline-none cursor-pointer appearance-none pr-10 w-full sm:w-auto"
+            style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239CA3AF' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`, backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.5em 1.5em' }}
+          >
+            <option value="all">Todos</option>
+            <option value="watched">Vista ✓</option>
+            <option value="in_progress">En progreso</option>
+            <option value="pending">Pendiente</option>
+            <option value="none">Sin estado</option>
+          </select>
           <button className="btn-primary w-full sm:w-auto whitespace-nowrap" onClick={() => {
             if (showForm && isEditing) {
               setIsEditing(false);
@@ -2832,6 +3250,8 @@ function MediaVaultView({ tab }: { tab: string }) {
               onEdit={handleEdit}
               onDelete={handleDelete}
               onUpdateRating={handleUpdateRating}
+              myStatus={myStatuses[item.id]}
+              onStatusChange={(id, status) => setMyStatuses(prev => ({ ...prev, [id]: status }))}
             />
           ))}
         </div>
