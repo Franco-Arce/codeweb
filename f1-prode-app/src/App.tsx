@@ -3635,7 +3635,7 @@ function F1RulesTab() {
       isPoints: true,
       points: [
         { label: "Ganador exacto", pts: "+10 pts", desc: "Acertá quién gana la sesión (P1 exacto)." },
-        { label: "Mejor equipo exacto", pts: "+5 pts", desc: "Acertá el equipo constructor ganador de la sesión." },
+        { label: "Mejor equipo exacto", pts: "+5 pts", desc: "Acertá el equipo constructor del piloto que termina P1 en esa sesión." },
         { label: "Piloto en Top 5 (cualquier posición)", pts: "+3 pts c/u", desc: "Por cada piloto que predijiste y terminó en el Top 5, sin importar el orden." },
         { label: "Piloto en posición exacta", pts: "+2 pts extra c/u", desc: "Bonus adicional por cada piloto que acertaste en su posición exacta." },
         { label: "¡Todo perfecto! 🎖️", pts: "+10 pts bonus", desc: "Si acertás el ganador, el equipo y los 5 pilotos en orden exacto, recibís 10 puntos extra." },
