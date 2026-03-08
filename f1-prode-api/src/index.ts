@@ -331,6 +331,35 @@ const initDb = async () => {
             ON CONFLICT (player, race_id, session_type) DO NOTHING
         `);
 
+        // Rebuild leaderboard from scratch so seeded/late predictions are always scored correctly
+        const [rebuildResults, rebuildPreds] = await Promise.all([
+            pool.query('SELECT * FROM race_results'),
+            pool.query('SELECT * FROM predictions'),
+        ]);
+        if (rebuildResults.rows.length > 0) {
+            // Reset pts to 0 for all existing entries, then re-accumulate
+            await pool.query('UPDATE leaderboard SET pts = 0');
+            for (const result of rebuildResults.rows) {
+                const sessionPts = (SESSION_POINTS as any)[result.session_type]?.pick || 10;
+                const matching = rebuildPreds.rows.filter(
+                    (p: any) => p.race_id === result.race_id && p.session_type === result.session_type
+                );
+                for (const pred of matching) {
+                    let scored = 0;
+                    for (const pos of ['p1', 'p2', 'p3', 'p4', 'p5']) {
+                        if ((pred as any)[pos] && (pred as any)[pos] === (result as any)[pos]) scored += sessionPts;
+                    }
+                    if (scored > 0) {
+                        await pool.query(
+                            'INSERT INTO leaderboard (name, pts) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET pts = leaderboard.pts + $2',
+                            [pred.player, scored]
+                        );
+                    }
+                }
+            }
+            console.log('✅ Leaderboard reconstruido desde predicciones y resultados');
+        }
+
         console.log('✅ Base de datos inicializada y migrada');
     } catch (error) {
         console.error('❌ Error configurando base de datos:', error);
@@ -1227,8 +1256,8 @@ app.post('/api/admin/whatsapp/remind', requireAuth, requireAdmin, async (req: Re
 // --- Score History per race (for Chart.js) ---
 app.get('/api/leaderboard/history', requireAuth, async (req: Request, res: Response) => {
     try {
-        // Get all official results that have been processed
-        const resultsQuery = await pool.query('SELECT race_id FROM race_results ORDER BY created_at ASC');
+        // Get unique race_ids that have official results
+        const resultsQuery = await pool.query('SELECT DISTINCT race_id FROM race_results ORDER BY race_id ASC');
         const raceIds = resultsQuery.rows.map((r: any) => r.race_id);
 
         if (raceIds.length === 0) return res.json([]);
@@ -1236,26 +1265,28 @@ app.get('/api/leaderboard/history', requireAuth, async (req: Request, res: Respo
         const history: any[] = [];
 
         for (const raceId of raceIds) {
-            // Get official result for this race
+            // Get ALL sessions for this race
             const rr = await pool.query('SELECT * FROM race_results WHERE race_id = $1', [raceId]);
-            const official = rr.rows[0];
-            if (!official) continue;
-
-            // Get all predictions for this race
-            const preds = await pool.query('SELECT * FROM predictions WHERE race_id = $1', [raceId]);
+            if (rr.rows.length === 0) continue;
 
             const raceScores: Record<string, number> = {};
 
-            for (const pred of preds.rows) {
-                let scored = 0;
-                for (const pos of ['p1', 'p2', 'p3', 'p4', 'p5'] as const) {
-                    if (pred[pos] && pred[pos] === official[pos]) scored += 10;
+            // Score each session separately and accumulate
+            for (const official of rr.rows) {
+                const sessionPts = (SESSION_POINTS as any)[official.session_type]?.pick || 10;
+                const preds = await pool.query(
+                    'SELECT * FROM predictions WHERE race_id = $1 AND session_type = $2',
+                    [raceId, official.session_type]
+                );
+                for (const pred of preds.rows) {
+                    let scored = 0;
+                    for (const pos of ['p1', 'p2', 'p3', 'p4', 'p5']) {
+                        if ((pred as any)[pos] && (pred as any)[pos] === (official as any)[pos]) scored += sessionPts;
+                    }
+                    raceScores[pred.player] = (raceScores[pred.player] || 0) + scored;
                 }
-                if (pred.pole_position && pred.pole_position === official.pole_position) scored += 5;
-                raceScores[pred.player] = scored;
             }
 
-            // Get race name from calendar
             const roundNum = parseInt(raceId.replace('round_', ''));
             const raceInfo = races2026.find(r => r.round === roundNum);
 
@@ -1670,13 +1701,21 @@ app.post('/api/media/:type/:id/status', requireAuth, async (req: Request, res: R
     const { type, id } = req.params;
     const { status } = req.body;
     const userId = (req as any).user.userId;
-    if (!['watched', 'in_progress', 'pending'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
+    if (status && !['watched', 'in_progress', 'pending'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
     try {
-        await pool.query(`
-            INSERT INTO media_user_status (user_id, media_type, media_id, status)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (user_id, media_type, media_id) DO UPDATE SET status = $4, updated_at = NOW()
-        `, [userId, type, id, status]);
+        if (!status) {
+            // Clear status
+            await pool.query(
+                'DELETE FROM media_user_status WHERE user_id = $1 AND media_type = $2 AND media_id = $3',
+                [userId, type, id]
+            );
+        } else {
+            await pool.query(`
+                INSERT INTO media_user_status (user_id, media_type, media_id, status)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (user_id, media_type, media_id) DO UPDATE SET status = $4, updated_at = NOW()
+            `, [userId, type, id, status]);
+        }
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: 'DB error' }); }
 });
