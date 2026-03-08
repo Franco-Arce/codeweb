@@ -2744,11 +2744,6 @@ function MediaDetailModal({ item, tab, isGame, getGenreColor, poster, onClose, o
 }
 
 // MediaCard: poster-centric, opens detail modal on click
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  watched: { label: 'Vista ✓', color: 'bg-green-500/20 text-green-400 border-green-500/30' },
-  in_progress: { label: 'En progreso', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
-  pending: { label: 'Pendiente', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
-};
 
 function MediaCard({ item, i, isGame, getGenreColor, tab, onEdit, onDelete, onUpdateRating, myStatus, onStatusChange }: {
   item: any; i: number; isGame: boolean; getGenreColor: (g: string) => string; tab: string;
@@ -2912,6 +2907,40 @@ function MediaVaultView({ tab }: { tab: string }) {
   const [showCustomGenre, setShowCustomGenre] = React.useState(false);
   const [tempGenre, setTempGenre] = React.useState('');
   const [initialStarRating, setInitialStarRating] = React.useState(0);
+  const [searchSuggestions, setSearchSuggestions] = React.useState<any[]>([]);
+  const [searchingTmdb, setSearchingTmdb] = React.useState(false);
+  const searchTimeout = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleNameInput = (value: string) => {
+    setFormData(prev => ({ ...prev, name: value }));
+    setSearchSuggestions([]);
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    if (value.length < 2) return;
+    searchTimeout.current = setTimeout(async () => {
+      setSearchingTmdb(true);
+      try {
+        if (isGame) {
+          const res = await fetchWithAuth(`/api/bgg/search?query=${encodeURIComponent(value)}`);
+          const data = await res.json();
+          setSearchSuggestions(Array.isArray(data) ? data : []);
+        } else {
+          const type = tab === 'movies' ? 'movie' : 'tv';
+          const res = await fetchWithAuth(`/api/tmdb/search?query=${encodeURIComponent(value)}&type=${type}`);
+          const data = await res.json();
+          setSearchSuggestions(Array.isArray(data) ? data : []);
+        }
+      } catch {} finally { setSearchingTmdb(false); }
+    }, 400);
+  };
+
+  const applySearchSuggestion = (s: any) => {
+    if (isGame) {
+      setFormData(prev => ({ ...prev, name: s.name, notes: s.description || prev.notes, game_type: s.categories || prev.game_type }));
+    } else {
+      setFormData(prev => ({ ...prev, name: s.title || s.name, description: s.overview || prev.description, genre: s.genres || prev.genre }));
+    }
+    setSearchSuggestions([]);
+  };
   const [searchQuery, setSearchQuery] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState<string>('all');
   const [myStatuses, setMyStatuses] = React.useState<Record<string, string>>({});
@@ -2998,6 +3027,7 @@ function MediaVaultView({ tab }: { tab: string }) {
     setSelectedGenre('All');
     setSearchQuery('');
     setStatusFilter('all');
+    setSearchSuggestions([]);
   }, [tab]);
 
   const genres = React.useMemo(() => {
@@ -3155,7 +3185,40 @@ function MediaVaultView({ tab }: { tab: string }) {
                         {userList.map(u => <option key={u} value={u} className="bg-codeflow-dark">{u}</option>)}
                       </select>
                     </div>
-                    <input type="text" placeholder="Nombre completo" required className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder={searchingTmdb ? 'Buscando...' : 'Nombre (busca automáticamente)'}
+                        required
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent outline-none"
+                        value={formData.name}
+                        onChange={e => handleNameInput(e.target.value)}
+                        autoComplete="off"
+                      />
+                      {searchSuggestions.length > 0 && (
+                        <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-codeflow-card border border-white/10 rounded-xl shadow-2xl overflow-hidden">
+                          {searchSuggestions.map((s: any, i: number) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => applySearchSuggestion(s)}
+                              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 text-left border-b border-white/5 last:border-0 transition-colors"
+                            >
+                              {(s.poster || s.thumbnail) && (
+                                <img src={s.poster || s.thumbnail} alt="" className="w-10 h-14 object-cover rounded-md shrink-0 border border-white/10" />
+                              )}
+                              <div className="min-w-0">
+                                <p className="text-white text-sm font-semibold truncate">{s.title || s.name}</p>
+                                {(s.year || s.genres || s.categories) && (
+                                  <p className="text-codeflow-muted text-xs truncate">{[s.year, s.genres || s.categories].filter(Boolean).join(' · ')}</p>
+                                )}
+                                {s.overview && <p className="text-white/40 text-[10px] line-clamp-1 mt-0.5">{s.overview}</p>}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
 
                     {/* Genre Dropdown/Input */}
                     <div className="flex flex-col gap-2">
@@ -3217,7 +3280,31 @@ function MediaVaultView({ tab }: { tab: string }) {
                         {userList.map(u => <option key={u} value={u} className="bg-codeflow-dark">{u}</option>)}
                       </select>
                     </div>
-                    <input type="text" placeholder="Nombre del Juego" required className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder={searchingTmdb ? 'Buscando en BGG...' : 'Nombre del juego (busca en BGG)'}
+                        required
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-codeflow-accent outline-none"
+                        value={formData.name}
+                        onChange={e => handleNameInput(e.target.value)}
+                        autoComplete="off"
+                      />
+                      {searchSuggestions.length > 0 && (
+                        <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-codeflow-card border border-white/10 rounded-xl shadow-2xl overflow-hidden">
+                          {searchSuggestions.map((s: any, i: number) => (
+                            <button key={i} type="button" onClick={() => applySearchSuggestion(s)}
+                              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 text-left border-b border-white/5 last:border-0 transition-colors">
+                              {s.thumbnail && <img src={s.thumbnail} alt="" className="w-10 h-10 object-cover rounded-md shrink-0 border border-white/10" />}
+                              <div className="min-w-0">
+                                <p className="text-white text-sm font-semibold truncate">{s.name}</p>
+                                {s.categories && <p className="text-codeflow-muted text-xs truncate">{s.categories}</p>}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
 
                     {/* Game Type Dropdown/Input */}
                     <div className="flex flex-col gap-2">

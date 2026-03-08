@@ -93,6 +93,43 @@ const SESSION_POINTS: Record<SessionType, { pick: number }> = {
     sprint_qualifying: { pick: 5 },
 };
 
+// Shared: process and score a session result (used by admin endpoint + auto-score cron)
+async function processSessionResult(
+    pool: Pool,
+    race_id: string,
+    session_type: string,
+    p1: string, p2: string, p3: string, p4: string, p5: string
+): Promise<{ player: string; scored: number }[]> {
+    const pts = (SESSION_POINTS as any)[session_type]?.pick || 10;
+    await pool.query(
+        `INSERT INTO race_results (race_id, session_type, p1, p2, p3, p4, p5)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (race_id, session_type)
+         DO UPDATE SET p1=$3, p2=$4, p3=$5, p4=$6, p5=$7, created_at=CURRENT_TIMESTAMP`,
+        [race_id, session_type, p1, p2, p3, p4, p5]
+    );
+    const predsResult = await pool.query(
+        'SELECT * FROM predictions WHERE race_id = $1 AND session_type = $2',
+        [race_id, session_type]
+    );
+    const scoreUpdates: { player: string; scored: number }[] = [];
+    for (const pred of predsResult.rows) {
+        let scored = 0;
+        for (const pos of ['p1', 'p2', 'p3', 'p4', 'p5']) {
+            const official: any = { p1, p2, p3, p4, p5 };
+            if ((pred as any)[pos] && (pred as any)[pos] === official[pos]) scored += pts;
+        }
+        if (scored > 0) {
+            scoreUpdates.push({ player: pred.player, scored });
+            await pool.query(
+                'INSERT INTO leaderboard (name, pts) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET pts = leaderboard.pts + $2',
+                [pred.player, scored]
+            );
+        }
+    }
+    return scoreUpdates;
+}
+
 // Create and migrate tables
 const initDb = async () => {
     try {
@@ -1104,6 +1141,19 @@ app.get('/api/tmdb/search', requireAuth, async (req: Request, res: Response) => 
             }
         }
 
+        // Fetch genre list for mapping ids → names
+        const genreEndpoint = (type === 'movie')
+            ? `https://api.themoviedb.org/3/genre/movie/list?api_key=${apiKey}&language=es-AR`
+            : `https://api.themoviedb.org/3/genre/tv/list?api_key=${apiKey}&language=es-AR`;
+        let genreMap: Record<number, string> = {};
+        try {
+            const genreResp = await fetch(genreEndpoint);
+            if (genreResp.ok) {
+                const genreData = await genreResp.json();
+                genreMap = Object.fromEntries((genreData.genres || []).map((g: any) => [g.id, g.name]));
+            }
+        } catch {}
+
         const formattedResults = results.slice(0, 5).map((r: any) => ({
             id: r.id,
             title: r.title || r.name,
@@ -1111,6 +1161,7 @@ app.get('/api/tmdb/search', requireAuth, async (req: Request, res: Response) => 
             year: (r.release_date || r.first_air_date || '').slice(0, 4),
             poster: r.poster_path ? `https://image.tmdb.org/t/p/w300${r.poster_path}` : null,
             overview: r.overview,
+            genres: (r.genre_ids || []).map((id: number) => genreMap[id]).filter(Boolean).join(', '),
         }));
         res.json(formattedResults);
     } catch (error) {
@@ -1119,72 +1170,76 @@ app.get('/api/tmdb/search', requireAuth, async (req: Request, res: Response) => 
     }
 });
 
+// --- BoardGameGeek search proxy ---
+app.get('/api/bgg/search', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const { query } = req.query as { query: string };
+        if (!query) return res.status(400).json({ error: 'Missing query' });
+
+        // Search BGG XML API
+        const searchResp = await fetch(`https://boardgamegeek.com/xmlapi2/search?query=${encodeURIComponent(query)}&type=boardgame&limit=5`);
+        if (!searchResp.ok) return res.json([]);
+        const xml = await searchResp.text();
+
+        // Simple regex parse for ids and names (avoids xml2js dependency)
+        const items: { id: string; name: string }[] = [];
+        const itemMatches = xml.matchAll(/<item type="boardgame" id="(\d+)"[\s\S]*?<name[^>]*value="([^"]+)"/g);
+        for (const m of itemMatches) {
+            items.push({ id: m[1], name: m[2] });
+            if (items.length >= 5) break;
+        }
+
+        if (items.length === 0) return res.json([]);
+
+        // Fetch details for each game
+        const ids = items.map(i => i.id).join(',');
+        const detailResp = await fetch(`https://boardgamegeek.com/xmlapi2/thing?id=${ids}&stats=1`);
+        const detailXml = detailResp.ok ? await detailResp.text() : '';
+
+        const results = items.map(item => {
+            // Extract thumbnail
+            const thumbMatch = detailXml.match(new RegExp(`<item[^>]*id="${item.id}"[\\s\\S]*?<thumbnail>([^<]+)<\\/thumbnail>`));
+            const thumb = thumbMatch ? thumbMatch[1].trim() : null;
+            // Extract description snippet
+            const descMatch = detailXml.match(new RegExp(`<item[^>]*id="${item.id}"[\\s\\S]*?<description>([\\s\\S]*?)<\\/description>`));
+            const desc = descMatch ? descMatch[1].replace(/&amp;#10;/g, ' ').replace(/&amp;/g, '&').replace(/<[^>]+>/g, '').trim().slice(0, 300) : '';
+            // Extract categories
+            const cats: string[] = [];
+            const catRe = /link type="boardgamecategory"[^>]*value="([^"]+)"/g;
+            const itemBlock = detailXml.match(new RegExp(`<item[^>]*id="${item.id}"[\\s\\S]*?(?=<item |$)`))?.[0] || '';
+            let catMatch;
+            while ((catMatch = catRe.exec(itemBlock)) !== null && cats.length < 3) cats.push(catMatch[1]);
+
+            return { id: item.id, name: item.name, thumbnail: thumb, description: desc, categories: cats.join(', ') };
+        });
+
+        res.json(results);
+    } catch (err) {
+        console.error('BGG error:', err);
+        res.json([]);
+    }
+});
+
 // --- Admin: Submit official race results and calculate scores ---
 app.post('/api/admin/results', requireAuth, requireAdmin, async (req: Request, res: Response) => {
     try {
-        const { race_round, session_type = 'race', p1, p2, p3, p4, p5, pole_position } = req.body;
+        const { race_round, session_type = 'race', p1, p2, p3, p4, p5 } = req.body;
         const race_id = `round_${race_round}`;
-        const pts = SESSION_POINTS[session_type as SessionType] || SESSION_POINTS.race;
 
-        // Save official results
-        await pool.query(
-            `INSERT INTO race_results (race_id, session_type, p1, p2, p3, p4, p5, pole_position)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-             ON CONFLICT (race_id, session_type)
-             DO UPDATE SET p1 = $3, p2 = $4, p3 = $5, p4 = $6, p5 = $7, pole_position = $8, created_at = CURRENT_TIMESTAMP`,
-            [race_id, session_type, p1, p2, p3, p4, p5, pole_position]
-        );
+        const scoreUpdates = await processSessionResult(pool, race_id, session_type, p1, p2, p3 || '', p4 || '', p5 || '');
 
-        // Score predictions for this race+session
-        const predictionsResult = await pool.query(
-            "SELECT * FROM predictions WHERE race_id = $1 AND session_type = $2",
-            [race_id, session_type]
-        );
-
-        const officialResult = { p1, p2, p3, p4, p5 };
-        const posFields = ['p1', 'p2', 'p3', 'p4', 'p5'] as const;
-        const scoreUpdates: { player: string; scored: number }[] = [];
-
-        for (const pred of predictionsResult.rows) {
-            let scored = 0;
-            for (const pos of posFields) {
-                if (pred[pos] && pred[pos] === (officialResult as any)[pos]) scored += pts.pick;
-            }
-            if (scored > 0) scoreUpdates.push({ player: pred.player, scored });
-        }
-
-        for (const update of scoreUpdates) {
-            await pool.query(
-                `INSERT INTO leaderboard (name, pts) VALUES ($1, $2)
-                 ON CONFLICT (name) DO UPDATE SET pts = leaderboard.pts + $2`,
-                [update.player, update.scored]
-            );
-        }
-
-        // Send WhatsApp notification with score breakdown
         if (scoreUpdates.length > 0) {
             const raceName = races2026.find(r => r.round === Number(race_round))?.name || race_id;
             const sessionLabel: Record<string, string> = {
                 race: 'Carrera', qualifying: 'Clasificación',
                 sprint: 'Sprint Race', sprint_qualifying: 'Sprint Qualifying'
             };
-            const breakdown = scoreUpdates
-                .sort((a, b) => b.scored - a.scored)
-                .map(u => `  • *${u.player}*: +${u.scored} pts`)
-                .join('\n');
-            const msg = `🏁 *Resultados de ${sessionLabel[session_type] || session_type} — ${raceName}*
-
-${breakdown}
-
-¡El leaderboard fue actualizado!\nhttps://codeweb-f1.vercel.app/`;
-            sendWhatsAppMessage(msg).catch(() => {});
+            const breakdown = scoreUpdates.sort((a, b) => b.scored - a.scored)
+                .map(u => `  • *${u.player}*: +${u.scored} pts`).join('\n');
+            sendWhatsAppMessage(`🏁 *Resultados de ${sessionLabel[session_type] || session_type} — ${raceName}*\n\n${breakdown}\n\n¡El leaderboard fue actualizado!\nhttps://codeweb-f1.vercel.app/`).catch(() => {});
         }
 
-        res.json({
-            message: `Resultados de ${session_type} procesados para ${race_id}`,
-            scoreUpdates,
-            totalPredictions: predictionsResult.rows.length,
-        });
+        res.json({ message: `Resultados de ${session_type} procesados para ${race_id}`, scoreUpdates });
     } catch (error) {
         console.error('Error processing results:', error);
         res.status(500).json({ error: 'Error processing race results' });
@@ -1633,6 +1688,77 @@ app.delete('/api/media/:type/:id', requireAuth, async (req: Request, res: Respon
 // Start WhatsApp Cron Job
 import { startWhatsAppCron } from './whatsappAlerts';
 startWhatsAppCron(pool, getNextRace, races2026);
+
+// --- Auto-score cron: fetch Jolpica results and score automatically ---
+import cron from 'node-cron';
+cron.schedule('*/30 * * * *', async () => {
+    try {
+        const nextRace = getNextRace();
+        // Also check the previous race (in case it just finished)
+        const prevRound = nextRace ? nextRace.round - 1 : null;
+        const roundsToCheck = [prevRound, nextRace?.round].filter(Boolean) as number[];
+
+        for (const round of roundsToCheck) {
+            const race_id = `round_${round}`;
+            const sessions: { type: string; jolpicaEndpoint: string }[] = [
+                { type: 'qualifying', jolpicaEndpoint: 'qualifying' },
+                { type: 'race', jolpicaEndpoint: 'results' },
+                { type: 'sprint', jolpicaEndpoint: 'sprint' },
+            ];
+
+            for (const session of sessions) {
+                // Skip if already in our DB
+                const existing = await pool.query(
+                    'SELECT id FROM race_results WHERE race_id = $1 AND session_type = $2',
+                    [race_id, session.type]
+                );
+                if (existing.rows.length > 0) continue;
+
+                // Fetch from Jolpica
+                const resp = await fetch(`https://api.jolpi.ca/ergast/f1/2026/${round}/${session.jolpicaEndpoint}.json`);
+                if (!resp.ok) continue;
+                const data = await resp.json();
+
+                let positions: string[] = [];
+                if (session.type === 'qualifying') {
+                    positions = (data?.MRData?.RaceTable?.Races?.[0]?.QualifyingResults || [])
+                        .slice(0, 5)
+                        .map((r: any) => `${r.Driver.givenName} ${r.Driver.familyName}`);
+                } else if (session.type === 'race') {
+                    positions = (data?.MRData?.RaceTable?.Races?.[0]?.Results || [])
+                        .slice(0, 5)
+                        .map((r: any) => `${r.Driver.givenName} ${r.Driver.familyName}`);
+                } else if (session.type === 'sprint') {
+                    positions = (data?.MRData?.RaceTable?.Races?.[0]?.SprintResults || [])
+                        .slice(0, 5)
+                        .map((r: any) => `${r.Driver.givenName} ${r.Driver.familyName}`);
+                }
+
+                if (positions.length < 3) continue; // Results not available yet
+
+                const [p1, p2, p3, p4, p5] = positions;
+                console.log(`🤖 Auto-scoring ${race_id} ${session.type}: ${positions.join(', ')}`);
+
+                const scoreUpdates = await processSessionResult(pool, race_id, session.type, p1, p2, p3 || '', p4 || '', p5 || '');
+
+                // Notify via WhatsApp
+                if (scoreUpdates.length > 0) {
+                    const raceName = races2026.find(r => r.round === round)?.name || race_id;
+                    const sessionLabel: Record<string, string> = { race: 'Carrera', qualifying: 'Clasificación', sprint: 'Sprint Race' };
+                    const breakdown = scoreUpdates.sort((a, b) => b.scored - a.scored)
+                        .map(u => `  • *${u.player}*: +${u.scored} pts`).join('\n');
+                    const { sendWhatsAppMessage } = await import('./whatsappAlerts');
+                    sendWhatsAppMessage(
+                        `🤖 *Resultados AUTO-importados — ${sessionLabel[session.type] || session.type} ${raceName}*\n\n${breakdown}\n\n¡El leaderboard fue actualizado!\nhttps://codeweb-f1.vercel.app/`
+                    ).catch(() => {});
+                    console.log(`✅ Auto-scored ${race_id} ${session.type}:`, scoreUpdates);
+                }
+            }
+        }
+    } catch (err) {
+        console.error('❌ Auto-score cron error:', err);
+    }
+});
 
 // Global Error Handler
 app.use((err: any, req: Request, res: Response, next: any) => {
