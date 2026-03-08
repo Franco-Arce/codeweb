@@ -5,8 +5,9 @@ import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
+import cron from 'node-cron';
 import { generateOracleRoast, RaceContext } from './groqOracle';
-import { sendWhatsAppMessage } from './whatsappAlerts';
+import { sendWhatsAppMessage, startWhatsAppCron } from './whatsappAlerts';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'f1prode_secret_key_2026';
 
@@ -1686,11 +1687,9 @@ app.delete('/api/media/:type/:id', requireAuth, async (req: Request, res: Respon
 });
 
 // Start WhatsApp Cron Job
-import { startWhatsAppCron } from './whatsappAlerts';
 startWhatsAppCron(pool, getNextRace, races2026);
 
 // --- Auto-score cron: fetch Jolpica results and score automatically ---
-import cron from 'node-cron';
 cron.schedule('*/30 * * * *', async () => {
     try {
         const nextRace = getNextRace();
@@ -1747,7 +1746,6 @@ cron.schedule('*/30 * * * *', async () => {
                     const sessionLabel: Record<string, string> = { race: 'Carrera', qualifying: 'Clasificación', sprint: 'Sprint Race' };
                     const breakdown = scoreUpdates.sort((a, b) => b.scored - a.scored)
                         .map(u => `  • *${u.player}*: +${u.scored} pts`).join('\n');
-                    const { sendWhatsAppMessage } = await import('./whatsappAlerts');
                     sendWhatsAppMessage(
                         `🤖 *Resultados AUTO-importados — ${sessionLabel[session.type] || session.type} ${raceName}*\n\n${breakdown}\n\n¡El leaderboard fue actualizado!\nhttps://codeweb-f1.vercel.app/`
                     ).catch(() => {});
