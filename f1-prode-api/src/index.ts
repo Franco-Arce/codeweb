@@ -1629,7 +1629,7 @@ app.get('/api/races/:round/results', requireAuth, async (req: Request, res: Resp
 // --- Public: Personal prediction history ---
 app.get('/api/predictions/history/:username', requireAuth, async (req: Request, res: Response) => {
     try {
-        const username = req.params.username.toLowerCase();
+        const username = (req.params.username as string).toLowerCase();
         const preds = await pool.query(
             'SELECT * FROM predictions WHERE player = $1 ORDER BY race_id ASC, session_type ASC',
             [username]
@@ -1713,7 +1713,7 @@ app.post('/api/media/:type/:id/comments', requireAuth, async (req: Request, res:
 
 // --- Personal Stats ---
 app.get('/api/stats/:username', requireAuth, async (req: Request, res: Response) => {
-    const { username } = req.params;
+    const username = req.params.username as string;
     try {
         const resultsQuery = await pool.query('SELECT * FROM race_results ORDER BY created_at ASC');
         const allResults = resultsQuery.rows;
