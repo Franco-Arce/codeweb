@@ -95,7 +95,7 @@ export function startWhatsAppCron(pool: Pool, getNextRace: () => any, races2026:
 
                     if (missingUsers.length > 0) {
                         const mentions = missingUsers.map(u => `*${u}*`).join(', ');
-                        const message = `⚠️ *¡ALERTA F1 PRODE!* ⚠️\n\nFaltan solo 3 HORAS para que cierre la carga de pronósticos para la *${session.label}* del *${nextRace.name}*.\n\nLos siguientes pilotos aún no han cargado su pronóstico y podrían quedar descalificados:\n${mentions}\n\n¡Aceleren y carguen ya mismo! 🏎️💨`;
+                        const message = `⚠️ *¡ALERTA F1 PRODE!* ⚠️\n\nFaltan solo 3 HORAS para que cierre la carga de pronósticos para la *${session.label}* del *${nextRace.name}*.\n\nLos siguientes pilotos aún no han cargado su pronóstico y podrían quedar descalificados:\n${mentions}\n\n¡Aceleren y carguen ya mismo! 🏎️💨\nhttps://codeweb-f1.vercel.app/`;
 
                         try {
                             const res = await fetch(GREEN_API_URL, {

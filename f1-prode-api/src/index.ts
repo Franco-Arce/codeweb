@@ -321,10 +321,11 @@ const initDb = async () => {
             INSERT INTO predictions (player, race_id, session_type, p1, p2, p3)
             SELECT u.username, 'round_1', 'qualifying', data.p1, data.p2, data.p3
             FROM (VALUES
-                ('lu',      'George Russell',  'Lewis Hamilton',  'Oscar Piastri'),
-                ('eliana',  'Oscar Piastri',   'Max Verstappen',  'Charles Leclerc'),
-                ('guille',  'Charles Leclerc', 'Lando Norris',    'Max Verstappen'),
-                ('nestor',  'Charles Leclerc', 'Lando Norris',    'Max Verstappen')
+                ('lu',       'George Russell',  'Lewis Hamilton',  'Oscar Piastri'),
+                ('eliana',   'Oscar Piastri',   'Max Verstappen',  'Charles Leclerc'),
+                ('guille',   'Charles Leclerc', 'Lando Norris',    'Max Verstappen'),
+                ('nestor',   'Charles Leclerc', 'Lando Norris',    'Max Verstappen'),
+                ('davisote', 'George Russell',  'Charles Leclerc', 'Max Verstappen')
             ) AS data(username, p1, p2, p3)
             JOIN users u ON u.username = data.username
             ON CONFLICT (player, race_id, session_type) DO NOTHING
@@ -725,7 +726,7 @@ app.post('/api/predictions', requireAuth, async (req: Request, res: Response) =>
 
                 const mentions = missing.map((u: string) => `*${u}*`).join(', ');
                 const sessionLabel = SESSION_LABELS[session_type] || session_type;
-                const msg = `🏎️ *${lowerPlayer}* acaba de cargar su pronóstico para la *${sessionLabel}* de *${nextRace.name}*.\n\nTodavía faltan: ${mentions}\n\n¡No se queden afuera! ⏱️`;
+                const msg = `🏎️ *${lowerPlayer}* acaba de cargar su pronóstico para la *${sessionLabel}* de *${nextRace.name}*.\n\nTodavía faltan: ${mentions}\n\n¡No se queden afuera! ⏱️\nhttps://codeweb-f1.vercel.app/`;
                 await sendWhatsAppMessage(msg);
             } catch (err) {
                 console.error('WhatsApp auto-remind error:', err);
@@ -1146,7 +1147,7 @@ app.post('/api/admin/results', requireAuth, requireAdmin, async (req: Request, r
 
 ${breakdown}
 
-¡El leaderboard fue actualizado!`;
+¡El leaderboard fue actualizado!\nhttps://codeweb-f1.vercel.app/`;
             sendWhatsAppMessage(msg).catch(() => {});
         }
 
@@ -1213,7 +1214,7 @@ app.post('/api/admin/whatsapp/remind', requireAuth, requireAdmin, async (req: Re
 
         const mentions = missingPlayers.map(u => `*${u}*`).join(', ');
         const sessionLabel = SESSION_LABELS[session_type] || session_type;
-        const message = `⚠️ *¡ALERTA F1 PRODE!* ⚠️\n\nFaltan pronósticos para la *${sessionLabel}* del *${nextRace.name}*.\n\nLos siguientes pilotos aún no cargaron:\n${mentions}\n\n¡Carguen ya antes de que cierre! 🏎️💨`;
+        const message = `⚠️ *¡ALERTA F1 PRODE!* ⚠️\n\nFaltan pronósticos para la *${sessionLabel}* del *${nextRace.name}*.\n\nLos siguientes pilotos aún no cargaron:\n${mentions}\n\n¡Carguen ya antes de que cierre! 🏎️💨\nhttps://codeweb-f1.vercel.app/`;
 
         await sendWhatsAppMessage(message);
         res.json({ sent: true, missing: missingPlayers, message: `Mensaje enviado. Faltan: ${missingPlayers.join(', ')}` });
