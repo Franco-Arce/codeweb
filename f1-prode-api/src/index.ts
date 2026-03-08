@@ -106,40 +106,60 @@ const pool = new Pool({
 // Session types for the prode
 export type SessionType = 'race' | 'qualifying' | 'sprint' | 'sprint_qualifying';
 
-// Points per session type (5 positions, no pole)
-const SESSION_POINTS: Record<SessionType, { pick: number }> = {
-    race: { pick: 10 },
-    qualifying: { pick: 10 },
-    sprint: { pick: 8 },
-    sprint_qualifying: { pick: 5 },
-};
+// New scoring: winner(10) + team(5) + top5(3 in top5 + 2 exact) + bonus(10)
+function scoreSession(pred: any, official: any): number {
+    let scored = 0;
+    const officialTop5 = [official.p1, official.p2, official.p3, official.p4, official.p5].filter(Boolean) as string[];
+    const predDrivers = [pred.p1, pred.p2, pred.p3, pred.p4, pred.p5] as (string | null)[];
+
+    // 1. Winner exact: +10
+    if (pred.p1 && pred.p1 === official.p1) scored += 10;
+
+    // 2. Best team exact: +5
+    if (pred.predicted_team && official.winning_team &&
+        pred.predicted_team.toLowerCase().trim() === official.winning_team.toLowerCase().trim()) scored += 5;
+
+    // 3. Top 5 drivers: +3 if in top5 (any position) +2 if exact position
+    for (let i = 0; i < 5; i++) {
+        const d = predDrivers[i];
+        if (!d) continue;
+        if (officialTop5.includes(d)) scored += 3;
+        if (d === officialTop5[i]) scored += 2;
+    }
+
+    // 4. Bonus: all 5 exact + winner + team
+    const allTop5Exact = predDrivers.every((d, i) => d && d === officialTop5[i]);
+    const winnerCorrect = pred.p1 === official.p1;
+    const teamCorrect = !official.winning_team ||
+        (pred.predicted_team && pred.predicted_team.toLowerCase().trim() === official.winning_team.toLowerCase().trim());
+    if (allTop5Exact && winnerCorrect && teamCorrect) scored += 10;
+
+    return scored;
+}
 
 // Shared: process and score a session result (used by admin endpoint + auto-score cron)
 async function processSessionResult(
     pool: Pool,
     race_id: string,
     session_type: string,
-    p1: string, p2: string, p3: string, p4: string, p5: string
+    p1: string, p2: string, p3: string, p4: string, p5: string,
+    winning_team: string = ''
 ): Promise<{ player: string; scored: number }[]> {
-    const pts = (SESSION_POINTS as any)[session_type]?.pick || 10;
     await pool.query(
-        `INSERT INTO race_results (race_id, session_type, p1, p2, p3, p4, p5)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO race_results (race_id, session_type, p1, p2, p3, p4, p5, winning_team)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          ON CONFLICT (race_id, session_type)
-         DO UPDATE SET p1=$3, p2=$4, p3=$5, p4=$6, p5=$7, created_at=CURRENT_TIMESTAMP`,
-        [race_id, session_type, p1, p2, p3, p4, p5]
+         DO UPDATE SET p1=$3, p2=$4, p3=$5, p4=$6, p5=$7, winning_team=$8, created_at=CURRENT_TIMESTAMP`,
+        [race_id, session_type, p1, p2, p3, p4, p5, winning_team || null]
     );
     const predsResult = await pool.query(
         'SELECT * FROM predictions WHERE race_id = $1 AND session_type = $2',
         [race_id, session_type]
     );
+    const official = { p1, p2, p3, p4, p5, winning_team };
     const scoreUpdates: { player: string; scored: number }[] = [];
     for (const pred of predsResult.rows) {
-        let scored = 0;
-        for (const pos of ['p1', 'p2', 'p3', 'p4', 'p5']) {
-            const official: any = { p1, p2, p3, p4, p5 };
-            if ((pred as any)[pos] && (pred as any)[pos] === official[pos]) scored += pts;
-        }
+        const scored = scoreSession(pred, official);
         if (scored > 0) {
             scoreUpdates.push({ player: pred.player, scored });
             await pool.query(
@@ -232,6 +252,12 @@ const initDb = async () => {
         // 2. Add session_type to race_results if it doesn't exist
         await pool.query(`
             ALTER TABLE race_results ADD COLUMN IF NOT EXISTS session_type VARCHAR(30) NOT NULL DEFAULT 'race';
+        `);
+
+        // New scoring: add predicted_team to predictions and winning_team to race_results
+        await pool.query(`
+            ALTER TABLE predictions ADD COLUMN IF NOT EXISTS predicted_team VARCHAR(100);
+            ALTER TABLE race_results ADD COLUMN IF NOT EXISTS winning_team VARCHAR(100);
         `);
 
         // 3. Fix unique constraint on predictions: (player, race_id, session_type)
@@ -408,18 +434,13 @@ const initDb = async () => {
             pool.query('SELECT * FROM predictions'),
         ]);
         if (rebuildResults.rows.length > 0) {
-            // Reset pts to 0 for all existing entries, then re-accumulate
             await pool.query('UPDATE leaderboard SET pts = 0');
             for (const result of rebuildResults.rows) {
-                const sessionPts = (SESSION_POINTS as any)[result.session_type]?.pick || 10;
                 const matching = rebuildPreds.rows.filter(
                     (p: any) => p.race_id === result.race_id && p.session_type === result.session_type
                 );
                 for (const pred of matching) {
-                    let scored = 0;
-                    for (const pos of ['p1', 'p2', 'p3', 'p4', 'p5']) {
-                        if ((pred as any)[pos] && (pred as any)[pos] === (result as any)[pos]) scored += sessionPts;
-                    }
+                    const scored = scoreSession(pred, result);
                     if (scored > 0) {
                         await pool.query(
                             'INSERT INTO leaderboard (name, pts) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET pts = leaderboard.pts + $2',
@@ -1260,10 +1281,10 @@ app.get('/api/bgg/search', requireAuth, async (req: Request, res: Response) => {
 // --- Admin: Submit official race results and calculate scores ---
 app.post('/api/admin/results', requireAuth, requireAdmin, async (req: Request, res: Response) => {
     try {
-        const { race_round, session_type = 'race', p1, p2, p3, p4, p5 } = req.body;
+        const { race_round, session_type = 'race', p1, p2, p3, p4, p5, winning_team } = req.body;
         const race_id = `round_${race_round}`;
 
-        const scoreUpdates = await processSessionResult(pool, race_id, session_type, p1, p2, p3 || '', p4 || '', p5 || '');
+        const scoreUpdates = await processSessionResult(pool, race_id, session_type, p1, p2, p3 || '', p4 || '', p5 || '', winning_team || '');
 
         if (scoreUpdates.length > 0) {
             const raceName = races2026.find(r => r.round === Number(race_round))?.name || race_id;
@@ -1365,16 +1386,12 @@ app.get('/api/leaderboard/history', requireAuth, async (req: Request, res: Respo
 
             // Score each session separately and accumulate
             for (const official of rr.rows) {
-                const sessionPts = (SESSION_POINTS as any)[official.session_type]?.pick || 10;
                 const preds = await pool.query(
                     'SELECT * FROM predictions WHERE race_id = $1 AND session_type = $2',
                     [raceId, official.session_type]
                 );
                 for (const pred of preds.rows) {
-                    let scored = 0;
-                    for (const pos of ['p1', 'p2', 'p3', 'p4', 'p5']) {
-                        if ((pred as any)[pos] && (pred as any)[pos] === (official as any)[pos]) scored += sessionPts;
-                    }
+                    const scored = scoreSession(pred, official);
                     raceScores[pred.player] = (raceScores[pred.player] || 0) + scored;
                 }
             }
@@ -1916,18 +1933,19 @@ cron.schedule('*/30 * * * *', async () => {
                 const data = await resp.json();
 
                 let positions: string[] = [];
+                let winningTeam = '';
                 if (session.type === 'qualifying') {
-                    positions = (data?.MRData?.RaceTable?.Races?.[0]?.QualifyingResults || [])
-                        .slice(0, 5)
-                        .map((r: any) => `${r.Driver.givenName} ${r.Driver.familyName}`);
+                    const results = data?.MRData?.RaceTable?.Races?.[0]?.QualifyingResults || [];
+                    positions = results.slice(0, 5).map((r: any) => `${r.Driver.givenName} ${r.Driver.familyName}`);
+                    winningTeam = results[0]?.Constructor?.name || '';
                 } else if (session.type === 'race') {
-                    positions = (data?.MRData?.RaceTable?.Races?.[0]?.Results || [])
-                        .slice(0, 5)
-                        .map((r: any) => `${r.Driver.givenName} ${r.Driver.familyName}`);
+                    const results = data?.MRData?.RaceTable?.Races?.[0]?.Results || [];
+                    positions = results.slice(0, 5).map((r: any) => `${r.Driver.givenName} ${r.Driver.familyName}`);
+                    winningTeam = results[0]?.Constructor?.name || '';
                 } else if (session.type === 'sprint') {
-                    positions = (data?.MRData?.RaceTable?.Races?.[0]?.SprintResults || [])
-                        .slice(0, 5)
-                        .map((r: any) => `${r.Driver.givenName} ${r.Driver.familyName}`);
+                    const results = data?.MRData?.RaceTable?.Races?.[0]?.SprintResults || [];
+                    positions = results.slice(0, 5).map((r: any) => `${r.Driver.givenName} ${r.Driver.familyName}`);
+                    winningTeam = results[0]?.Constructor?.name || '';
                 }
 
                 if (positions.length < 3) continue; // Results not available yet
@@ -1935,7 +1953,7 @@ cron.schedule('*/30 * * * *', async () => {
                 const [p1, p2, p3, p4, p5] = positions;
                 console.log(`🤖 Auto-scoring ${race_id} ${session.type}: ${positions.join(', ')}`);
 
-                const scoreUpdates = await processSessionResult(pool, race_id, session.type, p1, p2, p3 || '', p4 || '', p5 || '');
+                const scoreUpdates = await processSessionResult(pool, race_id, session.type, p1, p2, p3 || '', p4 || '', p5 || '', winningTeam);
 
                 // Notify via WhatsApp
                 if (scoreUpdates.length > 0) {

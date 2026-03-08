@@ -1539,6 +1539,7 @@ function F1ProdeView() {
   // Form State
   const [pName, setPName] = React.useState('');
   const [pPole, setPPole] = React.useState('');
+  const [pTeam, setPTeam] = React.useState('');
   const [p1, setP1] = React.useState('');
   const [p2, setP2] = React.useState('');
   const [p3, setP3] = React.useState('');
@@ -1559,6 +1560,10 @@ function F1ProdeView() {
     "Liam Lawson", "Nico Hülkenberg", "Esteban Ocon", "Pierre Gasly", "Jack Doohan",
     "Alexander Albon", "Franco Colapinto", "Oliver Bearman", "Andrea Kimi Antonelli", "Gabriel Bortoleto"
   ]);
+  const TEAMS = [
+    "Red Bull Racing", "McLaren", "Ferrari", "Mercedes", "Aston Martin",
+    "Alpine", "Williams", "Racing Bulls", "Haas", "Sauber"
+  ];
 
   const { addToast } = useToast();
   const [existingPrediction, setExistingPrediction] = React.useState<any>(null);
@@ -1679,12 +1684,13 @@ function F1ProdeView() {
         if (mine) {
           setExistingPrediction(mine);
           setPPole(mine.pole_position || '');
+          setPTeam(mine.predicted_team || '');
           setP1(mine.p1 || ''); setP2(mine.p2 || ''); setP3(mine.p3 || '');
           setP4(mine.p4 || ''); setP5(mine.p5 || '');
           addToast('warning', `Cargando tu prognostico de ${selectedSession} para ${pName}`);
         } else {
           setExistingPrediction(null);
-          setPPole(''); setP1(''); setP2(''); setP3(''); setP4(''); setP5('');
+          setPPole(''); setPTeam(''); setP1(''); setP2(''); setP3(''); setP4(''); setP5('');
         }
       })
       .catch(console.error);
@@ -1772,12 +1778,12 @@ function F1ProdeView() {
         method: 'POST',
         body: JSON.stringify({
           player: pName, session_type: selectedSession,
-          pole_position: pPole, p1, p2, p3, p4, p5,
+          pole_position: pPole, predicted_team: pTeam, p1, p2, p3, p4, p5,
         })
       });
       if (!res.ok) throw new Error("Falla al guardar");
       addToast('success', `Pronóstico de ${currentForm.label} guardado para ${pName}`);
-      setExistingPrediction({ player: pName, session_type: selectedSession, pole_position: pPole, p1, p2, p3, p4, p5 });
+      setExistingPrediction({ player: pName, session_type: selectedSession, pole_position: pPole, predicted_team: pTeam, p1, p2, p3, p4, p5 });
     } catch (err) {
       addToast('error', 'Error guardando el pronóstico. Verificá la conexión.');
     } finally {
@@ -2015,6 +2021,19 @@ function F1ProdeView() {
                       />
                     </div>
                   )}
+
+                  {/* Mejor Equipo */}
+                  <div>
+                    <label className="block text-xs text-codeflow-muted mb-1 font-semibold">Mejor Equipo</label>
+                    <select
+                      value={pTeam}
+                      onChange={e => setPTeam(e.target.value)}
+                      className="w-full bg-codeflow-card border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-codeflow-accent/50"
+                    >
+                      <option value="">— Seleccionar equipo —</option>
+                      {TEAMS.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
 
                   {/* Dynamic position fields */}
                   <div className="pt-2">
@@ -2503,6 +2522,28 @@ function PredictionsGridTab({ nextRace }: { nextRace: any }) {
                     })}
                   </tr>
                 ))}
+                <tr className="border-b border-white/5 hover:bg-white/[0.02]">
+                  <td className="text-codeflow-muted text-xs font-semibold py-3 pr-4 whitespace-nowrap">🏎️ Equipo</td>
+                  {predictions.map((pred: any) => {
+                    const val = pred.predicted_team;
+                    const isCorrect = officialResult && val && officialResult.winning_team &&
+                      val.toLowerCase().trim() === officialResult.winning_team.toLowerCase().trim();
+                    const isWrong = officialResult && officialResult.winning_team && val &&
+                      val.toLowerCase().trim() !== officialResult.winning_team.toLowerCase().trim();
+                    return (
+                      <td key={pred.player} className="text-center py-2 px-3">
+                        <span className={`inline-block px-2 py-1 rounded-lg text-xs font-medium whitespace-nowrap ${
+                          !val ? 'text-codeflow-muted/50 italic' :
+                          isCorrect ? 'bg-green-500/15 text-green-300 border border-green-500/30' :
+                          isWrong ? 'bg-red-500/10 text-red-300/70 border border-red-500/20' :
+                          'bg-white/5 text-white/80 border border-white/10'
+                        }`}>
+                          {val || '—'}
+                        </span>
+                      </td>
+                    );
+                  })}
+                </tr>
               </tbody>
             </table>
           </div>
@@ -3674,6 +3715,7 @@ function AdminView() {
   const [selectedRound, setSelectedRound] = React.useState('');
   const [selectedSession, setSelectedSession] = React.useState<'race' | 'qualifying' | 'sprint' | 'sprint_qualifying'>('race');
   const [pole, setPole] = React.useState('');
+  const [winningTeam, setWinningTeam] = React.useState('');
   const [p1, setP1] = React.useState('');
   const [p2, setP2] = React.useState('');
   const [p3, setP3] = React.useState('');
@@ -3793,7 +3835,7 @@ function AdminView() {
     try {
       const res = await fetchWithAuth('/api/admin/results', {
         method: 'POST',
-        body: JSON.stringify({ race_round: Number(selectedRound), session_type: selectedSession, p1, p2, p3, p4, p5, pole_position: sessionCfg.hasPole ? pole : undefined })
+        body: JSON.stringify({ race_round: Number(selectedRound), session_type: selectedSession, p1, p2, p3, p4, p5, pole_position: sessionCfg.hasPole ? pole : undefined, winning_team: winningTeam || undefined })
       });
       const data = await res.json();
       setResultMessage(data);
@@ -3860,7 +3902,7 @@ function AdminView() {
                 <div className="flex flex-wrap gap-2">
                   {(Object.entries(SESSION_CONFIG) as any[]).map(([key, cfg]: any) => (
                     <button key={key} type="button"
-                      onClick={() => { setSelectedSession(key as any); setResultMessage(null); setPole(''); setP1(''); setP2(''); setP3(''); setP4(''); setP5(''); }}
+                      onClick={() => { setSelectedSession(key as any); setResultMessage(null); setPole(''); setWinningTeam(''); setP1(''); setP2(''); setP3(''); setP4(''); setP5(''); }}
                       className={`px-3 py-2 text-xs font-semibold rounded-xl border transition-all ${selectedSession === key ? 'bg-codeflow-accent/20 text-codeflow-accent border-codeflow-accent/40 shadow-[0_0_10px_rgba(168,85,247,0.2)]' : 'border-white/10 text-codeflow-muted hover:border-white/20'}`}
                     >
                       {cfg.label}
@@ -3915,6 +3957,17 @@ function AdminView() {
                     </select>
                   </div>
                 ))}
+              </div>
+
+              {/* Winning Team */}
+              <div>
+                <label className="block text-xs uppercase font-bold text-codeflow-muted tracking-wider mb-1">Mejor Equipo (Winning Team)</label>
+                <select value={winningTeam} onChange={e => setWinningTeam(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-codeflow-accent appearance-none cursor-pointer">
+                  <option value="" className="bg-codeflow-dark text-codeflow-muted">— Seleccionar equipo —</option>
+                  {["Red Bull Racing", "McLaren", "Ferrari", "Mercedes", "Aston Martin", "Alpine", "Williams", "Racing Bulls", "Haas", "Sauber"].map(t => (
+                    <option key={t} value={t} className="bg-codeflow-dark text-white">{t}</option>
+                  ))}
+                </select>
               </div>
 
               <button type="submit" disabled={submitting} className="w-full bg-gradient-to-r from-red-600 to-orange-600 hover:opacity-90 text-white font-bold py-3 rounded-xl transition-all shadow-lg mt-4 disabled:opacity-50">
