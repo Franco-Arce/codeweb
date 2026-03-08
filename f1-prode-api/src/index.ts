@@ -767,10 +767,69 @@ app.get('/api/races/calendar', requireAuth, (req: Request, res: Response) => {
     res.json(races2026);
 });
 
-// Get the next upcoming race
-app.get('/api/races/next', requireAuth, (req: Request, res: Response) => {
-    const next = getNextRace();
-    res.json(next);
+// Get the next upcoming race — DB-aware: only advances past a GP when race result is confirmed
+app.get('/api/races/next', requireAuth, async (req: Request, res: Response) => {
+    try {
+        // Find current/next race by time (with 4h buffer)
+        const byTime = getNextRace();
+        // Check if its race result is already in our DB (auto-imported from Jolpica)
+        const raceId = `round_${byTime.round}`;
+        const raceResult = await pool.query(
+            "SELECT id FROM race_results WHERE race_id = $1 AND session_type = 'race'",
+            [raceId]
+        );
+        if (raceResult.rows.length > 0) {
+            // Race is confirmed finished → advance to next round
+            const next = races2026.find(r => r.round === byTime.round + 1) || byTime;
+            return res.json({ ...next, previous: byTime });
+        }
+        res.json(byTime);
+    } catch {
+        res.json(getNextRace());
+    }
+});
+
+// Full results from Jolpica for any round (qualifying + race + sprint)
+app.get('/api/races/:round/full-results', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const round = parseInt(req.params.round as string);
+        if (isNaN(round)) return res.status(400).json({ error: 'Invalid round' });
+
+        const fetchJolpica = async (endpoint: string) => {
+            try {
+                const r = await fetch(`https://api.jolpi.ca/ergast/f1/2026/${round}/${endpoint}.json`);
+                return r.ok ? await r.json() : null;
+            } catch { return null; }
+        };
+
+        const mapResults = (rows: any[]) => rows.map((r: any, i: number) => ({
+            pos: i + 1,
+            driver: `${r.Driver?.givenName} ${r.Driver?.familyName}`,
+            team: r.Constructor?.name || '',
+            number: r.Driver?.permanentNumber || '',
+        }));
+
+        const [qualyData, raceData, sprintData] = await Promise.all([
+            fetchJolpica('qualifying'),
+            fetchJolpica('results'),
+            fetchJolpica('sprint'),
+        ]);
+
+        const result: any = {};
+
+        const qualyRows = qualyData?.MRData?.RaceTable?.Races?.[0]?.QualifyingResults || [];
+        if (qualyRows.length) result.qualifying = mapResults(qualyRows);
+
+        const raceRows = raceData?.MRData?.RaceTable?.Races?.[0]?.Results || [];
+        if (raceRows.length) result.race = mapResults(raceRows);
+
+        const sprintRows = sprintData?.MRData?.RaceTable?.Races?.[0]?.SprintResults || [];
+        if (sprintRows.length) result.sprint = mapResults(sprintRows);
+
+        res.json(result);
+    } catch (err) {
+        res.status(500).json({ error: 'Error fetching results from Jolpica' });
+    }
 });
 
 // Get predictions for a race+session (defaults to next race, 'race' session)

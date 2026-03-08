@@ -1387,43 +1387,92 @@ function DashboardView() {
       </div>
 
       {/* ===== LAST GP OFFICIAL RESULTS ===== */}
-      {!loading && history && history.length > 0 && (() => {
-        const lastGP = history[history.length - 1];
-        return (
-          <div className="glass-card p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-lg">🏁</span>
-              <h3 className="text-base font-bold text-white">Último GP — {lastGP.race_name}</h3>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {(lastGP.sessions || []).map((s: any) => (
-                <div key={s.type} className="bg-white/5 border border-white/8 rounded-xl p-3">
-                  <p className="text-[10px] font-bold text-codeflow-accent uppercase tracking-wider mb-2">{s.label}</p>
-                  {s.official?.winning_team && (
-                    <p className="text-[10px] text-yellow-400/80 mb-1.5 flex items-center gap-1">
-                      <span>🏆</span> {s.official.winning_team}
-                    </p>
-                  )}
-                  <ol className="space-y-1">
-                    {[s.official?.p1, s.official?.p2, s.official?.p3, s.official?.p4, s.official?.p5]
-                      .filter(Boolean).map((driver: string, i: number) => (
-                        <li key={i} className="flex items-center gap-2 text-xs">
-                          <span className={`w-4 text-center font-bold shrink-0 ${i === 0 ? 'text-yellow-400' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-orange-400' : 'text-codeflow-muted'}`}>
-                            {i + 1}
-                          </span>
-                          <span className="text-white/80">{driver}</span>
-                        </li>
-                      ))}
-                  </ol>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
+      {!loading && history && history.length > 0 && (
+        <LastGPResults history={history} />
+      )}
 
       {/* ===== SCORE HISTORY CHART ===== */}
       <ScoreHistoryChart history={history} loading={loading} />
+    </div>
+  );
+}
+
+// --- Last GP Full Results Widget ---
+const SESSION_LABELS_MAP: Record<string, string> = {
+  qualifying: 'Clasificación',
+  race: 'Carrera',
+  sprint: 'Sprint Race',
+  sprint_qualifying: 'Sprint Qualy',
+};
+
+function LastGPResults({ history }: { history: any[] }) {
+  const lastGP = history[history.length - 1];
+  const round = parseInt(lastGP?.race_id?.replace('round_', '') || '0');
+  const [results, setResults] = React.useState<any>(null);
+  const [activeTab, setActiveTab] = React.useState<string>('');
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    if (!round) return;
+    fetchWithAuth(`/api/races/${round}/full-results`)
+      .then(r => r.json())
+      .then(data => {
+        setResults(data);
+        // Default to first available session
+        const first = ['qualifying', 'sprint_qualifying', 'sprint', 'race'].find(s => data[s]?.length);
+        if (first) setActiveTab(first);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, [round]);
+
+  if (!lastGP) return null;
+
+  const availableSessions = ['qualifying', 'sprint_qualifying', 'sprint', 'race'].filter(s => results?.[s]?.length);
+
+  return (
+    <div className="glass-card p-5">
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <span className="text-lg">🏁</span>
+        <h3 className="text-base font-bold text-white">Último GP — {lastGP.race_name}</h3>
+        <div className="ml-auto flex gap-1 flex-wrap">
+          {!loading && availableSessions.map(s => (
+            <button
+              key={s}
+              onClick={() => setActiveTab(s)}
+              className={`text-xs px-2.5 py-1 rounded-lg font-semibold transition-all ${
+                activeTab === s ? 'bg-codeflow-accent text-white' : 'bg-white/5 text-codeflow-muted hover:text-white'
+              }`}
+            >
+              {SESSION_LABELS_MAP[s] || s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+          {[1,2,3,4,5].map(i => <div key={i} className="h-8 bg-white/5 rounded-lg animate-pulse" />)}
+        </div>
+      ) : !results || availableSessions.length === 0 ? (
+        <p className="text-codeflow-muted text-sm text-center py-4">Resultados no disponibles aún en Jolpica.</p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-96 overflow-y-auto pr-1">
+          {(results[activeTab] || []).map((entry: any) => (
+            <div key={entry.pos} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${
+              entry.pos <= 3 ? 'bg-white/[0.06] border border-white/8' : 'bg-white/[0.02]'
+            }`}>
+              <span className={`w-6 text-center font-bold text-sm shrink-0 ${
+                entry.pos === 1 ? 'text-yellow-400' : entry.pos === 2 ? 'text-slate-300' : entry.pos === 3 ? 'text-orange-400' : 'text-codeflow-muted/60'
+              }`}>{entry.pos}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-white text-xs font-semibold truncate">{entry.driver}</p>
+                <p className="text-codeflow-muted text-[10px] truncate">{entry.team}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
