@@ -393,17 +393,40 @@ function App() {
 // --- Mobile Bottom Navigation ---
 function MobileBottomNav({ activeTab, onNavigate }: { activeTab: string; onNavigate: (tab: string) => void }) {
   const mediaActive = ['series', 'animes', 'movies', 'games'].includes(activeTab);
-  const items = [
+  const mainItems = [
     { icon: <LayoutDashboard size={22} />, label: 'Inicio', tab: 'dashboard' },
     { icon: <Trophy size={22} />, label: 'F1', tab: 'f1' },
     { icon: <Film size={22} />, label: 'Bóveda', tab: 'series', isMedia: true },
     { icon: <Settings size={22} />, label: 'Config.', tab: 'settings' },
   ];
+  const mediaItems = [
+    { icon: <Tv size={18} />, label: 'Series', tab: 'series' },
+    { icon: <Ghost size={18} />, label: 'Animes', tab: 'animes' },
+    { icon: <Film size={18} />, label: 'Películas', tab: 'movies' },
+    { icon: <Diced size={18} />, label: 'Juegos', tab: 'games' },
+  ];
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-white/8"
       style={{ background: 'rgba(10,10,15,0.92)', backdropFilter: 'blur(24px)', paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
+      {/* Media sub-nav: shown when in any media tab */}
+      {mediaActive && (
+        <div className="flex items-center justify-around px-2 pt-2 pb-1 border-b border-white/5">
+          {mediaItems.map(item => (
+            <button key={item.tab} onClick={() => onNavigate(item.tab)}
+              className="flex flex-col items-center gap-0.5 px-4 py-1 rounded-lg transition-all">
+              <span className={`transition-colors ${activeTab === item.tab ? 'text-codeflow-accent' : 'text-codeflow-muted/50'}`}>
+                {item.icon}
+              </span>
+              <span className={`text-[9px] font-bold uppercase tracking-wide ${activeTab === item.tab ? 'text-codeflow-accent' : 'text-codeflow-muted/40'}`}>
+                {item.label}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      {/* Main nav */}
       <div className="flex items-center justify-around px-2 pt-2 pb-1">
-        {items.map(item => {
+        {mainItems.map(item => {
           const isActive = item.isMedia ? mediaActive : activeTab === item.tab;
           return (
             <button key={item.tab} onClick={() => onNavigate(item.tab)}
@@ -490,7 +513,7 @@ function AppShell({ activeTab, setActiveTab, setIsAuthenticated, currentUser, ha
       {/* Mobile Bottom Navigation */}
       <MobileBottomNav activeTab={activeTab} onNavigate={handleNavClick} />
 
-      <main className="flex-1 p-4 md:p-8 relative z-0 overflow-x-hidden pb-24 md:pb-8">
+      <main className={`flex-1 p-4 md:p-8 relative z-0 overflow-x-hidden md:pb-8 ${['series','animes','movies','games'].includes(activeTab) ? 'pb-36' : 'pb-24'}`}>
         <ActiveTabContext.Provider value={setActiveTab}>
           <AnimatePresence mode="wait">
             <motion.div
