@@ -1741,7 +1741,7 @@ function F1ProdeView() {
   const [pendingSubmit, setPendingSubmit] = React.useState<(() => void) | null>(null);
 
   // Form State
-  const [pName, setPName] = React.useState('');
+  const currentUser = localStorage.getItem('prode_username') || '';
   const [pPole, setPPole] = React.useState('');
   const [pTeam, setPTeam] = React.useState('');
   const [p1, setP1] = React.useState('');
@@ -1757,7 +1757,6 @@ function F1ProdeView() {
   const selectedSessionData = schedule?.sessions?.find((s: any) => s.type === selectedSession);
 
   // --- Constantes y Estados Dinámicos ---
-  const [USERS, setUSERS] = React.useState<string[]>([]);
   const [DRIVERS, setDRIVERS] = React.useState<string[]>([
     "Max Verstappen", "Lando Norris", "Charles Leclerc", "Carlos Sainz", "Oscar Piastri",
     "Lewis Hamilton", "George Russell", "Fernando Alonso", "Lance Stroll", "Yuki Tsunoda",
@@ -1792,10 +1791,7 @@ function F1ProdeView() {
       })
       .catch(err => console.error("Error trayendo lista oficial de la FIA:", err));
 
-    fetchWithAuth('/api/users/list')
-      .then(res => res.json())
-      .then(data => setUSERS(data || []))
-      .catch(err => console.error("Error fetching users:", err));
+
 
     setLoadingOracle(true);
     fetchWithAuth('/api/oracle/roast')
@@ -1878,20 +1874,20 @@ function F1ProdeView() {
     return () => clearInterval(interval);
   }, [nextRace?.round]);
 
-  // When player or session changes, pre-fill existing prediction
+  // When session changes, pre-fill existing prediction for logged-in user
   React.useEffect(() => {
-    if (!pName) return;
+    if (!currentUser) return;
     fetchWithAuth(`/api/predictions?session_type=${selectedSession}`)
       .then(r => r.json())
       .then((preds: any[]) => {
-        const mine = preds.find(p => p.player === pName);
+        const mine = preds.find(p => p.player === currentUser);
         if (mine) {
           setExistingPrediction(mine);
           setPPole(mine.pole_position || '');
           setPTeam(mine.predicted_team || '');
           setP1(mine.p1 || ''); setP2(mine.p2 || ''); setP3(mine.p3 || '');
           setP4(mine.p4 || ''); setP5(mine.p5 || '');
-          addToast('warning', `Cargando tu prognostico de ${selectedSession} para ${pName}`);
+          addToast('warning', `Cargando tu pronóstico de ${selectedSession}`);
         } else {
           setExistingPrediction(null);
           setPPole(''); setPTeam(''); setP1(''); setP2(''); setP3(''); setP4(''); setP5('');
@@ -1899,7 +1895,7 @@ function F1ProdeView() {
       })
       .catch(console.error);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pName, selectedSession]);
+  }, [selectedSession]);
 
   // Duplicate driver validation
   const allPicks = [p1, p2, p3, p4, p5].filter(Boolean);
@@ -1981,13 +1977,13 @@ function F1ProdeView() {
       const res = await fetchWithAuth('/api/predictions', {
         method: 'POST',
         body: JSON.stringify({
-          player: pName, session_type: selectedSession,
+          player: currentUser, session_type: selectedSession,
           pole_position: pPole, predicted_team: pTeam, p1, p2, p3, p4, p5,
         })
       });
       if (!res.ok) throw new Error("Falla al guardar");
-      addToast('success', `Pronóstico de ${currentForm.label} guardado para ${pName}`);
-      setExistingPrediction({ player: pName, session_type: selectedSession, pole_position: pPole, predicted_team: pTeam, p1, p2, p3, p4, p5 });
+      addToast('success', `Pronóstico de ${currentForm.label} guardado`);
+      setExistingPrediction({ player: currentUser, session_type: selectedSession, pole_position: pPole, predicted_team: pTeam, p1, p2, p3, p4, p5 });
     } catch (err) {
       addToast('error', 'Error guardando el pronóstico. Verificá la conexión.');
     } finally {
@@ -2002,7 +1998,7 @@ function F1ProdeView() {
         onClose={() => setConfirmOpen(false)}
         onConfirm={() => pendingSubmit && pendingSubmit()}
         title="Actualizar pronóstico"
-        message={`Ya cargaste un pronóstico de ${currentForm?.label} para ${pName}. ¿Querés actualizarlo?`}
+        message={`Ya cargaste un pronóstico de ${currentForm?.label}. ¿Querés actualizarlo?`}
         confirmLabel="Actualizar"
       />
       {/* Header F1 & Nav Tabs */}
@@ -2200,14 +2196,6 @@ function F1ProdeView() {
                 </div>
 
                 <form onSubmit={handlePredictSubmit} className="space-y-4 flex-1">
-                  <div>
-                    <label className="block text-xs uppercase font-bold text-codeflow-muted tracking-wider mb-1">Nombre Jugador</label>
-                    <select value={pName} onChange={e => setPName(e.target.value)} required className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white outline-none focus:border-codeflow-accent appearance-none cursor-pointer">
-                      <option value="" disabled className="bg-codeflow-dark text-codeflow-muted">Seleccioná tu usuario...</option>
-                      {USERS.map(u => <option key={u} value={u} className="bg-codeflow-dark text-white">{u}</option>)}
-                    </select>
-                  </div>
-
                   {/* Pole — only for race session */}
                   {currentForm.hasPole && (
                     <div className="mb-4">
