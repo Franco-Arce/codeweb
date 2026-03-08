@@ -1483,8 +1483,17 @@ const PLAYER_COLORS = [
   '#ec4899', '#06b6d4', '#84cc16',
 ];
 
+const SESSION_SHORT: Record<string, string> = {
+  qualifying: 'Q', sprint_qualifying: 'SQ', sprint: 'S', race: 'R'
+};
+
 function ScoreHistoryChart({ history, loading }: { history: any[], loading: boolean }) {
   const [mode, setMode] = React.useState<'session' | 'cumulative'>('session');
+  const [calendar, setCalendar] = React.useState<any[]>([]);
+
+  React.useEffect(() => {
+    fetchWithAuth('/api/races/calendar').then(r => r.json()).then(setCalendar).catch(() => {});
+  }, []);
 
   if (loading) {
     return (
@@ -1495,32 +1504,52 @@ function ScoreHistoryChart({ history, loading }: { history: any[], loading: bool
     );
   }
 
-  if (history.length === 0) {
-    return (
-      <div className="glass-card p-6 text-center">
-        <p className="text-codeflow-muted text-sm">📊 El gráfico de historial aparecerá aquí cuando se procesen los primeros resultados del campeonato.</p>
-      </div>
-    );
-  }
+  // Build history lookup: race_id -> session_type -> scores
+  const historyMap: Record<string, Record<string, Record<string, number>>> = {};
+  history.forEach((race: any) => {
+    historyMap[race.race_id] = {};
+    (race.sessions || []).forEach((s: any) => {
+      historyMap[race.race_id][s.type] = s.scores || {};
+    });
+  });
 
+  // All players from history
   const allPlayers = Array.from(new Set(history.flatMap((r: any) => Object.keys(r.scores))));
 
-  // Flatten all sessions across all GPs into individual X-axis points
-  const flatSessions: { label: string; gpName: string; scores: Record<string, number> }[] = [];
-  history.forEach((race: any) => {
-    const gpShort = race.race_name?.split(' ').slice(-1)[0] || race.race_id;
-    (race.sessions || []).forEach((s: any) => {
-      flatSessions.push({ label: `${gpShort} · ${s.label}`, gpName: gpShort, scores: s.scores || {} });
+  // Build all expected sessions from full calendar
+  interface FlatSession { label: string; raceId: string; type: string; hasResult: boolean; }
+  const flatSessions: FlatSession[] = [];
+
+  (calendar.length > 0 ? calendar : history.map((r: any) => ({
+    round: parseInt(r.race_id.replace('round_', '')),
+    name: r.race_name || r.race_id,
+    sprint: (r.sessions || []).some((s: any) => s.type === 'sprint'),
+  }))).forEach((race: any) => {
+    const raceId = `round_${race.round}`;
+    const gpShort = race.name?.split(' ').slice(-1)[0] || raceId;
+    const sessions = race.sprint
+      ? ['qualifying', 'sprint_qualifying', 'sprint', 'race']
+      : ['qualifying', 'race'];
+    sessions.forEach(type => {
+      const hasResult = !!(historyMap[raceId]?.[type]);
+      flatSessions.push({
+        label: `${gpShort} · ${SESSION_SHORT[type]}`,
+        raceId,
+        type,
+        hasResult,
+      });
     });
   });
 
   const labels = flatSessions.map(s => s.label);
+  const completedCount = flatSessions.filter(s => s.hasResult).length;
 
   const datasets = allPlayers.map((player, i) => {
     const color = PLAYER_COLORS[i % PLAYER_COLORS.length];
     let cumulative = 0;
-    const data = flatSessions.map(s => {
-      const pts = s.scores[player] ?? 0;
+    const data: (number | null)[] = flatSessions.map(s => {
+      if (!s.hasResult) return null;
+      const pts = historyMap[s.raceId]?.[s.type]?.[player] ?? 0;
       if (mode === 'cumulative') { cumulative += pts; return cumulative; }
       return pts;
     });
@@ -1529,16 +1558,19 @@ function ScoreHistoryChart({ history, loading }: { history: any[], loading: bool
       data,
       borderColor: color,
       backgroundColor: color + '25',
-      pointBackgroundColor: color,
-      pointRadius: 5,
-      pointHoverRadius: 8,
-      tension: 0.3,
+      pointBackgroundColor: (ctx: any) => {
+        const val = data[ctx.dataIndex];
+        return val === null ? 'transparent' : color;
+      },
+      pointRadius: (ctx: any) => data[ctx.dataIndex] === null ? 0 : 4,
+      pointHoverRadius: (ctx: any) => data[ctx.dataIndex] === null ? 0 : 7,
+      tension: 0.25,
       fill: mode === 'cumulative',
+      spanGaps: false,
     };
   });
 
   const chartData = { labels, datasets };
-  const totalSessions = flatSessions.length;
 
   const options = {
     responsive: true,
@@ -1554,15 +1586,20 @@ function ScoreHistoryChart({ history, loading }: { history: any[], loading: bool
         borderWidth: 1,
         titleColor: '#fff',
         bodyColor: 'rgba(255,255,255,0.8)',
+        filter: (item: any) => item.raw !== null,
         callbacks: {
-          label: (ctx: any) => `  ${ctx.dataset.label}: ${ctx.raw} pts${mode === 'cumulative' ? ' (acum.)' : ''}`,
+          label: (ctx: any) => ctx.raw === null ? '' : `  ${ctx.dataset.label}: ${ctx.raw} pts${mode === 'cumulative' ? ' (acum.)' : ''}`,
         },
       },
     },
     scales: {
       x: {
         grid: { color: 'rgba(255,255,255,0.04)' },
-        ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 10 }, maxRotation: 35 },
+        ticks: {
+          color: (ctx: any) => flatSessions[ctx.index]?.hasResult ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)',
+          font: { size: 9 },
+          maxRotation: 45,
+        },
       },
       y: {
         grid: { color: 'rgba(255,255,255,0.04)' },
@@ -1584,7 +1621,7 @@ function ScoreHistoryChart({ history, loading }: { history: any[], loading: bool
           📊 Historial de Puntos
         </h3>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-codeflow-muted italic mr-2">{totalSessions} sesiones</span>
+          <span className="text-xs text-codeflow-muted italic mr-2">{completedCount}/{flatSessions.length} sesiones</span>
           <div className="flex rounded-lg border border-white/10 overflow-hidden text-xs font-semibold">
             <button
               onClick={() => setMode('session')}
@@ -1597,8 +1634,16 @@ function ScoreHistoryChart({ history, loading }: { history: any[], loading: bool
           </div>
         </div>
       </div>
-      <div className="h-72">
-        <Line data={chartData} options={options} />
+      <div className="h-72 overflow-x-auto">
+        <div style={{ minWidth: Math.max(600, flatSessions.length * 32) + 'px', height: '100%' }}>
+          <Line data={chartData} options={options} />
+        </div>
+      </div>
+      <div className="mt-2 flex gap-4 text-xs text-codeflow-muted">
+        <span>Q = Clasificación</span>
+        <span>SQ = Sprint Qualy</span>
+        <span>S = Sprint</span>
+        <span>R = Carrera</span>
       </div>
     </div>
   );
