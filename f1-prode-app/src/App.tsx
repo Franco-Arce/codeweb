@@ -1608,7 +1608,7 @@ function F1ProdeView() {
   const handleOracleRefresh = async () => {
     if (loadingOracle) return;
     if (oracleRemaining !== null && oracleRemaining <= 0) {
-      addToast('El Oráculo agotó sus tokens por hoy. Volvé mañana.', 'error');
+      addToast('error', 'El Oráculo agotó sus tokens por hoy. Volvé mañana.');
       return;
     }
     setLoadingOracle(true);
@@ -1616,7 +1616,7 @@ function F1ProdeView() {
       const res = await fetchWithAuth('/api/oracle/roast/refresh', { method: 'POST' });
       const data = await res.json();
       if (!res.ok) {
-        addToast(data.error || 'Error al actualizar el Oráculo', 'error');
+        addToast('error', data.error || 'Error al actualizar el Oráculo');
         setLoadingOracle(false);
         return;
       }
@@ -1625,10 +1625,10 @@ function F1ProdeView() {
       setOracleGeneratedAt(data.generated_at ?? null);
       setOracleCached(false);
       if (data.remaining !== null && data.remaining <= 3 && data.remaining > 0) {
-        addToast(`⚠️ Al Oráculo le quedan solo ${data.remaining} análisis disponibles hoy`, 'warning');
+        addToast('warning', `⚠️ Al Oráculo le quedan solo ${data.remaining} análisis disponibles hoy`);
       }
     } catch {
-      addToast('Error de conexión con el Oráculo', 'error');
+      addToast('error', 'Error de conexión con el Oráculo');
     }
     setLoadingOracle(false);
   };
