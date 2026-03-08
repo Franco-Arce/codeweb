@@ -2361,35 +2361,64 @@ function F1LeaderboardTab() {
 
           {showBreakdown && (
             <div className="overflow-x-auto rounded-xl border border-white/8">
-              <table className="w-full text-xs">
+              <table className="w-full text-xs border-collapse">
                 <thead>
+                  {/* Row 1: GP names spanning their sessions */}
                   <tr className="border-b border-white/10">
-                    <th className="text-left py-3 px-4 text-codeflow-muted font-semibold whitespace-nowrap sticky left-0 bg-codeflow-card">Piloto</th>
+                    <th className="text-left py-2 px-4 text-codeflow-muted font-semibold sticky left-0 bg-codeflow-card" rowSpan={2}>Piloto</th>
                     {history.map((race: any) => (
-                      <th key={race.race_id} className="text-center py-3 px-3 text-codeflow-muted font-semibold whitespace-nowrap">
+                      <th
+                        key={race.race_id}
+                        colSpan={(race.sessions?.length || 1) + 1}
+                        className="text-center py-2 px-2 text-white/80 font-bold whitespace-nowrap border-l border-white/10"
+                      >
                         {race.race_name?.split(' ').slice(-1)[0] || race.race_id}
                       </th>
+                    ))}
+                  </tr>
+                  {/* Row 2: session labels + total */}
+                  <tr className="border-b border-white/10">
+                    {history.map((race: any) => (
+                      <React.Fragment key={race.race_id}>
+                        {(race.sessions || []).map((s: any) => (
+                          <th key={s.type} className="text-center py-2 px-2 text-codeflow-muted font-normal whitespace-nowrap border-l border-white/5">
+                            {s.label}
+                          </th>
+                        ))}
+                        <th className="text-center py-2 px-2 text-codeflow-accent/80 font-semibold whitespace-nowrap border-l border-white/10">
+                          Total
+                        </th>
+                      </React.Fragment>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {leaderboard.map((user, i) => (
                     <tr key={user.name} className={`border-b border-white/5 ${i % 2 === 0 ? 'bg-white/[0.01]' : ''}`}>
-                      <td className="py-3 px-4 font-semibold text-white whitespace-nowrap sticky left-0 bg-codeflow-card">{user.name}</td>
-                      {history.map((race: any) => {
-                        const pts = race.scores?.[user.name] ?? null;
-                        return (
-                          <td key={race.race_id} className="text-center py-3 px-3">
-                            {pts !== null ? (
-                              <span className={`inline-block px-2 py-0.5 rounded-full font-bold ${pts > 0 ? 'bg-codeflow-accent/15 text-codeflow-accent' : 'text-codeflow-muted/50'}`}>
-                                {pts > 0 ? `+${pts}` : '0'}
+                      <td className="py-2 px-4 font-semibold text-white whitespace-nowrap sticky left-0 bg-codeflow-card">{user.name}</td>
+                      {history.map((race: any) => (
+                        <React.Fragment key={race.race_id}>
+                          {(race.sessions || []).map((s: any) => {
+                            const pts = s.scores?.[user.name] ?? null;
+                            return (
+                              <td key={s.type} className="text-center py-2 px-2 border-l border-white/5">
+                                {pts !== null ? (
+                                  <span className={`font-medium ${pts > 0 ? 'text-white/80' : 'text-codeflow-muted/40'}`}>
+                                    {pts > 0 ? `+${pts}` : '0'}
+                                  </span>
+                                ) : <span className="text-codeflow-muted/20">—</span>}
+                              </td>
+                            );
+                          })}
+                          <td className="text-center py-2 px-2 border-l border-white/10">
+                            {race.scores?.[user.name] != null ? (
+                              <span className={`inline-block px-2 py-0.5 rounded-full font-bold text-xs ${(race.scores[user.name] || 0) > 0 ? 'bg-codeflow-accent/15 text-codeflow-accent' : 'text-codeflow-muted/40'}`}>
+                                {(race.scores[user.name] || 0) > 0 ? `+${race.scores[user.name]}` : '0'}
                               </span>
-                            ) : (
-                              <span className="text-codeflow-muted/30">—</span>
-                            )}
+                            ) : <span className="text-codeflow-muted/20">—</span>}
                           </td>
-                        );
-                      })}
+                        </React.Fragment>
+                      ))}
                     </tr>
                   ))}
                 </tbody>

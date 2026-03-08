@@ -1366,10 +1366,16 @@ app.post('/api/admin/whatsapp/remind', requireAuth, requireAdmin, async (req: Re
     }
 });
 
+const SESSION_LABEL_MAP: Record<string, string> = {
+    qualifying: 'Qualy',
+    race: 'Carrera',
+    sprint: 'Sprint',
+    sprint_qualifying: 'Sprint Q',
+};
+
 // --- Score History per race (for Chart.js) ---
 app.get('/api/leaderboard/history', requireAuth, async (req: Request, res: Response) => {
     try {
-        // Get unique race_ids that have official results
         const resultsQuery = await pool.query('SELECT DISTINCT race_id FROM race_results ORDER BY race_id ASC');
         const raceIds = resultsQuery.rows.map((r: any) => r.race_id);
 
@@ -1378,22 +1384,28 @@ app.get('/api/leaderboard/history', requireAuth, async (req: Request, res: Respo
         const history: any[] = [];
 
         for (const raceId of raceIds) {
-            // Get ALL sessions for this race
-            const rr = await pool.query('SELECT * FROM race_results WHERE race_id = $1', [raceId]);
+            const rr = await pool.query('SELECT * FROM race_results WHERE race_id = $1 ORDER BY session_type ASC', [raceId]);
             if (rr.rows.length === 0) continue;
 
             const raceScores: Record<string, number> = {};
+            const sessions: { type: string; label: string; scores: Record<string, number> }[] = [];
 
-            // Score each session separately and accumulate
             for (const official of rr.rows) {
                 const preds = await pool.query(
                     'SELECT * FROM predictions WHERE race_id = $1 AND session_type = $2',
                     [raceId, official.session_type]
                 );
+                const sessionScores: Record<string, number> = {};
                 for (const pred of preds.rows) {
                     const scored = scoreSession(pred, official);
+                    sessionScores[pred.player] = scored;
                     raceScores[pred.player] = (raceScores[pred.player] || 0) + scored;
                 }
+                sessions.push({
+                    type: official.session_type,
+                    label: SESSION_LABEL_MAP[official.session_type] || official.session_type,
+                    scores: sessionScores,
+                });
             }
 
             const roundNum = parseInt(raceId.replace('round_', ''));
@@ -1402,7 +1414,8 @@ app.get('/api/leaderboard/history', requireAuth, async (req: Request, res: Respo
             history.push({
                 race_id: raceId,
                 race_name: raceInfo ? raceInfo.name.replace('Gran Premio de ', 'GP ').replace('Grand Prix', 'GP') : raceId,
-                scores: raceScores,
+                scores: raceScores,   // total per GP (for chart)
+                sessions,             // per-session breakdown
             });
         }
 
