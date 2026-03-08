@@ -1892,14 +1892,16 @@ function F1ProdeView() {
                         )}
                       </div>
 
-                      {oracleRemaining !== null && oracleRemaining <= 3 && oracleRemaining > 0 && (
-                        <div className="mb-2 flex items-center gap-2 text-amber-400 text-xs bg-amber-400/10 border border-amber-400/20 rounded-lg px-3 py-2">
-                          ⚠️ Al Oráculo le quedan solo <strong>{oracleRemaining}</strong> análisis disponibles hoy
+                      {oracleRemaining !== null && oracleRemaining <= 10 && oracleRemaining > 0 && (
+                        <div className="mb-2 flex items-center gap-1.5 text-amber-400/90 text-xs">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
+                          Solo quedan <strong>{oracleRemaining}</strong> análisis hoy
                         </div>
                       )}
                       {oracleRemaining === 0 && (
-                        <div className="mb-2 flex items-center gap-2 text-red-400 text-xs bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
-                          🔴 Sin tokens disponibles hoy. El Oráculo vuelve mañana.
+                        <div className="mb-2 flex items-center gap-1.5 text-red-400/80 text-xs">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                          Sin tokens disponibles hoy
                         </div>
                       )}
 
@@ -1917,13 +1919,16 @@ function F1ProdeView() {
                       <button
                         onClick={handleOracleRefresh}
                         disabled={loadingOracle || oracleRemaining === 0}
-                        className="mt-3 flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border border-codeflow-accent/30 text-codeflow-accent hover:bg-codeflow-accent/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                        className="mt-3 inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-codeflow-muted hover:border-codeflow-accent/40 hover:text-codeflow-accent hover:bg-codeflow-accent/5 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                       >
-                        {loadingOracle ? (
-                          <div className="w-3 h-3 border border-codeflow-accent border-t-transparent rounded-full animate-spin" />
-                        ) : '🔄'}
+                        {loadingOracle
+                          ? <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                          : <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+                        }
                         Actualizar contexto
-                        {oracleRemaining !== null && <span className="ml-1 opacity-60">({oracleRemaining} restantes hoy)</span>}
+                        {oracleRemaining !== null && oracleRemaining <= 10 && (
+                          <span className="opacity-50">{oracleRemaining}</span>
+                        )}
                       </button>
                     </div>
                   </div>
