@@ -1423,6 +1423,21 @@ app.get('/api/media/:type', requireAuth, async (req: Request, res: Response) => 
     }
 });
 
+// --- Media Status bulk fetch (for card badges) — must be before /:type/:id routes ---
+app.get('/api/media/:type/my-statuses', requireAuth, async (req: Request, res: Response) => {
+    const { type } = req.params;
+    const userId = (req as any).user.userId;
+    try {
+        const result = await pool.query(
+            'SELECT media_id, status FROM media_user_status WHERE user_id = $1 AND media_type = $2',
+            [userId, type]
+        );
+        const map: Record<string, string> = {};
+        result.rows.forEach((r: any) => { map[r.media_id] = r.status; });
+        res.json(map);
+    } catch (err) { res.status(500).json({ error: 'DB error' }); }
+});
+
 // POST new Media Item
 app.post('/api/media/:type', requireAuth, async (req: Request, res: Response) => {
     try {
@@ -1542,6 +1557,17 @@ app.put('/api/media/:type/:id', requireAuth, async (req: Request, res: Response)
         console.error('Error updating media:', e);
         res.status(500).json({ error: 'Database error updating media item' });
     }
+});
+
+// DELETE Comment — must be before /:type/:id to avoid route conflict
+app.delete('/api/media/comments/:commentId', requireAuth, async (req: Request, res: Response) => {
+    const userId = (req as any).user.userId;
+    const { commentId } = req.params;
+    try {
+        const result = await pool.query('DELETE FROM media_comments WHERE id = $1 AND user_id = $2 RETURNING id', [commentId, userId]);
+        if (result.rows.length === 0) return res.status(403).json({ error: 'Not your comment' });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: 'DB error' }); }
 });
 
 // DELETE Media Item
@@ -1685,16 +1711,6 @@ app.post('/api/media/:type/:id/comments', requireAuth, async (req: Request, res:
     } catch (err) { res.status(500).json({ error: 'DB error' }); }
 });
 
-app.delete('/api/media/comments/:commentId', requireAuth, async (req: Request, res: Response) => {
-    const userId = (req as any).user.userId;
-    const { commentId } = req.params;
-    try {
-        const result = await pool.query('DELETE FROM media_comments WHERE id = $1 AND user_id = $2 RETURNING id', [commentId, userId]);
-        if (result.rows.length === 0) return res.status(403).json({ error: 'Not your comment' });
-        res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: 'DB error' }); }
-});
-
 // --- Personal Stats ---
 app.get('/api/stats/:username', requireAuth, async (req: Request, res: Response) => {
     const { username } = req.params;
@@ -1738,21 +1754,6 @@ app.get('/api/stats/:username', requireAuth, async (req: Request, res: Response)
         const accuracy = totalPossible > 0 ? Math.round((totalHits / totalPossible) * 100) : 0;
 
         res.json({ totalHits, totalPossible, totalPts, accuracy, statsBySession, favoriteDriver, totalRaces: allResults.length, totalPredictions: allPreds.length });
-    } catch (err) { res.status(500).json({ error: 'DB error' }); }
-});
-
-// --- Media Status bulk fetch (for card badges) ---
-app.get('/api/media/:type/my-statuses', requireAuth, async (req: Request, res: Response) => {
-    const { type } = req.params;
-    const userId = (req as any).user.userId;
-    try {
-        const result = await pool.query(
-            'SELECT media_id, status FROM media_user_status WHERE user_id = $1 AND media_type = $2',
-            [userId, type]
-        );
-        const map: Record<string, string> = {};
-        result.rows.forEach((r: any) => { map[r.media_id] = r.status; });
-        res.json(map);
     } catch (err) { res.status(500).json({ error: 'DB error' }); }
 });
 

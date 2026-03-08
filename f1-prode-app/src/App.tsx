@@ -733,11 +733,11 @@ function SettingsView({ username, onUsernameChange, onDeleted }: { username: str
           <h3 className="text-xl font-bold text-white mb-5 flex items-center gap-2"><Trophy size={20} className="text-yellow-400" /> Tus Estadísticas</h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="flat-card p-4 text-center">
-              <div className="text-2xl font-display font-bold text-codeflow-accent">{stats.total_pts ?? 0}</div>
+              <div className="text-2xl font-display font-bold text-codeflow-accent">{stats.totalPts ?? 0}</div>
               <div className="text-xs text-codeflow-muted mt-1">Puntos totales</div>
             </div>
             <div className="flat-card p-4 text-center">
-              <div className="text-2xl font-display font-bold text-green-400">{stats.total_hits ?? 0}</div>
+              <div className="text-2xl font-display font-bold text-green-400">{stats.totalHits ?? 0}</div>
               <div className="text-xs text-codeflow-muted mt-1">Aciertos</div>
             </div>
             <div className="flat-card p-4 text-center">
@@ -745,12 +745,12 @@ function SettingsView({ username, onUsernameChange, onDeleted }: { username: str
               <div className="text-xs text-codeflow-muted mt-1">Precisión</div>
             </div>
             <div className="flat-card p-4 text-center">
-              <div className="text-2xl font-display font-bold text-yellow-400">{stats.predictions_made ?? 0}</div>
+              <div className="text-2xl font-display font-bold text-yellow-400">{stats.totalPredictions ?? 0}</div>
               <div className="text-xs text-codeflow-muted mt-1">Predicciones</div>
             </div>
           </div>
-          {stats.favorite_driver && (
-            <p className="text-sm text-codeflow-muted mt-4 text-center">Piloto más elegido: <strong className="text-white">{stats.favorite_driver}</strong></p>
+          {stats.favoriteDriver && (
+            <p className="text-sm text-codeflow-muted mt-4 text-center">Piloto más elegido: <strong className="text-white">{stats.favoriteDriver}</strong></p>
           )}
         </section>
       )}
@@ -2490,7 +2490,7 @@ function MediaDetailModal({ item, tab, isGame, getGenreColor, poster, onClose, o
     try {
       await fetchWithAuth(`/api/media/${endpointTab}/${item.id}/comments`, {
         method: 'POST',
-        body: JSON.stringify({ text: newComment.trim() })
+        body: JSON.stringify({ comment: newComment.trim() })
       });
       setNewComment('');
       fetchComments();
@@ -2614,7 +2614,7 @@ function MediaDetailModal({ item, tab, isGame, getGenreColor, poster, onClose, o
                           <span className="text-[11px] font-bold text-white">{c.username}</span>
                           <span className="text-[10px] text-codeflow-muted/50">{new Date(c.created_at).toLocaleDateString('es-AR')}</span>
                         </div>
-                        <p className="text-xs text-white/70 leading-relaxed">{c.text}</p>
+                        <p className="text-xs text-white/70 leading-relaxed">{c.comment}</p>
                       </div>
                       {c.username === currentUser && (
                         <button onClick={() => handleDeleteComment(c.id)} className="text-white/20 hover:text-red-400 transition-colors shrink-0 mt-0.5">
@@ -2869,10 +2869,8 @@ function MediaVaultView({ tab }: { tab: string }) {
     ])
       .then(([data, statuses]) => {
         setItems(Array.isArray(data) ? data : []);
-        if (Array.isArray(statuses)) {
-          const map: Record<string, string> = {};
-          statuses.forEach((s: any) => { map[s.media_id] = s.status; });
-          setMyStatuses(map);
+        if (statuses && typeof statuses === 'object' && !Array.isArray(statuses)) {
+          setMyStatuses(statuses);
         }
         setLoading(false);
       })
