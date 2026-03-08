@@ -1182,84 +1182,126 @@ function DashboardView() {
               <p className="text-codeflow-muted text-sm">Nadie tiene puntos todavía. Cargá tu primer pronóstico.</p>
             </div>
           ) : (
-            <div className="space-y-2">
-              {leaderboard.map((user: any, i: number) => {
-                const gapToLeader = leader && i > 0 ? leader.pts - user.pts : 0;
-                const hasSubmitted = playersWithPrediction.has(user.name);
-                const streak = getStreak(user.name);
-                const medalStyle = i === 0
-                  ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50 shadow-yellow-500/10'
-                  : i === 1 ? 'bg-gray-400/20 text-gray-300 border-gray-400/50'
-                    : i === 2 ? 'bg-orange-600/20 text-orange-400 border-orange-600/50'
-                      : 'bg-white/5 text-white/40 border-white/10';
+            {(() => {
+              // Compute previous ranking (all races except last) to show position changes
+              const prevRanking: Record<string, number> = {};
+              if (history && history.length >= 2) {
+                const prevTotals: Record<string, number> = {};
+                history.slice(0, -1).forEach((race: any) => {
+                  Object.entries(race.scores || {}).forEach(([player, pts]) => {
+                    prevTotals[player] = (prevTotals[player] || 0) + (pts as number);
+                  });
+                });
+                Object.entries(prevTotals)
+                  .sort((a, b) => b[1] - a[1])
+                  .forEach(([player], idx) => { prevRanking[player] = idx + 1; });
+              }
 
-                const isLeader = i === 0;
-                const avatarSeed = profiles[user.name] || user.name || '';
-                const avatarUrl = (avatarSeed && typeof avatarSeed === 'string' && avatarSeed.includes(':'))
-                  ? `https://api.dicebear.com/7.x/${avatarSeed.split(':')[0]}/svg?seed=${avatarSeed.split(':')[1]}`
-                  : `https://api.dicebear.com/7.x/notionists/svg?seed=${avatarSeed || 'default'}&backgroundColor=transparent`;
+              return (
+                <div className="space-y-2">
+                  {leaderboard.map((user: any, i: number) => {
+                    const gapToLeader = leader && i > 0 ? leader.pts - user.pts : 0;
+                    const hasSubmitted = playersWithPrediction.has(user.name);
+                    const streak = getStreak(user.name);
+                    const isLeader = i === 0;
+                    const isTop3 = i < 3;
 
-                return (
-                  <motion.div
-                    key={user.name}
-                    initial={{ opacity: 0, x: -12 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.04, type: 'spring', stiffness: 300, damping: 28 }}
-                    className={`flex items-center gap-4 rounded-xl border transition-all ${
-                      isLeader
-                        ? 'p-5 bg-gradient-to-r from-f1-gold/10 via-yellow-500/5 to-transparent border-f1-gold/30 shadow-[0_0_24px_rgba(245,197,24,0.08)]'
-                        : i === 1 ? 'p-4 bg-white/[0.02] border-white/8 hover:bg-white/5'
-                        : i === 2 ? 'p-4 bg-white/[0.02] border-white/5 hover:bg-white/5'
-                        : 'p-3.5 bg-transparent border-white/[0.04] hover:bg-white/[0.03]'
-                    }`}
-                  >
-                    {/* Avatar + medal badge */}
-                    <div className="relative shrink-0">
-                      <div className={`rounded-full overflow-hidden bg-codeflow-base border-2 ${
-                        isLeader ? 'w-14 h-14 border-f1-gold/60 shadow-[0_0_12px_rgba(245,197,24,0.3)]'
-                        : i === 1 ? 'w-12 h-12 border-f1-silver/50'
-                        : i === 2 ? 'w-12 h-12 border-f1-bronze/40'
-                        : 'w-10 h-10 border-white/10'
-                      }`}>
-                        <img src={avatarUrl} alt={user.name} className="w-full h-full object-cover" />
-                      </div>
-                      <div className={`absolute -bottom-1.5 -right-1.5 rounded-full flex items-center justify-center font-bold border-2 border-codeflow-dark z-10 ${
-                        isLeader ? 'w-7 h-7 text-sm' : 'w-5 h-5 text-[10px]'
-                      } ${medalStyle}`}>
-                        {i === 0 ? '1' : i === 1 ? '2' : i === 2 ? '3' : i + 1}
-                      </div>
-                    </div>
+                    // Position change
+                    const prevPos = prevRanking[user.name];
+                    const posChange = prevPos != null ? prevPos - (i + 1) : null; // positive = climbed
 
-                    {/* Name + info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`font-bold text-white truncate ${isLeader ? 'text-xl' : 'text-base'}`}>{user.name}</span>
-                        {streak >= 2 && (
-                          <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }}
-                            className="text-xs text-orange-400 font-bold bg-orange-500/15 px-1.5 py-0.5 rounded-full border border-orange-500/25 flex items-center gap-1"
-                            title={`Racha de ${streak} carreras con puntos`}>
-                            🔥 {streak}
-                          </motion.span>
-                        )}
-                        {isLeader && <span className="text-[10px] font-bold text-f1-gold bg-f1-gold/10 border border-f1-gold/25 px-2 py-0.5 rounded-full uppercase tracking-wider">Líder</span>}
-                      </div>
-                      {i > 0 && <span className="text-xs text-red-400/60">-{gapToLeader} del líder</span>}
-                    </div>
+                    const avatarSeed = profiles[user.name] || user.name || '';
+                    const avatarUrl = (avatarSeed && typeof avatarSeed === 'string' && avatarSeed.includes(':'))
+                      ? `https://api.dicebear.com/7.x/${avatarSeed.split(':')[0]}/svg?seed=${avatarSeed.split(':')[1]}`
+                      : `https://api.dicebear.com/7.x/notionists/svg?seed=${avatarSeed || 'default'}&backgroundColor=transparent`;
 
-                    {/* Submitted badge */}
-                    <div className={`hidden sm:flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full border ${hasSubmitted ? 'bg-green-500/10 text-green-400 border-green-500/25' : 'bg-orange-500/10 text-orange-400 border-orange-500/25'}`}>
-                      {hasSubmitted ? <><CheckCircle size={9} /> OK</> : <><AlertCircle size={9} /> —</>}
-                    </div>
+                    const rowStyle = isLeader
+                      ? 'p-5 bg-gradient-to-r from-yellow-500/15 via-yellow-500/5 to-transparent border-yellow-500/40 shadow-[0_0_32px_rgba(234,179,8,0.12)] border-l-4 border-l-yellow-400'
+                      : i === 1
+                        ? 'p-4 bg-gradient-to-r from-slate-400/10 to-transparent border-slate-400/25 border-l-4 border-l-slate-300 shadow-[0_0_16px_rgba(148,163,184,0.06)]'
+                        : i === 2
+                          ? 'p-4 bg-gradient-to-r from-orange-700/10 to-transparent border-orange-700/25 border-l-4 border-l-orange-500 shadow-[0_0_16px_rgba(194,65,12,0.08)]'
+                          : 'p-3.5 bg-transparent border-white/[0.04] hover:bg-white/[0.03]';
 
-                    {/* Points */}
-                    <div className={`text-right tabular-nums shrink-0 ${isLeader ? 'text-2xl' : 'text-lg'} font-display font-extrabold text-white`}>
-                      <AnimatedNumber value={user.pts} />
-                      <span className="text-xs font-normal text-codeflow-muted ml-1">PTS</span>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
+                    const medalStyle = i === 0
+                      ? 'bg-yellow-500/30 text-yellow-300 border-yellow-400/60'
+                      : i === 1 ? 'bg-slate-400/20 text-slate-200 border-slate-300/50'
+                        : i === 2 ? 'bg-orange-700/25 text-orange-400 border-orange-600/50'
+                          : 'bg-white/5 text-white/40 border-white/10';
+
+                    return (
+                      <motion.div
+                        key={user.name}
+                        initial={{ opacity: 0, x: -12 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.04, type: 'spring', stiffness: 300, damping: 28 }}
+                        className={`flex items-center gap-4 rounded-xl border transition-all ${rowStyle}`}
+                      >
+                        {/* Avatar + medal badge */}
+                        <div className="relative shrink-0">
+                          <div className={`rounded-full overflow-hidden bg-codeflow-base border-2 ${
+                            isLeader ? 'w-14 h-14 border-yellow-400/70 shadow-[0_0_16px_rgba(234,179,8,0.35)]'
+                            : i === 1 ? 'w-12 h-12 border-slate-300/50 shadow-[0_0_10px_rgba(148,163,184,0.2)]'
+                            : i === 2 ? 'w-12 h-12 border-orange-500/40 shadow-[0_0_10px_rgba(194,65,12,0.2)]'
+                            : 'w-10 h-10 border-white/10'
+                          }`}>
+                            <img src={avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+                          </div>
+                          <div className={`absolute -bottom-1.5 -right-1.5 rounded-full flex items-center justify-center font-bold border-2 border-codeflow-dark z-10 ${
+                            isLeader ? 'w-7 h-7 text-sm' : isTop3 ? 'w-6 h-6 text-xs' : 'w-5 h-5 text-[10px]'
+                          } ${medalStyle}`}>
+                            {i + 1}
+                          </div>
+                        </div>
+
+                        {/* Name + info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`font-bold text-white truncate ${isLeader ? 'text-xl' : isTop3 ? 'text-base' : 'text-sm'}`}>{user.name}</span>
+                            {isLeader && <span className="text-[10px] font-bold text-yellow-300 bg-yellow-400/15 border border-yellow-400/30 px-2 py-0.5 rounded-full uppercase tracking-wider">👑 Líder</span>}
+                            {streak >= 2 && (
+                              <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }}
+                                className="text-xs text-orange-400 font-bold bg-orange-500/15 px-1.5 py-0.5 rounded-full border border-orange-500/25 flex items-center gap-1"
+                                title={`Racha de ${streak} carreras con puntos`}>
+                                🔥 {streak}
+                              </motion.span>
+                            )}
+                            {/* Position change indicator */}
+                            {posChange !== null && posChange !== 0 && (
+                              <motion.span
+                                initial={{ scale: 0, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                transition={{ delay: i * 0.04 + 0.2 }}
+                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border flex items-center gap-0.5 ${
+                                  posChange > 0
+                                    ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25'
+                                    : 'text-red-400 bg-red-500/10 border-red-500/20'
+                                }`}
+                                title={posChange > 0 ? `Subió ${posChange} puesto${posChange > 1 ? 's' : ''}` : `Bajó ${Math.abs(posChange)} puesto${Math.abs(posChange) > 1 ? 's' : ''}`}
+                              >
+                                {posChange > 0 ? '▲' : '▼'}{Math.abs(posChange)}
+                              </motion.span>
+                            )}
+                          </div>
+                          {i > 0 && <span className="text-xs text-red-400/50">-{gapToLeader} pts</span>}
+                        </div>
+
+                        {/* Submitted badge */}
+                        <div className={`hidden sm:flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full border ${hasSubmitted ? 'bg-green-500/10 text-green-400 border-green-500/25' : 'bg-orange-500/10 text-orange-400 border-orange-500/25'}`}>
+                          {hasSubmitted ? <><CheckCircle size={9} /> OK</> : <><AlertCircle size={9} /> —</>}
+                        </div>
+
+                        {/* Points */}
+                        <div className={`text-right tabular-nums shrink-0 ${isLeader ? 'text-2xl' : isTop3 ? 'text-xl' : 'text-lg'} font-display font-extrabold text-white`}>
+                          <AnimatedNumber value={user.pts} />
+                          <span className="text-xs font-normal text-codeflow-muted ml-1">PTS</span>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           )}
         </div>
 
