@@ -3634,11 +3634,13 @@ function F1RulesTab() {
       icon: <CheckCircle className="text-green-500" />,
       isPoints: true,
       points: [
-        { label: "Carrera (Top 5)", pts: "+10 pts c/u", desc: "Acertá las 5 primeras posiciones exactas del domingo. Máximo 50 pts por carrera." },
-        { label: "Clasificación (Top 5)", pts: "+10 pts c/u", desc: "Acertá los 5 pilotos más rápidos de la Qualy tradicional en orden exacto. Máximo 50 pts." },
-        { label: "Sprint Race (Top 5)", pts: "+8 pts c/u", desc: "Acertá los 5 primeros de la carrera corta en orden exacto. Máximo 40 pts." },
-        { label: "Sprint Qualifying (Top 5)", pts: "+5 pts c/u", desc: "Acertá los 5 primeros de la tanda del viernes en orden exacto. Máximo 25 pts." },
-      ]
+        { label: "Ganador exacto", pts: "+10 pts", desc: "Acertá quién gana la sesión (P1 exacto)." },
+        { label: "Mejor equipo exacto", pts: "+5 pts", desc: "Acertá el equipo constructor ganador de la sesión." },
+        { label: "Piloto en Top 5 (cualquier posición)", pts: "+3 pts c/u", desc: "Por cada piloto que predijiste y terminó en el Top 5, sin importar el orden." },
+        { label: "Piloto en posición exacta", pts: "+2 pts extra c/u", desc: "Bonus adicional por cada piloto que acertaste en su posición exacta." },
+        { label: "¡Todo perfecto! 🎖️", pts: "+10 pts bonus", desc: "Si acertás el ganador, el equipo y los 5 pilotos en orden exacto, recibís 10 puntos extra." },
+      ],
+      footer: "Máximo posible por sesión: 50 pts (10 ganador + 5 equipo + 25 top5 + 10 bonus)"
     },
     {
       title: "🔍 Visualización y Transparencia",
@@ -3687,6 +3689,9 @@ function F1RulesTab() {
                       <span className="text-xs font-bold text-codeflow-accent bg-codeflow-accent/10 px-2 py-1 rounded shrink-0">{p.pts}</span>
                     </div>
                   ))}
+                  {(sec as any).footer && (
+                    <p className="text-[10px] text-codeflow-muted/70 pt-1 italic">{(sec as any).footer}</p>
+                  )}
                 </div>
               ) : (
                 <p className="text-sm text-codeflow-text/80 leading-relaxed">
