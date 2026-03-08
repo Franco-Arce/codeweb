@@ -46,6 +46,9 @@ const ORACLE_NEAR_RACE_WINDOW = 3 * 60 * 60 * 1000;   // 3h before session → r
 const ORACLE_NEAR_RACE_REFRESH = 30 * 60 * 1000;       // refresh every 30min when near race
 const ORACLE_MAX_DAILY_CALLS = 80;                      // ~100k TPD / ~1250 tokens per call
 
+// In-memory Groq rate-limit backoff: don't retry until this timestamp
+let groqRateLimitedUntil = 0;
+
 function hashStr(s: string): string {
     return crypto.createHash('md5').update(s).digest('hex');
 }
@@ -1465,7 +1468,18 @@ async function buildOracleAnalysis(nextRace: any): Promise<{ analysis: string; p
         lastResults: sessionResults.length > 0 ? sessionResults.join(' | ') : undefined,
     };
 
-    const analysis = await generateOracleRoast(predsRes.rows, raceCtx, lbRes.rows);
+    let analysis: string;
+    try {
+        analysis = await generateOracleRoast(predsRes.rows, raceCtx, lbRes.rows);
+    } catch (err: any) {
+        // Parse retry-after from Groq 429 and set backoff
+        if (err?.status === 429) {
+            const retryAfterSec = parseInt(err?.headers?.['retry-after'] || '1800', 10);
+            groqRateLimitedUntil = Date.now() + retryAfterSec * 1000;
+            console.log(`⏸️ Groq rate limited. Backing off until ${new Date(groqRateLimitedUntil).toISOString()}`);
+        }
+        throw err;
+    }
     return { analysis, predsHash, jolpicaHash };
 }
 
@@ -1513,6 +1527,14 @@ app.get('/api/oracle/roast', async (req: Request, res: Response) => {
             }
         }
 
+        // If Groq is rate-limited, serve stale cache immediately without attempting
+        if (Date.now() < groqRateLimitedUntil) {
+            if (cached.rows.length > 0) {
+                return res.json({ analysis: cached.rows[0].analysis, cached: true, stale: true, generated_at: cached.rows[0].generated_at, remaining: 0 });
+            }
+            return res.status(429).json({ error: 'El Oráculo está en boxes. Reintentá en unos minutos.', remaining: 0 });
+        }
+
         // Generate fresh analysis
         let analysis: string, predsHash: string, jolpicaHash: string;
         try {
@@ -1555,6 +1577,12 @@ app.post('/api/oracle/roast/refresh', requireAuth, async (req: Request, res: Res
     try {
         const nextRace = getNextRace();
         const raceId = `round_${nextRace.round}`;
+
+        // Check Groq backoff before calling
+        if (Date.now() < groqRateLimitedUntil) {
+            const waitMin = Math.ceil((groqRateLimitedUntil - Date.now()) / 60000);
+            return res.status(429).json({ error: `El Oráculo está en boxes. Reintentá en ~${waitMin} minutos.`, remaining: 0 });
+        }
 
         // Check daily limit before calling Groq
         const usageCheck = await pool.query(
