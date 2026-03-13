@@ -1390,15 +1390,12 @@ app.post('/api/admin/whatsapp/remind', requireAuth, requireAdmin, async (req: Re
             sprint: 'Sprint Race', sprint_qualifying: 'Sprint Qualifying',
         };
 
-        // Get all players who have predicted for any session of this race
-        const allPredsResult = await pool.query(
-            'SELECT DISTINCT player FROM predictions WHERE race_id = $1',
-            [raceId]
-        );
-        const activePlayers = allPredsResult.rows.map(r => r.player);
+        // Get all registered players from leaderboard
+        const allPredsResult = await pool.query('SELECT name FROM leaderboard');
+        const activePlayers = allPredsResult.rows.map(r => r.name);
 
         if (activePlayers.length === 0) {
-            return res.json({ sent: false, message: 'No hay jugadores activos para esta ronda aún.' });
+            return res.json({ sent: false, message: 'No hay jugadores registrados en el leaderboard.' });
         }
 
         // Get who already predicted for the requested session
