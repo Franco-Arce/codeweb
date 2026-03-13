@@ -891,11 +891,9 @@ app.post('/api/predictions', requireAuth, async (req: Request, res: Response) =>
                     race: 'Carrera', qualifying: 'Clasificación',
                     sprint: 'Sprint Race', sprint_qualifying: 'Sprint Qualifying',
                 };
-                // Active players = everyone who predicted for ANY session this race
-                const activePreds = await pool.query(
-                    'SELECT DISTINCT player FROM predictions WHERE race_id = $1', [race_id]
-                );
-                const activePlayers = activePreds.rows.map((r: any) => r.player);
+                // Active players = everyone registered in the leaderboard
+                const activePreds = await pool.query('SELECT name FROM leaderboard');
+                const activePlayers = activePreds.rows.map((r: any) => r.name);
 
                 // Who already predicted this session
                 const sessionPreds = await pool.query(
