@@ -4059,9 +4059,9 @@ function AdminView() {
         }
 
       } else if (selectedSession === 'sprint_qualifying') {
-        const res = await fetch(`https://api.jolpi.ca/ergast/f1/2026/${selectedRound}/qualifying.json`);
+        const res = await fetch(`https://api.jolpi.ca/ergast/f1/2026/${selectedRound}/sprint_qualifying.json`);
         const data = await res.json();
-        const sqResults = data.MRData.RaceTable.Races[0]?.QualifyingResults;
+        const sqResults = data.MRData.RaceTable.Races[0]?.SprintQualifyingResults;
         if (sqResults && sqResults.length >= 5) {
           setP1(driverName(sqResults[0].Driver));
           setP2(driverName(sqResults[1].Driver));
