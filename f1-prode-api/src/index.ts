@@ -1514,7 +1514,16 @@ app.get('/api/leaderboard/history', requireAuth, async (req: Request, res: Respo
         const history: any[] = [];
 
         for (const raceId of raceIds) {
-            const rr = await pool.query('SELECT * FROM race_results WHERE race_id = $1 ORDER BY session_type ASC', [raceId]);
+            const rr = await pool.query(
+                `SELECT * FROM race_results WHERE race_id = $1
+                 ORDER BY CASE session_type
+                   WHEN 'sprint_qualifying' THEN 1
+                   WHEN 'sprint' THEN 2
+                   WHEN 'qualifying' THEN 3
+                   WHEN 'race' THEN 4
+                   ELSE 5 END`,
+                [raceId]
+            );
             if (rr.rows.length === 0) continue;
 
             const raceScores: Record<string, number> = {};
@@ -1588,7 +1597,9 @@ async function buildOracleAnalysis(nextRace: any): Promise<{ analysis: string; p
     // DB race results
     try {
         const dbResults = await pool.query(
-            'SELECT * FROM race_results ORDER BY race_id DESC, session_type ASC LIMIT 10'
+            `SELECT * FROM race_results ORDER BY race_id DESC,
+             CASE session_type WHEN 'sprint_qualifying' THEN 1 WHEN 'sprint' THEN 2 WHEN 'qualifying' THEN 3 WHEN 'race' THEN 4 ELSE 5 END
+             LIMIT 10`
         );
         for (const row of dbResults.rows) {
             const race = races2026.find(r => `round_${r.round}` === row.race_id);

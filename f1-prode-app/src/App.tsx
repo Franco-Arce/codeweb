@@ -1419,7 +1419,7 @@ function LastGPResults({ history }: { history: any[] }) {
       .then(data => {
         setResults(data);
         // Default to first available session
-        const first = ['qualifying', 'sprint_qualifying', 'sprint', 'race'].find(s => data[s]?.length);
+        const first = ['sprint_qualifying', 'sprint', 'qualifying', 'race'].find(s => data[s]?.length);
         if (first) setActiveTab(first);
         setLoading(false);
       })
@@ -1428,7 +1428,7 @@ function LastGPResults({ history }: { history: any[] }) {
 
   if (!lastGP) return null;
 
-  const availableSessions = ['qualifying', 'sprint_qualifying', 'sprint', 'race'].filter(s => results?.[s]?.length);
+  const availableSessions = ['sprint_qualifying', 'sprint', 'qualifying', 'race'].filter(s => results?.[s]?.length);
 
   return (
     <div className="glass-card p-5">
@@ -1528,7 +1528,7 @@ function ScoreHistoryChart({ history, loading }: { history: any[], loading: bool
     const raceId = `round_${race.round}`;
     const gpShort = race.name?.split(' ').slice(-1)[0] || raceId;
     const sessions = race.sprint
-      ? ['qualifying', 'sprint_qualifying', 'sprint', 'race']
+      ? ['sprint_qualifying', 'sprint', 'qualifying', 'race']
       : ['qualifying', 'race'];
     sessions.forEach(type => {
       const hasResult = !!(historyMap[raceId]?.[type]);
@@ -1853,7 +1853,7 @@ function F1ProdeView() {
 
     const checkResults = async () => {
       try {
-        const sessions = ['qualifying', 'sprint_qualifying', 'sprint', 'race'];
+        const sessions = ['sprint_qualifying', 'sprint', 'qualifying', 'race'];
         for (const sType of sessions) {
           if (knownSessions.has(sType)) continue;
           const res = await fetchWithAuth(`/api/races/${nextRace.round}/results?session_type=${sType}`);
@@ -2336,7 +2336,7 @@ function PredictionHistoryTab({ username }: { username: string }) {
   const [history, setHistory] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [expandedRace, setExpandedRace] = React.useState<string | null>(null);
-  const SESSION_LABELS: Record<string, string> = { race: '🏁 Carrera', qualifying: '🏎️ Clasificación', sprint: '🏃 Sprint', sprint_qualifying: '⚡ Sprint Q' };
+  const SESSION_LABELS: Record<string, string> = { sprint_qualifying: '⚡ Sprint Q', sprint: '🏃 Sprint', qualifying: '🏎️ Clasificación', race: '🏁 Carrera' };
   const SESSION_PTS: Record<string, number> = { race: 10, qualifying: 10, sprint: 8, sprint_qualifying: 5 };
 
   React.useEffect(() => {
@@ -2687,8 +2687,8 @@ function PredictionsGridTab({ nextRace }: { nextRace: any }) {
   }, [sessionFilter, nextRace?.round]);
 
   const SESSION_LABELS: Record<string, string> = {
-    race: '🏁 Carrera', qualifying: '🏎️ Clasificación',
-    sprint: '🏃 Sprint', sprint_qualifying: '⚡ Sprint Qualifying',
+    sprint_qualifying: '⚡ Sprint Q', sprint: '🏃 Sprint',
+    qualifying: '🏎️ Clasificación', race: '🏁 Carrera',
   };
   const POSITIONS: Record<string, string[]> = {
     race: ['p1', 'p2', 'p3', 'p4', 'p5'],
@@ -4281,8 +4281,8 @@ function AdminView() {
         </h3>
         <p className="text-codeflow-muted text-sm mb-6">Envía un mensaje al grupo indicando quién falta cargar pronóstico para la próxima sesión.</p>
         <div className="flex flex-wrap gap-3">
-          {(['race', 'qualifying', 'sprint', 'sprint_qualifying'] as const).map(s => {
-            const labels: Record<string, string> = { race: '🏁 Carrera', qualifying: '🏎️ Clasificación', sprint: '🏃 Sprint', sprint_qualifying: '⚡ Sprint Q' };
+          {(['sprint_qualifying', 'sprint', 'qualifying', 'race'] as const).map(s => {
+            const labels: Record<string, string> = { sprint_qualifying: '⚡ Sprint Q', sprint: '🏃 Sprint', qualifying: '🏎️ Clasificación', race: '🏁 Carrera' };
             return (
               <button
                 key={s}
