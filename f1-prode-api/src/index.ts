@@ -160,13 +160,27 @@ async function processSessionResult(
     const scoreUpdates: { player: string; scored: number }[] = [];
     for (const pred of predsResult.rows) {
         const scored = scoreSession(pred, official);
-        if (scored > 0) {
-            scoreUpdates.push({ player: pred.player, scored });
-            await pool.query(
-                'INSERT INTO leaderboard (name, pts) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET pts = leaderboard.pts + $2',
-                [pred.player, scored]
+        if (scored > 0) scoreUpdates.push({ player: pred.player, scored });
+    }
+
+    // Recalculate total pts for each affected player from ALL race_results to avoid double-counting
+    const affectedPlayers = predsResult.rows.map((r: any) => r.player);
+    for (const player of affectedPlayers) {
+        const allResults = await pool.query('SELECT * FROM race_results');
+        let total = 0;
+        for (const res of allResults.rows) {
+            const playerPred = await pool.query(
+                'SELECT * FROM predictions WHERE race_id = $1 AND session_type = $2 AND player = $3',
+                [res.race_id, res.session_type, player]
             );
+            if (playerPred.rows.length > 0) {
+                total += scoreSession(playerPred.rows[0], res);
+            }
         }
+        await pool.query(
+            'INSERT INTO leaderboard (name, pts) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET pts = $2',
+            [player, total]
+        );
     }
     return scoreUpdates;
 }
