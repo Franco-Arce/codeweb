@@ -789,6 +789,68 @@ app.get('/api/races/next', requireAuth, async (req: Request, res: Response) => {
     }
 });
 
+// Sprint Qualifying results from OpenF1 (Jolpica doesn't have this session)
+app.get('/api/races/:round/sprint-qualifying-results', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const round = parseInt(req.params.round as string);
+        if (isNaN(round)) return res.status(400).json({ error: 'Invalid round' });
+
+        const race = races2026.find(r => r.round === round);
+        if (!race || !race.sprint) return res.status(404).json({ error: 'No sprint qualifying for this round' });
+
+        // 1. Find the OpenF1 session_key for sprint qualifying of this round
+        const sessRes = await fetch('https://api.openf1.org/v1/sessions?year=2026&session_name=Sprint+Qualifying');
+        if (!sessRes.ok) return res.status(502).json({ error: 'OpenF1 unavailable' });
+        const sessions: any[] = await sessRes.json();
+
+        // Match by date proximity to our sprint_qualy_date
+        const targetDate = new Date((race as any).sprint_qualy_date).getTime();
+        const session = sessions
+            .map(s => ({ ...s, diff: Math.abs(new Date(s.date_start).getTime() - targetDate) }))
+            .sort((a, b) => a.diff - b.diff)[0];
+
+        if (!session) return res.status(404).json({ error: 'Session not found on OpenF1' });
+
+        const sessionKey = session.session_key;
+
+        // 2. Fetch laps and driver info in parallel
+        const [lapsRes, driversRes] = await Promise.all([
+            fetch(`https://api.openf1.org/v1/laps?session_key=${sessionKey}`),
+            fetch(`https://api.openf1.org/v1/drivers?session_key=${sessionKey}`),
+        ]);
+        if (!lapsRes.ok || !driversRes.ok) return res.status(502).json({ error: 'OpenF1 data unavailable' });
+
+        const laps: any[] = await lapsRes.json();
+        const drivers: any[] = await driversRes.json();
+
+        // 3. Best lap per driver (ignore null durations)
+        const bestLaps = new Map<number, number>();
+        for (const lap of laps) {
+            if (!lap.lap_duration || lap.lap_duration <= 0) continue;
+            const prev = bestLaps.get(lap.driver_number);
+            if (prev === undefined || lap.lap_duration < prev) {
+                bestLaps.set(lap.driver_number, lap.lap_duration);
+            }
+        }
+
+        // 4. Sort ascending and take top 5
+        const sorted = [...bestLaps.entries()].sort((a, b) => a[1] - b[1]);
+        const driverMap = new Map(drivers.map((d: any) => [d.driver_number, d.full_name || `#${d.driver_number}`]));
+
+        const top5 = sorted.slice(0, 5).map(([num, time], i) => ({
+            pos: i + 1,
+            driver: driverMap.get(num) || `#${num}`,
+            number: num,
+            best_lap: time.toFixed(3),
+        }));
+
+        res.json({ session_key: sessionKey, results: top5 });
+    } catch (err) {
+        console.error('Sprint qualifying OpenF1 error:', err);
+        res.status(500).json({ error: 'Error fetching sprint qualifying from OpenF1' });
+    }
+});
+
 // Full results from Jolpica for any round (qualifying + race + sprint)
 app.get('/api/races/:round/full-results', requireAuth, async (req: Request, res: Response) => {
     try {

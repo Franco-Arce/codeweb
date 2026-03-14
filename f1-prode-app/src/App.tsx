@@ -4059,16 +4059,17 @@ function AdminView() {
         }
 
       } else if (selectedSession === 'sprint_qualifying') {
-        const res = await fetch(`https://api.jolpi.ca/ergast/f1/2026/${selectedRound}/sprint_qualifying.json`);
+        const res = await fetchWithAuth(`/api/races/${selectedRound}/sprint-qualifying-results`);
         const data = await res.json();
-        const sqResults = data.MRData.RaceTable.Races[0]?.SprintQualifyingResults;
-        if (sqResults && sqResults.length >= 5) {
-          setP1(driverName(sqResults[0].Driver));
-          setP2(driverName(sqResults[1].Driver));
-          setP3(driverName(sqResults[2].Driver));
-          setP4(driverName(sqResults[3].Driver));
-          setP5(driverName(sqResults[4].Driver));
-          setResultMessage({ message: "¡Top 5 de Sprint Qualifying sincronizados!" });
+        if (!res.ok) {
+          setResultMessage({ error: data.error || "No hay datos de Sprint Qualifying todavía." });
+        } else if (data.results && data.results.length >= 5) {
+          setP1(data.results[0].driver);
+          setP2(data.results[1].driver);
+          setP3(data.results[2].driver);
+          setP4(data.results[3].driver);
+          setP5(data.results[4].driver);
+          setResultMessage({ message: `¡Top 5 de Sprint Qualifying sincronizados desde OpenF1!` });
         } else {
           setResultMessage({ error: "No hay datos de Sprint Qualifying todavía para este GP." });
         }
@@ -4165,9 +4166,19 @@ function AdminView() {
               </div>
 
               {selectedSession === 'sprint_qualifying' ? (
-                <div className="flex items-center gap-3 bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-xl">
-                  <AlertCircle size={16} className="text-yellow-400 shrink-0" />
-                  <p className="text-xs text-yellow-300">Jolpica no publica resultados de Sprint Qualifying. Ingresá los datos manualmente.</p>
+                <div className="flex justify-between items-center bg-codeflow-accent/10 border border-codeflow-accent/20 p-4 rounded-xl">
+                  <div className="flex flex-col">
+                    <p className="text-sm text-codeflow-accent font-semibold">{selectedRaceName} · ⚡ Sprint Qualifying</p>
+                    <p className="text-[10px] text-codeflow-muted uppercase tracking-tighter">Vía OpenF1 (tiempos de vuelta)</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={fetchOfficialResults}
+                    className="bg-codeflow-accent/20 hover:bg-codeflow-accent/30 text-codeflow-accent text-xs font-bold px-4 py-2 rounded-lg transition-colors flex items-center gap-2 border border-codeflow-accent/30"
+                  >
+                    <RefreshCw size={14} className={submitting ? 'animate-spin' : ''} />
+                    Sincronizar con OpenF1
+                  </button>
                 </div>
               ) : (
                 <div className="flex justify-between items-center bg-codeflow-accent/10 border border-codeflow-accent/20 p-4 rounded-xl">
