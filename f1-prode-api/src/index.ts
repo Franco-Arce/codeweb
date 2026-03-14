@@ -823,19 +823,33 @@ app.get('/api/races/:round/sprint-qualifying-results', requireAuth, async (req: 
         const laps: any[] = await lapsRes.json();
         const drivers: any[] = await driversRes.json();
 
-        // 3. Best lap per driver (ignore null durations)
-        const bestLaps = new Map<number, number>();
+        // 3. Best lap per driver (ignore null durations) — use string keys to avoid type mismatch
+        const bestLaps = new Map<string, number>();
         for (const lap of laps) {
             if (!lap.lap_duration || lap.lap_duration <= 0) continue;
-            const prev = bestLaps.get(lap.driver_number);
+            const key = String(lap.driver_number);
+            const prev = bestLaps.get(key);
             if (prev === undefined || lap.lap_duration < prev) {
-                bestLaps.set(lap.driver_number, lap.lap_duration);
+                bestLaps.set(key, lap.lap_duration);
             }
         }
 
         // 4. Sort ascending and take top 5
         const sorted = [...bestLaps.entries()].sort((a, b) => a[1] - b[1]);
-        const driverMap = new Map(drivers.map((d: any) => [d.driver_number, d.full_name || `#${d.driver_number}`]));
+
+        // Convert OpenF1 "First LAST" → "First Last", with known overrides
+        const nameOverrides: Record<string, string> = {
+            'Kimi ANTONELLI': 'Andrea Kimi Antonelli',
+            'Nico HULKENBERG': 'Nico Hülkenberg',
+        };
+        const toTitleCase = (name: string) =>
+            nameOverrides[name] ??
+            name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+
+        const driverMap = new Map(drivers.map((d: any) => [
+            String(d.driver_number),
+            toTitleCase(d.full_name || '') || `#${d.driver_number}`,
+        ]));
 
         const top5 = sorted.slice(0, 5).map(([num, time], i) => ({
             pos: i + 1,
