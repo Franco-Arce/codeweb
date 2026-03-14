@@ -4164,20 +4164,27 @@ function AdminView() {
                 </div>
               </div>
 
-              <div className="flex justify-between items-center bg-codeflow-accent/10 border border-codeflow-accent/20 p-4 rounded-xl">
-                <div className="flex flex-col">
-                  <p className="text-sm text-codeflow-accent font-semibold">{selectedRaceName} · {sessionCfg.label}</p>
-                  <p className="text-[10px] text-codeflow-muted uppercase tracking-tighter">Sincronización automática disponible</p>
+              {selectedSession === 'sprint_qualifying' ? (
+                <div className="flex items-center gap-3 bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-xl">
+                  <AlertCircle size={16} className="text-yellow-400 shrink-0" />
+                  <p className="text-xs text-yellow-300">Jolpica no publica resultados de Sprint Qualifying. Ingresá los datos manualmente.</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={fetchOfficialResults}
-                  className="bg-codeflow-accent/20 hover:bg-codeflow-accent/30 text-codeflow-accent text-xs font-bold px-4 py-2 rounded-lg transition-colors flex items-center gap-2 border border-codeflow-accent/30"
-                >
-                  <RefreshCw size={14} className={submitting ? 'animate-spin' : ''} />
-                  Sincronizar con API Oficial
-                </button>
-              </div>
+              ) : (
+                <div className="flex justify-between items-center bg-codeflow-accent/10 border border-codeflow-accent/20 p-4 rounded-xl">
+                  <div className="flex flex-col">
+                    <p className="text-sm text-codeflow-accent font-semibold">{selectedRaceName} · {sessionCfg.label}</p>
+                    <p className="text-[10px] text-codeflow-muted uppercase tracking-tighter">Sincronización automática disponible</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={fetchOfficialResults}
+                    className="bg-codeflow-accent/20 hover:bg-codeflow-accent/30 text-codeflow-accent text-xs font-bold px-4 py-2 rounded-lg transition-colors flex items-center gap-2 border border-codeflow-accent/30"
+                  >
+                    <RefreshCw size={14} className={submitting ? 'animate-spin' : ''} />
+                    Sincronizar con API Oficial
+                  </button>
+                </div>
+              )}
 
               {/* Pole - only for race */}
               {sessionCfg.hasPole && (
