@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useContext, createContext } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, Reorder } from 'framer-motion';
+import confetti from 'canvas-confetti';
 import {
   Trophy, Film, Gamepad2, Tv, LayoutDashboard, Settings,
   RefreshCw, AlertCircle, CheckCircle, XCircle, Edit2, Trash2,
@@ -17,6 +18,13 @@ import logoCodeflow from './assets/LogoOnly.png';
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+// --- Haptic Feedback Helper ---
+export const vibrate = (pattern: number | number[]) => {
+  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    navigator.vibrate(pattern);
+  }
+};
 
 // --- Countdown Hook ---
 function useCountdown(targetUtc: string | null): string {
@@ -392,44 +400,20 @@ function App() {
 
 // --- Mobile Bottom Navigation ---
 function MobileBottomNav({ activeTab, onNavigate }: { activeTab: string; onNavigate: (tab: string) => void }) {
-  const mediaActive = ['series', 'animes', 'movies', 'games'].includes(activeTab);
   const mainItems = [
     { icon: <LayoutDashboard size={22} />, label: 'Inicio', tab: 'dashboard' },
     { icon: <Trophy size={22} />, label: 'F1', tab: 'f1' },
-    { icon: <Film size={22} />, label: 'Bóveda', tab: 'series', isMedia: true },
+    { icon: <Gamepad2 size={22} />, label: 'Game Hub', tab: 'gamehub' },
     { icon: <Settings size={22} />, label: 'Config.', tab: 'settings' },
-  ];
-  const mediaItems = [
-    { icon: <Tv size={18} />, label: 'Series', tab: 'series' },
-    { icon: <Ghost size={18} />, label: 'Animes', tab: 'animes' },
-    { icon: <Film size={18} />, label: 'Películas', tab: 'movies' },
-    { icon: <Diced size={18} />, label: 'Juegos', tab: 'games' },
   ];
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-white/8"
       style={{ background: 'rgba(10,10,15,0.92)', backdropFilter: 'blur(24px)', paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
-      {/* Media sub-nav: shown when in any media tab */}
-      {mediaActive && (
-        <div className="flex items-center justify-around px-2 pt-2 pb-1 border-b border-white/5">
-          {mediaItems.map(item => (
-            <button key={item.tab} onClick={() => onNavigate(item.tab)}
-              className="flex flex-col items-center gap-0.5 px-4 py-1 rounded-lg transition-all">
-              <span className={`transition-colors ${activeTab === item.tab ? 'text-codeflow-accent' : 'text-codeflow-muted/50'}`}>
-                {item.icon}
-              </span>
-              <span className={`text-[9px] font-bold uppercase tracking-wide ${activeTab === item.tab ? 'text-codeflow-accent' : 'text-codeflow-muted/40'}`}>
-                {item.label}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-      {/* Main nav */}
       <div className="flex items-center justify-around px-2 pt-2 pb-1">
         {mainItems.map(item => {
-          const isActive = item.isMedia ? mediaActive : activeTab === item.tab;
+          const isActive = activeTab === item.tab || (item.tab === 'gamehub' && ['series', 'animes', 'movies', 'games'].includes(activeTab));
           return (
-            <button key={item.tab} onClick={() => onNavigate(item.tab)}
+            <button key={item.tab} onClick={() => { vibrate(10); onNavigate(item.tab); }}
               className="flex flex-col items-center gap-1 px-5 py-1.5 rounded-xl transition-all relative">
               <span className={`transition-all duration-200 ${isActive ? 'text-codeflow-accent drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]' : 'text-codeflow-muted'}`}>
                 {item.icon}
@@ -481,10 +465,7 @@ function AppShell({ activeTab, setActiveTab, setIsAuthenticated, currentUser, ha
         <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto no-scrollbar">
           <NavItem icon={<LayoutDashboard size={20} />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleNavClick('dashboard')} />
           <NavItem icon={<Trophy size={20} />} label="F1 Prode" active={activeTab === 'f1'} onClick={() => handleNavClick('f1')} />
-          <NavItem icon={<Tv size={20} />} label="Series" active={activeTab === 'series'} onClick={() => handleNavClick('series')} />
-          <NavItem icon={<Ghost size={20} />} label="Animes" active={activeTab === 'animes'} onClick={() => handleNavClick('animes')} />
-          <NavItem icon={<Film size={20} />} label="Películas" active={activeTab === 'movies'} onClick={() => handleNavClick('movies')} />
-          <NavItem icon={<Diced size={20} />} label="Juegos de Mesa" active={activeTab === 'games'} onClick={() => handleNavClick('games')} />
+          <NavItem icon={<Gamepad2 size={20} />} label="Game Hub" active={activeTab === 'gamehub' || ['series','animes','movies','games'].includes(activeTab)} onClick={() => handleNavClick('gamehub')} />
           <NavItem icon={<Settings size={20} />} label="Configuración" active={activeTab === 'settings'} onClick={() => handleNavClick('settings')} />
 
           {/* Admin link — hide if not needed or restrict */}
@@ -528,8 +509,9 @@ function AppShell({ activeTab, setActiveTab, setIsAuthenticated, currentUser, ha
               {activeTab === 'f1' && <F1ProdeView />}
               {activeTab === 'admin' && <AdminView />}
               {activeTab === 'settings' && <SettingsView username={currentUser} onUsernameChange={onUsernameChange} onDeleted={handleLogout} />}
+              {activeTab === 'gamehub' && <GameHubLauncherView onNavigate={handleNavClick} />}
               {['series', 'animes', 'movies', 'games'].includes(activeTab) && (
-                <MediaVaultView tab={activeTab} />
+                <MediaVaultView tab={activeTab} onBack={() => handleNavClick('gamehub')} />
               )}
             </motion.div>
           </AnimatePresence>
@@ -1088,17 +1070,27 @@ function DashboardView() {
       </header>
 
       {/* ===== HERO FULL-WIDTH COUNTDOWN ===== */}
-      <div className="relative overflow-hidden rounded-2xl border border-codeflow-accent/20 bg-gradient-to-br from-codeflow-accent/10 via-purple-900/10 to-codeflow-dark p-5 md:p-8 shadow-[0_0_80px_rgba(168,85,247,0.08)]">
-        {/* Background decoration */}
-        <div className="absolute top-0 right-0 w-64 h-full bg-gradient-to-l from-red-600/10 to-transparent pointer-events-none" />
-        <div className="absolute -bottom-8 -right-8 text-[12rem] leading-none opacity-5 pointer-events-none select-none">🏎️</div>
+      <div className="relative overflow-hidden rounded-3xl border-t border-l border-codeflow-accent/40 bg-gradient-to-br from-codeflow-dark via-codeflow-base to-[#1a0f2e] p-6 md:p-10 shadow-premium-purple transition-all hover:shadow-premium-purple-hover group">
+        {/* Glassmorphism overlays & VIP details */}
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20 pointer-events-none mix-blend-overlay" />
+        <div className="absolute top-0 right-0 w-96 h-96 bg-codeflow-accent/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none group-hover:bg-codeflow-accent/20 transition-all duration-700" />
+        
+        {/* Ticket dashed line (separator) */}
+        <div className="hidden md:block absolute right-64 top-0 bottom-0 w-[2px] border-l-2 border-dashed border-white/10" />
+        <div className="hidden md:block absolute right-[247px] -top-3 w-6 h-6 rounded-full bg-codeflow-dark shadow-inner" />
+        <div className="hidden md:block absolute right-[247px] -bottom-3 w-6 h-6 rounded-full bg-codeflow-dark shadow-inner" />
 
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-8">
+        <div className="absolute -bottom-10 -left-10 text-[14rem] leading-none opacity-5 pointer-events-none select-none mix-blend-overlay rotate-[-10deg]">🏁</div>
+
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6 md:gap-12">
           <div className="flex-1">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-f1-redSoft text-f1-red text-xs font-bold border border-f1-red/30 uppercase tracking-wider mb-4 shadow-[0_0_12px_rgba(225,6,0,0.2)]">
-              <span className="w-1.5 h-1.5 rounded-full bg-f1-red animate-pulse" />
-              Siguiente Carrera
-            </span>
+            <div className="flex items-center gap-3 mb-4">
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-f1-red/20 text-f1-red text-xs font-bold border border-f1-red/40 uppercase tracking-widest shadow-glow-red backdrop-blur-md">
+                <span className="w-2 h-2 rounded-full bg-f1-red animate-pulse" />
+                Siguiente Carrera
+              </span>
+              <span className="text-[10px] uppercase tracking-widest text-codeflow-muted/60 font-bold border border-white/10 px-2 py-1 rounded">VIP PASS</span>
+            </div>
             {loading || !nextRace ? (
               <div className="space-y-2">
                 <div className="h-8 w-72 bg-white/5 rounded-lg animate-pulse" />
@@ -1726,6 +1718,44 @@ function DriverSelect({ value, onChange, drivers, label, color, hasError }: { va
 
 
 
+function GameHubLauncherView({ onNavigate }: { onNavigate: (tab: string) => void }) {
+  const cards = [
+    { id: 'series', title: 'Series', icon: <Tv size={32} />, color: 'from-blue-500/20 to-blue-600/10 border-blue-500/30 text-blue-400' },
+    { id: 'animes', title: 'Animes', icon: <Ghost size={32} />, color: 'from-purple-500/20 to-purple-600/10 border-purple-500/30 text-purple-400' },
+    { id: 'movies', title: 'Películas', icon: <Film size={32} />, color: 'from-red-500/20 to-red-600/10 border-red-500/30 text-red-400' },
+    { id: 'games', title: 'Juegos de Mesa', icon: <Gamepad2 size={32} />, color: 'from-green-500/20 to-green-600/10 border-green-500/30 text-green-400' },
+  ];
+
+  return (
+    <div className="space-y-6 animate-fade-in pb-12 max-w-4xl mx-auto">
+      <header className="mb-8 mt-4 text-center md:text-left">
+        <h1 className="text-3xl md:text-4xl font-display font-bold text-white mb-2 flex items-center justify-center md:justify-start gap-3">
+          <Gamepad2 size={32} className="text-codeflow-accent" /> Game Hub
+        </h1>
+        <p className="text-codeflow-muted text-sm md:text-base">La bóveda de entretenimiento del grupo. Registra lo que viste o jugaste.</p>
+      </header>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {cards.map((c, i) => (
+          <motion.button
+            key={c.id}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.1 }}
+            onClick={() => { vibrate(15); onNavigate(c.id); }}
+            className={`flex flex-col items-center justify-center p-8 rounded-2xl bg-gradient-to-br border transition-all hover:scale-[1.02] active:scale-95 ${c.color}`}
+          >
+            <div className="mb-4 bg-codeflow-card p-4 rounded-full shadow-lg">
+              {c.icon}
+            </div>
+            <h2 className="text-2xl font-bold text-white">{c.title}</h2>
+          </motion.button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function F1ProdeView() {
   const [f1Tab, setF1Tab] = React.useState('prode'); // 'prode', 'leaderboard', 'calendar'
 
@@ -1749,7 +1779,7 @@ function F1ProdeView() {
   const [p3, setP3] = React.useState('');
   const [p4, setP4] = React.useState('');
   const [p5, setP5] = React.useState('');
-
+  const [picks, setPicks] = React.useState<string[]>([]);
   // --- Session & Schedule ---
   type SessionType = 'qualifying' | 'sprint_qualifying' | 'sprint' | 'race';
   const [schedule, setSchedule] = React.useState<any>(null);
@@ -1768,6 +1798,20 @@ function F1ProdeView() {
     "Alpine", "Williams", "Racing Bulls", "Haas", "Sauber"
   ];
 
+  const getDriverColor = (name: string) => {
+    const n = name.toLowerCase();
+    if (n.includes("verstappen") || n.includes("lawson")) return 'border-blue-900 shadow-[0_0_10px_rgba(30,58,138,0.3)] bg-gradient-to-r from-blue-900/20 to-transparent'; // Red Bull
+    if (n.includes("norris") || n.includes("piastri")) return 'border-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.3)] bg-gradient-to-r from-orange-500/20 to-transparent'; // McLaren
+    if (n.includes("leclerc") || n.includes("hamilton")) return 'border-red-600 shadow-[0_0_10px_rgba(220,38,38,0.3)] bg-gradient-to-r from-red-600/20 to-transparent'; // Ferrari
+    if (n.includes("russell") || n.includes("antonelli")) return 'border-teal-500 shadow-[0_0_10px_rgba(20,184,166,0.3)] bg-gradient-to-r from-teal-500/20 to-transparent'; // Mercedes
+    if (n.includes("alonso") || n.includes("stroll")) return 'border-emerald-600 shadow-[0_0_10px_rgba(5,150,105,0.3)] bg-gradient-to-r from-emerald-600/20 to-transparent'; // Aston Martin
+    if (n.includes("gasly") || n.includes("doohan")) return 'border-pink-500 shadow-[0_0_10px_rgba(236,72,153,0.3)] bg-gradient-to-r from-pink-500/20 to-transparent'; // Alpine
+    if (n.includes("sainz") || n.includes("albon")) return 'border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.3)] bg-gradient-to-r from-blue-500/20 to-transparent'; // Williams
+    if (n.includes("tsunoda") || n.includes("hadjar")) return 'border-blue-400 shadow-[0_0_10px_rgba(96,165,250,0.3)] bg-gradient-to-r from-blue-400/20 to-transparent'; // Racing Bulls
+    if (n.includes("ocon") || n.includes("bearman")) return 'border-white/50 shadow-[0_0_10px_rgba(255,255,255,0.2)] bg-gradient-to-r from-white/10 to-transparent'; // Haas
+    if (n.includes("hulkenberg") || n.includes("bortoleto")) return 'border-green-500 shadow-[0_0_10px_rgba(34,197,94,0.3)] bg-gradient-to-r from-green-500/20 to-transparent'; // Sauber
+    return 'border-white/10 bg-white/5';
+  };
   const { addToast } = useToast();
   const [existingPrediction, setExistingPrediction] = React.useState<any>(null);
 
@@ -1885,12 +1929,15 @@ function F1ProdeView() {
           setExistingPrediction(mine);
           setPPole(mine.pole_position || '');
           setPTeam(mine.predicted_team || '');
-          setP1(mine.p1 || ''); setP2(mine.p2 || ''); setP3(mine.p3 || '');
-          setP4(mine.p4 || ''); setP5(mine.p5 || '');
+          const newPicks = [mine.p1, mine.p2, mine.p3, mine.p4, mine.p5].filter(Boolean);
+          setPicks(newPicks);
+          setP1(newPicks[0] || ''); setP2(newPicks[1] || ''); setP3(newPicks[2] || '');
+          setP4(newPicks[3] || ''); setP5(newPicks[4] || '');
           addToast('warning', `Cargando tu pronóstico de ${selectedSession}`);
         } else {
           setExistingPrediction(null);
-          setPPole(''); setPTeam(''); setP1(''); setP2(''); setP3(''); setP4(''); setP5('');
+          setPPole(''); setPTeam(''); setPicks([]);
+          setP1(''); setP2(''); setP3(''); setP4(''); setP5('');
         }
       })
       .catch(console.error);
@@ -1982,6 +2029,14 @@ function F1ProdeView() {
         })
       });
       if (!res.ok) throw new Error("Falla al guardar");
+      
+      confetti({
+        particleCount: 150,
+        spread: 80,
+        origin: { y: 0.6 },
+        colors: ['#A855F7', '#c084fc', '#ffffff', '#F5C518']
+      });
+
       addToast('success', `Pronóstico de ${currentForm.label} guardado`);
       setExistingPrediction({ player: currentUser, session_type: selectedSession, pole_position: pPole, predicted_team: pTeam, p1, p2, p3, p4, p5 });
     } catch (err) {
@@ -2227,35 +2282,92 @@ function F1ProdeView() {
                     </select>
                   </div>
 
-                  {/* Dynamic position fields */}
+                  {/* Drag and Drop / Tap to Select position fields */}
                   <div className="pt-2">
                     <div className="flex items-center justify-between mb-4 border-t border-white/5 pt-4">
                       <label className="text-xs uppercase font-bold text-codeflow-accent/70 tracking-wider">
                         Posiciones ({currentForm.fields[0]?.pts} c/u)
                       </label>
-                      {hasDuplicates && (
-                        <span className="text-[10px] text-red-400 font-bold flex items-center gap-1 bg-red-500/10 px-2 py-1 rounded-md border border-red-500/20 shadow-sm">
-                          <AlertCircle size={12} /> Pilotos repetidos
-                        </span>
-                      )}
+                      <span className="text-[10px] text-codeflow-muted font-medium bg-white/5 px-2 py-1 rounded">Arrastrá para ordenar</span>
                     </div>
-                    <div className="space-y-3">
-                      {currentForm.fields.map((field) => (
-                        <div key={field.key} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                          <span className="text-xs font-bold text-white/50 w-28 shrink-0 flex items-center gap-2">
-                            <span className="w-1 h-3 rounded-full bg-white/20" />
-                            {field.label}
-                          </span>
-                          <DriverSelect
-                            value={fieldValues[field.key] || ''}
-                            onChange={v => setFieldValue(field.key, v)}
-                            drivers={DRIVERS}
-                            label={field.label}
-                            color={`hover:border-white/20 ${field.color}`}
-                            hasError={!!isDuplicateField(fieldValues[field.key])}
-                          />
-                        </div>
-                      ))}
+
+                    {/* Selected Slots */}
+                    <div className="space-y-2 mb-6">
+                      <Reorder.Group axis="y" values={picks} onReorder={(newOrder) => {
+                        vibrate(5);
+                        setPicks(newOrder);
+                        setP1(newOrder[0] || ''); setP2(newOrder[1] || ''); setP3(newOrder[2] || '');
+                        setP4(newOrder[3] || ''); setP5(newOrder[4] || '');
+                      }} className="space-y-2">
+                        {picks.map((driver, i) => {
+                          const fieldInfo = currentForm.fields[i];
+                          return (
+                            <Reorder.Item key={driver} value={driver} className={`flex items-center justify-between p-3 rounded-xl border cursor-grab active:cursor-grabbing shadow-sm ${getDriverColor(driver)} ${fieldInfo?.color || ''}`}>
+                              <div className="flex items-center gap-3">
+                                <div className="flex flex-col items-center justify-center text-white/40 w-4 h-4">
+                                  <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="2" cy="7" r="1.5"/><circle cx="8" cy="7" r="1.5"/><circle cx="2" cy="12" r="1.5"/><circle cx="8" cy="12" r="1.5"/></svg>
+                                </div>
+                                <span className="text-xs font-bold text-white/50 w-24 shrink-0">{fieldInfo?.label || `P${i + 1}`}</span>
+                                <span className="text-sm font-bold text-white">{driver.split(' ').pop()}</span>
+                              </div>
+                              <button type="button" onClick={() => {
+                                vibrate(15);
+                                const newPicks = picks.filter(d => d !== driver);
+                                setPicks(newPicks);
+                                setP1(newPicks[0] || ''); setP2(newPicks[1] || ''); setP3(newPicks[2] || '');
+                                setP4(newPicks[3] || ''); setP5(newPicks[4] || '');
+                              }} className="text-white/40 hover:text-red-400 p-1 transition-colors">
+                                <XCircle size={16} />
+                              </button>
+                            </Reorder.Item>
+                          );
+                        })}
+                      </Reorder.Group>
+
+                      {/* Empty Slots */}
+                      {Array.from({ length: 5 - picks.length }).map((_, i) => {
+                        const idx = picks.length + i;
+                        const fieldInfo = currentForm.fields[idx];
+                        return (
+                          <div key={`empty-${idx}`} className="flex items-center p-3 rounded-xl border border-dashed border-white/10 bg-white/[0.02] opacity-50">
+                            <div className="w-4 h-4 mr-3" />
+                            <span className="text-xs font-bold text-white/50 w-24 shrink-0">{fieldInfo?.label || `P${idx + 1}`}</span>
+                            <span className="text-sm text-codeflow-muted italic">Espacio disponible...</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Unassigned Drivers */}
+                    <div className="mb-4 pt-4 border-t border-white/5">
+                      <label className="text-xs uppercase font-bold text-codeflow-muted tracking-wider block mb-3">
+                        Pilotos Disponibles (Toca para agregar)
+                      </label>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {DRIVERS.filter(d => !picks.includes(d)).map(d => {
+                          const lastName = d.split(' ').pop();
+                          return (
+                            <button
+                              key={d} type="button"
+                              onClick={() => {
+                                vibrate(10);
+                                if (picks.length < 5) {
+                                  const newPicks = [...picks, d];
+                                  setPicks(newPicks);
+                                  setP1(newPicks[0] || ''); setP2(newPicks[1] || ''); setP3(newPicks[2] || '');
+                                  setP4(newPicks[3] || ''); setP5(newPicks[4] || '');
+                                } else {
+                                  addToast('warning', 'Ya seleccionaste 5 pilotos. Quitá uno para agregar otro.');
+                                }
+                              }}
+                              className={`p-2.5 rounded-lg border text-left transition-all flex items-center justify-between group hover:scale-[1.02] active:scale-95 ${getDriverColor(d)}`}
+                            >
+                              <span className="text-xs text-white/90 group-hover:text-white font-medium truncate">{lastName}</span>
+                              <span className="text-white/50 group-hover:text-white text-sm font-bold leading-none transition-colors">+</span>
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
                   </div>
 
@@ -2493,18 +2605,21 @@ function F1LeaderboardTab() {
                 initial={{ opacity: 0, x: -12 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.05, type: 'spring', stiffness: 300, damping: 28 }}
-                className={`flex items-center justify-between rounded-xl border transition-all group ${
+                className={`flex items-center justify-between rounded-xl border transition-all group relative overflow-hidden ${
                   isLeader2
-                    ? 'p-5 bg-gradient-to-r from-f1-gold/10 via-yellow-500/5 to-transparent border-f1-gold/30 shadow-[0_0_24px_rgba(245,197,24,0.07)]'
+                    ? 'p-5 bg-gradient-to-r from-f1-gold/10 via-yellow-500/5 to-transparent border-f1-gold/50 shadow-[0_0_24px_rgba(245,197,24,0.15)] animate-glow-pulse z-10'
                     : i === 1 ? 'p-4 bg-white/[0.025] border-white/8 hover:bg-white/5'
                     : i === 2 ? 'p-4 bg-white/[0.015] border-white/5 hover:bg-white/5'
                     : 'p-3.5 bg-transparent border-white/[0.04] hover:bg-white/[0.03]'
                 }`}
               >
-                <div className="flex items-center gap-4">
+                {isLeader2 && (
+                  <div className="absolute inset-0 bg-gradient-to-r from-f1-gold/20 to-transparent mix-blend-overlay pointer-events-none" />
+                )}
+                <div className="flex items-center gap-4 relative z-10">
                   <div className="relative shrink-0">
                     <div className={`rounded-full overflow-hidden bg-codeflow-base border-2 ${
-                      isLeader2 ? 'w-14 h-14 border-f1-gold/60 shadow-[0_0_12px_rgba(245,197,24,0.25)]'
+                      isLeader2 ? 'w-14 h-14 border-f1-gold shadow-[0_0_20px_rgba(245,197,24,0.5)]'
                       : i === 1 ? 'w-12 h-12 border-f1-silver/40'
                       : i === 2 ? 'w-12 h-12 border-f1-bronze/35'
                       : 'w-10 h-10 border-white/10'
@@ -3259,7 +3374,7 @@ function MediaCard({ item, i, isGame, getGenreColor, tab, onEdit, onDelete, onUp
   );
 }
 
-function MediaVaultView({ tab }: { tab: string }) {
+function MediaVaultView({ tab, onBack }: { tab: string; onBack?: () => void }) {
   const [items, setItems] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [showForm, setShowForm] = React.useState(false);
@@ -3481,7 +3596,14 @@ function MediaVaultView({ tab }: { tab: string }) {
     <div className="space-y-8 animate-fade-in pb-12">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
         <div>
-          <h1 className="text-2xl md:text-4xl font-display font-bold text-white mb-2">{translations[tab]}</h1>
+          <div className="flex items-center gap-3 mb-2">
+            {onBack && (
+              <button onClick={() => { vibrate(10); onBack(); }} className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+              </button>
+            )}
+            <h1 className="text-2xl md:text-4xl font-display font-bold text-white">{translations[tab]}</h1>
+          </div>
           <p className="text-codeflow-muted text-sm md:text-lg">Bóveda de recomendaciones grupales.</p>
         </div>
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
