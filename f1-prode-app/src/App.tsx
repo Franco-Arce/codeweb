@@ -2200,7 +2200,10 @@ function F1ProdeView() {
                   </div>
                 ) : (
                   <div className="flex flex-wrap gap-3">
-                    {schedule.sessions?.map((s: any) => {
+                    {schedule.sessions?.slice().sort((a: any, b: any) => {
+                      const order: Record<string, number> = { sprint_qualifying: 1, sprint: 2, qualifying: 3, race: 4 };
+                      return (order[a.type] || 9) - (order[b.type] || 9);
+                    }).map((s: any) => {
                       const isSelected = selectedSession === s.type;
                       const argDate = s.date_arg ? new Date(s.date_arg) : null;
                       const dayStr = argDate ? argDate.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' }) : 'TBD';
@@ -2294,7 +2297,7 @@ function F1ProdeView() {
                         {picks.map((driver, i) => {
                           const fieldInfo = currentForm.fields[i];
                           return (
-                            <Reorder.Item key={driver} value={driver} className={`flex items-center justify-between p-3 rounded-xl border cursor-grab active:cursor-grabbing shadow-sm ${getDriverColor(driver)} ${fieldInfo?.color || ''}`}>
+                            <Reorder.Item key={driver} value={driver} style={{ touchAction: 'none' }} className={`flex items-center justify-between p-3 rounded-xl border cursor-grab active:cursor-grabbing shadow-sm ${getDriverColor(driver)} ${fieldInfo?.color || ''}`}>
                               <div className="flex items-center gap-3">
                                 <div className="flex flex-col items-center justify-center text-white/40 w-4 h-4">
                                   <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="2" cy="7" r="1.5"/><circle cx="8" cy="7" r="1.5"/><circle cx="2" cy="12" r="1.5"/><circle cx="8" cy="12" r="1.5"/></svg>
