@@ -7,7 +7,7 @@ import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import cron from 'node-cron';
 import crypto from 'crypto';
-import { generateOracleRoast, RaceContext } from './groqOracle';
+import { generateOracleRoast, generateAutoFill, generatePersonalRoast, RaceContext } from './groqOracle';
 import { sendWhatsAppMessage, startWhatsAppCron } from './whatsappAlerts';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'f1prode_secret_key_2026';
@@ -1674,7 +1674,6 @@ async function buildOracleAnalysis(nextRace: any): Promise<{ analysis: string; p
 app.get('/api/oracle/autofill', requireAuth, async (req: Request, res: Response) => {
     try {
         const nextRace = getNextRace();
-        const { generateAutoFill } = require('./groqOracle');
         const result = await generateAutoFill({ circuitName: `${nextRace.name} — ${nextRace.circuit || ''}` });
         res.json(result);
     } catch (e) {
@@ -1686,7 +1685,6 @@ app.post('/api/oracle/personal_roast', requireAuth, async (req: Request, res: Re
     try {
         const nextRace = getNextRace();
         const playerName = (req as any).user.username;
-        const { generatePersonalRoast } = require('./groqOracle');
         const roast = await generatePersonalRoast(playerName, req.body, { circuitName: `${nextRace.name} — ${nextRace.circuit || ''}` });
         res.json({ roast });
     } catch (e) {
