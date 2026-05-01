@@ -1662,16 +1662,37 @@ async function buildOracleAnalysis(nextRace: any): Promise<{ analysis: string; p
     try {
         analysis = await generateOracleRoast(predsRes.rows, raceCtx, lbRes.rows);
     } catch (err: any) {
-        // Parse retry-after from Groq 429 and set backoff
         if (err?.status === 429) {
             const retryAfterSec = parseInt(err?.headers?.['retry-after'] || '1800', 10);
             groqRateLimitedUntil = Date.now() + retryAfterSec * 1000;
-            console.log(`⏸️ Groq rate limited. Backing off until ${new Date(groqRateLimitedUntil).toISOString()}`);
         }
         throw err;
     }
     return { analysis, predsHash, jolpicaHash };
 }
+
+app.get('/api/oracle/autofill', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const nextRace = getNextRace();
+        const { generateAutoFill } = require('./groqOracle');
+        const result = await generateAutoFill({ circuitName: `${nextRace.name} — ${nextRace.circuit || ''}` });
+        res.json(result);
+    } catch (e) {
+        res.status(500).json({ error: "Oracle error" });
+    }
+});
+
+app.post('/api/oracle/personal_roast', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const nextRace = getNextRace();
+        const playerName = (req as any).user.username;
+        const { generatePersonalRoast } = require('./groqOracle');
+        const roast = await generatePersonalRoast(playerName, req.body, { circuitName: `${nextRace.name} — ${nextRace.circuit || ''}` });
+        res.json({ roast });
+    } catch (e) {
+        res.status(500).json({ error: "Oracle error" });
+    }
+});
 
 app.get('/api/oracle/roast', async (req: Request, res: Response) => {
     try {

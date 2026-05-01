@@ -1758,11 +1758,9 @@ function GameHubLauncherView({ onNavigate }: { onNavigate: (tab: string) => void
 function F1ProdeView() {
   const [f1Tab, setF1Tab] = React.useState('prode'); // 'prode', 'leaderboard', 'calendar'
 
-  const [oracleInsight, setOracleInsight] = React.useState<string | null>(null);
-  const [loadingOracle, setLoadingOracle] = React.useState(false);
-  const [oracleRemaining, setOracleRemaining] = React.useState<number | null>(null);
-  const [oracleGeneratedAt, setOracleGeneratedAt] = React.useState<string | null>(null);
-  const [oracleCached, setOracleCached] = React.useState(false);
+  const [loadingAutofill, setLoadingAutofill] = React.useState(false);
+  const [loadingRoast, setLoadingRoast] = React.useState(false);
+  const [roastMessage, setRoastMessage] = React.useState("");
   const [nextRace, setNextRace] = React.useState<any>(null);
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -1834,58 +1832,46 @@ function F1ProdeView() {
       })
       .catch(err => console.error("Error trayendo lista oficial de la FIA:", err));
 
-
-
-    setLoadingOracle(true);
-    fetchWithAuth('/api/oracle/roast')
-      .then(async res => {
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Falla en el backend del oráculo");
-        return data;
-      })
-      .then(data => {
-        setOracleInsight(data.analysis || "No tengo palabras...");
-        setOracleRemaining(data.remaining ?? null);
-        setOracleGeneratedAt(data.generated_at ?? null);
-        setOracleCached(!!data.cached);
-        setLoadingOracle(false);
-      })
-      .catch(() => { setOracleInsight("El oráculo tuvo una falla en su motor lógico."); setLoadingOracle(false); });
   }, []);
 
-  const handleOracleRefresh = async () => {
-    if (loadingOracle) return;
-    if (oracleRemaining !== null && oracleRemaining <= 0) {
-      addToast('error', 'El Oráculo agotó sus tokens por hoy. Volvé mañana.');
+  const handleAutoFill = async () => {
+    setLoadingAutofill(true);
+    try {
+      const res = await fetchWithAuth('/api/oracle/autofill');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      if (data.pole_position) setPPole(data.pole_position);
+      if (data.predicted_team) setPTeam(data.predicted_team);
+      const newPicks = [data.p1, data.p2, data.p3, data.p4, data.p5].filter(Boolean);
+      setPicks(newPicks);
+      setP1(newPicks[0] || ''); setP2(newPicks[1] || ''); setP3(newPicks[2] || '');
+      setP4(newPicks[3] || ''); setP5(newPicks[4] || '');
+      addToast('success', '¡El Oráculo usó su varita mágica!');
+    } catch {
+      addToast('error', 'La magia falló. Intenta de nuevo.');
+    }
+    setLoadingAutofill(false);
+  };
+
+  const handleRoast = async () => {
+    if (picks.length < 5) {
+      addToast('error', 'Seleccioná 5 pilotos primero.');
       return;
     }
-    setLoadingOracle(true);
+    setLoadingRoast(true);
+    setRoastMessage("");
     try {
-      const res = await fetchWithAuth('/api/oracle/roast/refresh', { method: 'POST' });
+      const res = await fetchWithAuth('/api/oracle/personal_roast', {
+        method: 'POST',
+        body: JSON.stringify({ pole_position: pPole, predicted_team: pTeam, p1, p2, p3, p4, p5 })
+      });
       const data = await res.json();
-      if (!res.ok) {
-        addToast('error', data.error || 'Error al actualizar el Oráculo');
-        // If stale analysis came back with the error, still show it
-        if (data.analysis) {
-          setOracleInsight(data.analysis);
-          setOracleRemaining(0);
-          setOracleGeneratedAt(data.generated_at ?? null);
-          setOracleCached(true);
-        }
-        setLoadingOracle(false);
-        return;
-      }
-      setOracleInsight(data.analysis || "No tengo palabras...");
-      setOracleRemaining(data.remaining ?? null);
-      setOracleGeneratedAt(data.generated_at ?? null);
-      setOracleCached(false);
-      if (data.remaining !== null && data.remaining <= 3 && data.remaining > 0) {
-        addToast('warning', `⚠️ Al Oráculo le quedan solo ${data.remaining} análisis disponibles hoy`);
-      }
+      if (!res.ok) throw new Error();
+      setRoastMessage(data.roast);
     } catch {
-      addToast('error', 'Error de conexión con el Oráculo');
+      setRoastMessage("El Oráculo no pudo procesar tu desgracia en este momento.");
     }
-    setLoadingOracle(false);
+    setLoadingRoast(false);
   };
 
   // Poll for new race results every 3 minutes and notify
@@ -2123,70 +2109,7 @@ function F1ProdeView() {
 
           {f1Tab === 'prode' && (
             <div className="space-y-6">
-              {/* Claude Oracle Section */}
-              <div className="glass-card p-1 pb-6 relative overflow-hidden min-h-[140px] border border-white/5">
-                {/* Fancy border effect atenuado */}
-                <div className="absolute inset-0 bg-gradient-to-r from-codeflow-accent via-fuchsia-600 to-purple-800 opacity-5" />
-                <div className="m-5 relative z-10">
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-purple-800 to-blue-800 p-[1px] shadow-lg shadow-purple-900/20 shrink-0">
-                      <div className="w-full h-full bg-codeflow-card rounded-xl flex items-center justify-center">
-                        <span className="text-2xl">🤖</span>
-                      </div>
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <h3 className="font-bold text-lg text-white">El Oráculo (Groq)</h3>
-                        <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 text-xs font-semibold">Análisis Sensorial</span>
-                        {oracleCached && oracleGeneratedAt && (
-                          <span className="text-xs text-codeflow-muted ml-auto">
-                            Actualizado {new Date(oracleGeneratedAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        )}
-                      </div>
 
-                      {oracleRemaining !== null && oracleRemaining <= 10 && oracleRemaining > 0 && (
-                        <div className="mb-2 flex items-center gap-1.5 text-amber-400/90 text-xs">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
-                          Solo quedan <strong>{oracleRemaining}</strong> análisis hoy
-                        </div>
-                      )}
-                      {oracleRemaining === 0 && (
-                        <div className="mb-2 flex items-center gap-1.5 text-red-400/80 text-xs">
-                          <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
-                          Sin tokens disponibles hoy
-                        </div>
-                      )}
-
-                      {loadingOracle ? (
-                        <div className="text-codeflow-muted text-sm animate-pulse flex items-center gap-3 py-2">
-                          <div className="w-4 h-4 border-2 border-codeflow-accent border-t-transparent rounded-full animate-spin"></div>
-                          Procesando telemetría de trolls...
-                        </div>
-                      ) : (
-                        <p className="text-codeflow-text/90 leading-relaxed italic border-l-2 border-codeflow-accent/40 pl-4 py-1 whitespace-pre-wrap">
-                          "{oracleInsight}"
-                        </p>
-                      )}
-
-                      <button
-                        onClick={handleOracleRefresh}
-                        disabled={loadingOracle || oracleRemaining === 0}
-                        className="mt-3 inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-codeflow-muted hover:border-codeflow-accent/40 hover:text-codeflow-accent hover:bg-codeflow-accent/5 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                      >
-                        {loadingOracle
-                          ? <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                          : <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
-                        }
-                        Actualizar contexto
-                        {oracleRemaining !== null && oracleRemaining <= 10 && (
-                          <span className="opacity-50">{oracleRemaining}</span>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
 
               {/* ===== SESSION SCHEDULE BAR ===== */}
               <div className="glass-card p-4">
@@ -2335,9 +2258,14 @@ function F1ProdeView() {
 
                     {/* Unassigned Drivers */}
                     <div className="mb-4 pt-4 border-t border-white/5">
-                      <label className="text-xs uppercase font-bold text-codeflow-muted tracking-wider block mb-3">
-                        Pilotos Disponibles (Toca para agregar)
-                      </label>
+                      <div className="flex items-center justify-between mb-3">
+                        <label className="text-xs uppercase font-bold text-codeflow-muted tracking-wider block">
+                          Pilotos Disponibles (Toca para agregar)
+                        </label>
+                        <button type="button" onClick={handleAutoFill} disabled={loadingAutofill || isSessionClosed} className="text-[10px] font-bold px-3 py-1.5 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 text-white flex items-center gap-1.5 hover:scale-105 active:scale-95 transition-all">
+                          {loadingAutofill ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <span>✨ Varita Mágica</span>}
+                        </button>
+                      </div>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {DRIVERS.filter(d => !picks.includes(d)).map(d => {
                           const lastName = d.split(' ').pop();
@@ -2367,6 +2295,16 @@ function F1ProdeView() {
                   </div>
 
                   <div className="pt-2 flex flex-col gap-3">
+                    {/* Juzgar Prode */}
+                    <div className="bg-white/[0.02] border border-white/5 p-3 rounded-xl flex flex-col gap-2 mt-2 mb-2">
+                      <button type="button" onClick={handleRoast} disabled={loadingRoast || picks.length < 5 || !pTeam || !pPole} className="text-xs font-bold text-codeflow-accent flex items-center justify-center gap-2 py-2 border border-codeflow-accent/30 rounded-lg hover:bg-codeflow-accent/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        {loadingRoast ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <span className="text-sm">🤖</span>}
+                        Juzgar mi Prode
+                      </button>
+                      {roastMessage && (
+                        <p className="text-sm text-white/90 italic border-l-2 border-codeflow-accent pl-3 py-1 mt-1">"{roastMessage}"</p>
+                      )}
+                    </div>
                     {existingPrediction && (
                       <p className="text-[10px] text-yellow-400/70 mb-2 flex items-center gap-1">
                         <AlertCircle size={10} /> Actualizarás tu pronóstico de {currentForm.label} existente
@@ -2407,7 +2345,7 @@ function F1ProdeView() {
           )}
 
           {f1Tab === 'grilla' && (
-            <PredictionsGridTab nextRace={nextRace} />
+            <PredictionsGridTab nextRace={nextRace} schedule={schedule} />
           )}
 
           {f1Tab === 'historial' && (
@@ -2761,7 +2699,8 @@ function F1LeaderboardTab() {
 }
 
 // --- Predictions Grid Tab ---
-function PredictionsGridTab({ nextRace }: { nextRace: any }) {
+function PredictionsGridTab({ nextRace, schedule }: { nextRace: any, schedule: any }) {
+  const currentUser = localStorage.getItem('prode_username') || '';
   const [predictions, setPredictions] = React.useState<any[]>([]);
   const [activePlayers, setActivePlayers] = React.useState<string[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -2864,16 +2803,21 @@ function PredictionsGridTab({ nextRace }: { nextRace: any }) {
                       const isCorrect = officialResult && val && val === officialResult[pos];
                       const isWrong = officialResult && val && val !== officialResult[pos];
                       const isConsensus = !officialResult && val && (consensus[pos][val] || 0) > 1;
+                      const sessionData = schedule?.sessions?.find((s: any) => s.type === sessionFilter);
+                      const isSessionClosed = sessionData ? !sessionData.isOpen : false;
+                      const isHidden = !isSessionClosed && pred.player !== currentUser;
+
                       return (
                         <td key={pred.player} className="text-center py-2 px-3">
                           <span className={`inline-block px-2 py-1 rounded-lg text-xs font-medium whitespace-nowrap ${
+                            isHidden ? 'blur-sm bg-white/5 text-white/30 border border-white/5 select-none' :
                             !val ? 'text-codeflow-muted/50 italic' :
                             isCorrect ? 'bg-green-500/15 text-green-300 border border-green-500/30' :
                             isWrong ? 'bg-red-500/10 text-red-300/70 border border-red-500/20' :
                             isConsensus ? 'bg-green-500/10 text-green-400/70 border border-green-500/20' :
                             'bg-white/5 text-white/80 border border-white/10'
                           }`}>
-                            {val ? val.split(' ').slice(-1)[0] : '—'}
+                            {isHidden ? 'Oculto 🔒' : val ? val.split(' ').slice(-1)[0] : '—'}
                           </span>
                         </td>
                       );
@@ -2888,15 +2832,20 @@ function PredictionsGridTab({ nextRace }: { nextRace: any }) {
                       val.toLowerCase().trim() === officialResult.winning_team.toLowerCase().trim();
                     const isWrong = officialResult && officialResult.winning_team && val &&
                       val.toLowerCase().trim() !== officialResult.winning_team.toLowerCase().trim();
+                    const sessionData = schedule?.sessions?.find((s: any) => s.type === sessionFilter);
+                    const isSessionClosed = sessionData ? !sessionData.isOpen : false;
+                    const isHidden = !isSessionClosed && pred.player !== currentUser;
+
                     return (
                       <td key={pred.player} className="text-center py-2 px-3">
                         <span className={`inline-block px-2 py-1 rounded-lg text-xs font-medium whitespace-nowrap ${
+                          isHidden ? 'blur-sm bg-white/5 text-white/30 border border-white/5 select-none' :
                           !val ? 'text-codeflow-muted/50 italic' :
                           isCorrect ? 'bg-green-500/15 text-green-300 border border-green-500/30' :
                           isWrong ? 'bg-red-500/10 text-red-300/70 border border-red-500/20' :
                           'bg-white/5 text-white/80 border border-white/10'
                         }`}>
-                          {val || '—'}
+                          {isHidden ? 'Oculto 🔒' : val || '—'}
                         </span>
                       </td>
                     );
