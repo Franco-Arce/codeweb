@@ -7,7 +7,6 @@ import {
   RefreshCw, AlertCircle, CheckCircle, XCircle, Edit2, Trash2,
   Star, Info, Dices, Sparkles, Lock, ShieldAlert, Ghost, ChevronDown
 } from 'lucide-react';
-const Diced = Gamepad2; // Fallback or Alias if needed
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement,
   LineElement, Title, Tooltip, Legend, Filler
@@ -1947,7 +1946,6 @@ function F1ProdeView() {
   // Duplicate driver validation
   const allPicks = [p1, p2, p3, p4, p5].filter(Boolean);
   const hasDuplicates = new Set(allPicks).size !== allPicks.length;
-  const isDuplicateField = (v: string) => v && allPicks.filter(p => p === v).length > 1;
   const isSessionClosed = selectedSessionData ? !selectedSessionData.isOpen : false;
 
   // Dynamic form config per session
@@ -1999,12 +1997,6 @@ function F1ProdeView() {
   };
 
   const currentForm = SESSION_FORM[selectedSession];
-  const fieldValues: Record<string, string> = { p1, p2, p3, p4, p5, pole_position: pPole };
-  const setFieldValue = (key: string, v: string) => {
-    if (key === 'p1') setP1(v); else if (key === 'p2') setP2(v);
-    else if (key === 'p3') setP3(v); else if (key === 'p4') setP4(v);
-    else if (key === 'p5') setP5(v); else if (key === 'pole_position') setPPole(v);
-  };
 
   const handlePredictSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
