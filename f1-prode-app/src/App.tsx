@@ -2297,7 +2297,7 @@ function F1ProdeView() {
                   <div className="pt-2 flex flex-col gap-3">
                     {/* Juzgar Prode */}
                     <div className="bg-white/[0.02] border border-white/5 p-3 rounded-xl flex flex-col gap-2 mt-2 mb-2">
-                      <button type="button" onClick={handleRoast} disabled={loadingRoast || picks.length < 5 || !pTeam || !pPole} className="text-xs font-bold text-codeflow-accent flex items-center justify-center gap-2 py-2 border border-codeflow-accent/30 rounded-lg hover:bg-codeflow-accent/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                      <button type="button" onClick={handleRoast} disabled={loadingRoast || picks.length < 5 || !pTeam || (currentForm.hasPole && !pPole)} className="text-xs font-bold text-codeflow-accent flex items-center justify-center gap-2 py-2 border border-codeflow-accent/30 rounded-lg hover:bg-codeflow-accent/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                         {loadingRoast ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <span className="text-sm">🤖</span>}
                         Juzgar mi Prode
                       </button>
